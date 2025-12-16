@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Collection Application</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-container">
+                <h1 class="nav-title">Data Collection</h1>
+                <div class="nav-links">
+                    <a href="#form" class="nav-link active" data-page="form">Form</a>
+                    <a href="#history" class="nav-link" data-page="history">History</a>
+                    <button id="logout-btn" class="nav-link logout-btn">Logout</button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Form Page -->
+            <section id="form-page" class="page active">
+                <div class="container">
+                    <h2>Submit Data</h2>
+                    
+                    <!-- Recent Submissions Section -->
+                    <div class="recent-section">
+                        <h3>Recent Submissions (Last 3 Days)</h3>
+                        <div id="recent-submissions" class="recent-list">
+                            <p class="empty-state">Loading recent submissions...</p>
+                        </div>
+                    </div>
+
+                    <!-- Form Section -->
+                    <div class="form-section">
+                        <h3>New Submission</h3>
+                        <form id="submission-form">
+                            <div class="form-group">
+                                <label for="datum">Date (dd.mm.yyyy)</label>
+                                <input 
+                                    type="text" 
+                                    id="datum" 
+                                    name="datum" 
+                                    placeholder="dd.mm.yyyy"
+                                    required
+                                >
+                                <span class="error-message" id="datum-error"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="uhrzeit">Time (hh:mm)</label>
+                                <input 
+                                    type="text" 
+                                    id="uhrzeit" 
+                                    name="uhrzeit" 
+                                    placeholder="hh:mm"
+                                    required
+                                >
+                                <span class="error-message" id="uhrzeit-error"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="betriebsstunden">Operating Hours</label>
+                                <input 
+                                    type="number" 
+                                    id="betriebsstunden" 
+                                    name="betriebsstunden" 
+                                    min="0"
+                                    required
+                                >
+                                <span class="error-message" id="betriebsstunden-error"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="starts">Starts</label>
+                                <input 
+                                    type="number" 
+                                    id="starts" 
+                                    name="starts" 
+                                    min="0"
+                                    required
+                                >
+                                <span class="error-message" id="starts-error"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="verbrauch_qm">Consumption (kWh/m²)</label>
+                                <input 
+                                    type="text" 
+                                    id="verbrauch_qm" 
+                                    name="verbrauch_qm" 
+                                    placeholder="0.00"
+                                    required
+                                >
+                                <span class="error-message" id="verbrauch_qm-error"></span>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">Submit</button>
+                        </form>
+
+                        <!-- Success/Error Messages -->
+                        <div id="form-message" class="message"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History Page -->
+            <section id="history-page" class="page">
+                <div class="container">
+                    <h2>Submission History</h2>
+                    
+                    <div id="history-content">
+                        <p class="empty-state">Loading history...</p>
+                    </div>
+
+                    <!-- Pagination Controls -->
+                    <div id="pagination-controls" class="pagination" style="display: none;">
+                        <button id="prev-btn" class="btn btn-secondary">Previous</button>
+                        <span id="page-info"></span>
+                        <button id="next-btn" class="btn btn-secondary">Next</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Login Section (shown when not authenticated) -->
+        <section id="login-section" class="login-container" style="display: none;">
+            <div class="login-box">
+                <h1>Data Collection Application</h1>
+                <p>Please log in to continue</p>
+                <button id="login-btn" class="btn btn-primary">Login with Cognito</button>
+            </div>
+        </section>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
