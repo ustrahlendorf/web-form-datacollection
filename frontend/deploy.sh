@@ -32,7 +32,7 @@ echo ""
 echo "Step 2: Retrieving AWS resources from CDK outputs..."
 
 # Get the stack name
-STACK_NAME="DataCollectionWebAppFrontend-$ENVIRONMENT"
+STACK_NAME="DataCollectionFrontend-$ENVIRONMENT"
 
 # Try to get outputs from CDK
 S3_BUCKET=$(aws cloudformation describe-stacks \

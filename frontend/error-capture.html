@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error Capture - Data Collection App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 20px;
+        }
+        
+        .section h2 {
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        
+        .status-icon {
+            margin-right: 10px;
+            font-size: 18px;
+            min-width: 20px;
+        }
+        
+        .status.success .status-icon {
+            color: #28a745;
+        }
+        
+        .status.error .status-icon {
+            color: #dc3545;
+        }
+        
+        .status.warning .status-icon {
+            color: #ffc107;
+        }
+        
+        .error-log {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .error-item {
+            background: white;
+            border-left: 4px solid #dc3545;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 2px;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .error-item .error-type {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .error-item .error-message {
+            color: #333;
+            margin-top: 5px;
+        }
+        
+        .error-item .error-stack {
+            color: #666;
+            margin-top: 5px;
+            font-size: 11px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        
+        .console-log {
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 5px;
+            border-radius: 2px;
+        }
+        
+        .log-entry.log {
+            background: #e8f4f8;
+            color: #0066cc;
+        }
+        
+        .log-entry.warn {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .log-entry.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .log-entry.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .empty-state {
+            color: #999;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+        }
+        
+        .config-display {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .config-item {
+            margin-bottom: 8px;
+            padding: 5px;
+        }
+        
+        .config-key {
+            color: #0066cc;
+            font-weight: bold;
+        }
+        
+        .config-value {
+            color: #333;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Error Capture & Diagnostics</h1>
+        <p class="subtitle">Real-time error monitoring for Data Collection App</p>
+        
+        <!-- Configuration Section -->
+        <div class="section">
+            <h2>Configuration Status</h2>
+            <div id="config-status"></div>
+            <div class="config-display" id="config-display"></div>
+        </div>
+        
+        <!-- Script Loading Section -->
+        <div class="section">
+            <h2>Script Loading Status</h2>
+            <div id="script-status"></div>
+        </div>
+        
+        <!-- Errors Section -->
+        <div class="section">
+            <h2>Captured Errors</h2>
+            <div id="error-count" class="status">
+                <span class="status-icon">📊</span>
+                <span>Total Errors: <strong id="error-total">0</strong></span>
+            </div>
+            <div id="error-log" class="error-log">
+                <div class="empty-state">No errors captured yet...</div>
+            </div>
+        </div>
+        
+        <!-- Console Log Section -->
+        <div class="section">
+            <h2>Console Output</h2>
+            <div id="console-log" class="console-log">
+                <div class="empty-state">No console output yet...</div>
+            </div>
+        </div>
+        
+        <!-- DOM Elements Section -->
+        <div class="section">
+            <h2>DOM Elements Check</h2>
+            <div id="dom-check"></div>
+        </div>
+        
+        <!-- Actions Section -->
+        <div class="section">
+            <h2>Actions</h2>
+            <div class="button-group">
+                <button class="btn-primary" onclick="loadMainApp()">Load Main App</button>
+                <button class="btn-secondary" onclick="checkAuthManager()">Check AuthManager</button>
+                <button class="btn-secondary" onclick="checkConfig()">Check Config</button>
+                <button class="btn-danger" onclick="clearLogs()">Clear Logs</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global state
+        const diagnostics = {
+            errors: [],
+            logs: [],
+            warnings: [],
+            configLoaded: false,
+            scriptsLoaded: {
+                config: false,
+                auth: false,
+                app: false
+            }
+        };
+        
+        // Capture console methods
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            diagnostics.logs.push({
+                type: 'log',
+                message: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '),
+                timestamp: new Date().toLocaleTimeString()
+            });
+            updateConsoleLog();
+        };
+        
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            diagnostics.warnings.push({
+                type: 'warn',
+                message: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '),
+                timestamp: new Date().toLocaleTimeString()
+            });
+            updateConsoleLog();
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            diagnostics.errors.push({
+                type: 'error',
+                message: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '),
+                timestamp: new Date().toLocaleTimeString()
+            });
+            updateErrorLog();
+        };
+        
+        // Capture uncaught errors
+        window.addEventListener('error', (event) => {
+            diagnostics.errors.push({
+                type: 'uncaught',
+                message: event.message,
+                filename: event.filename,
+                lineno: event.lineno,
+                colno: event.colno,
+                stack: event.error ? event.error.stack : 'No stack trace',
+                timestamp: new Date().toLocaleTimeString()
+            });
+            updateErrorLog();
+        });
+        
+        // Capture unhandled promise rejections
+        window.addEventListener('unhandledrejection', (event) => {
+            diagnostics.errors.push({
+                type: 'unhandledRejection',
+                message: event.reason ? String(event.reason) : 'Unknown rejection',
+                timestamp: new Date().toLocaleTimeString()
+            });
+            updateErrorLog();
+        });
+        
+        // Update functions
+        function updateErrorLog() {
+            const errorLog = document.getElementById('error-log');
+            const errorTotal = document.getElementById('error-total');
+            
+            errorTotal.textContent = diagnostics.errors.length;
+            
+            if (diagnostics.errors.length === 0) {
+                errorLog.innerHTML = '<div class="empty-state">No errors captured yet...</div>';
+                return;
+            }
+            
+            errorLog.innerHTML = diagnostics.errors.map((err, idx) => `
+                <div class="error-item">
+                    <div class="error-type">${idx + 1}. ${err.type.toUpperCase()}</div>
+                    <div class="error-message">${escapeHtml(err.message)}</div>
+                    ${err.stack ? `<div class="error-stack">Stack: ${escapeHtml(err.stack)}</div>` : ''}
+                    ${err.filename ? `<div class="error-stack">File: ${err.filename}:${err.lineno}:${err.colno}</div>` : ''}
+                    <div class="error-stack">Time: ${err.timestamp}</div>
+                </div>
+            `).join('');
+        }
+        
+        function updateConsoleLog() {
+            const consoleLog = document.getElementById('console-log');
+            const allLogs = [...diagnostics.logs, ...diagnostics.warnings];
+            
+            if (allLogs.length === 0) {
+                consoleLog.innerHTML = '<div class="empty-state">No console output yet...</div>';
+                return;
+            }
+            
+            consoleLog.innerHTML = allLogs.map(log => `
+                <div class="log-entry ${log.type}">
+                    <strong>[${log.timestamp}]</strong> ${escapeHtml(log.message)}
+                </div>
+            `).join('');
+            
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Check configuration
+        function checkConfig() {
+            const configStatus = document.getElementById('config-status');
+            const configDisplay = document.getElementById('config-display');
+            
+            if (window.APP_CONFIG) {
+                diagnostics.configLoaded = true;
+                configStatus.innerHTML = '<div class="status success"><span class="status-icon">✅</span><span>Configuration loaded successfully</span></div>';
+                
+                const config = window.APP_CONFIG;
+                configDisplay.innerHTML = `
+                    <div class="config-item">
+                        <span class="config-key">API_ENDPOINT:</span>
+                        <span class="config-value">${config.API_ENDPOINT || 'NOT SET'}</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-key">COGNITO_DOMAIN:</span>
+                        <span class="config-value">${config.COGNITO_DOMAIN || 'NOT SET'}</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-key">COGNITO_CLIENT_ID:</span>
+                        <span class="config-value">${config.COGNITO_CLIENT_ID || 'NOT SET'}</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-key">COGNITO_USER_POOL_ID:</span>
+                        <span class="config-value">${config.COGNITO_USER_POOL_ID || 'NOT SET'}</span>
+                    </div>
+                `;
+            } else {
+                configStatus.innerHTML = '<div class="status error"><span class="status-icon">❌</span><span>Configuration NOT loaded</span></div>';
+                configDisplay.innerHTML = '<div class="empty-state">window.APP_CONFIG is not defined</div>';
+            }
+        }
+        
+        // Check scripts
+        function checkScripts() {
+            const scriptStatus = document.getElementById('script-status');
+            
+            diagnostics.scriptsLoaded.config = typeof window.APP_CONFIG !== 'undefined';
+            diagnostics.scriptsLoaded.auth = typeof AuthManager !== 'undefined';
+            diagnostics.scriptsLoaded.app = typeof navigateToPage !== 'undefined';
+            
+            scriptStatus.innerHTML = `
+                <div class="status ${diagnostics.scriptsLoaded.config ? 'success' : 'error'}">
+                    <span class="status-icon">${diagnostics.scriptsLoaded.config ? '✅' : '❌'}</span>
+                    <span>config.js: ${diagnostics.scriptsLoaded.config ? 'Loaded' : 'NOT loaded'}</span>
+                </div>
+                <div class="status ${diagnostics.scriptsLoaded.auth ? 'success' : 'error'}">
+                    <span class="status-icon">${diagnostics.scriptsLoaded.auth ? '✅' : '❌'}</span>
+                    <span>auth.js: ${diagnostics.scriptsLoaded.auth ? 'Loaded' : 'NOT loaded'}</span>
+                </div>
+                <div class="status ${diagnostics.scriptsLoaded.app ? 'success' : 'error'}">
+                    <span class="status-icon">${diagnostics.scriptsLoaded.app ? '✅' : '❌'}</span>
+                    <span>app.js: ${diagnostics.scriptsLoaded.app ? 'Loaded' : 'NOT loaded'}</span>
+                </div>
+            `;
+        }
+        
+        // Check DOM elements
+        function checkDOM() {
+            const domCheck = document.getElementById('dom-check');
+            
+            const elements = [
+                { id: 'app', name: 'Main App Container' },
+                { id: 'login-section', name: 'Login Section' },
+                { id: 'submission-form', name: 'Submission Form' },
+                { id: 'datum', name: 'Date Input' },
+                { id: 'uhrzeit', name: 'Time Input' },
+                { id: 'login-btn', name: 'Login Button' },
+                { id: 'logout-btn', name: 'Logout Button' },
+                { id: 'form-page', name: 'Form Page' },
+                { id: 'history-page', name: 'History Page' }
+            ];
+            
+            domCheck.innerHTML = elements.map(el => {
+                const element = document.getElementById(el.id);
+                const exists = element !== null;
+                const display = exists ? window.getComputedStyle(element).display : 'N/A';
+                
+                return `
+                    <div class="status ${exists ? 'success' : 'error'}">
+                        <span class="status-icon">${exists ? '✅' : '❌'}</span>
+                        <span>${el.name} (#${el.id}): ${exists ? `Exists (display: ${display})` : 'NOT FOUND'}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // Check AuthManager
+        function checkAuthManager() {
+            if (typeof AuthManager === 'undefined') {
+                alert('AuthManager is not defined. auth.js may not have loaded.');
+                return;
+            }
+            
+            try {
+                const config = window.APP_CONFIG;
+                if (!config) {
+                    alert('APP_CONFIG is not defined. config.js may not have loaded.');
+                    return;
+                }
+                
+                const authManager = new AuthManager(config);
+                alert(`AuthManager initialized successfully.\nAuthenticated: ${authManager.isAuthenticated()}`);
+            } catch (error) {
+                alert(`Error initializing AuthManager: ${error.message}`);
+            }
+        }
+        
+        // Load main app
+        function loadMainApp() {
+            if (typeof navigateToPage === 'undefined') {
+                alert('App functions not loaded. app.js may not have loaded.');
+                return;
+            }
+            
+            try {
+                navigateToPage('form');
+                alert('Navigated to form page');
+            } catch (error) {
+                alert(`Error navigating: ${error.message}`);
+            }
+        }
+        
+        // Clear logs
+        function clearLogs() {
+            diagnostics.errors = [];
+            diagnostics.logs = [];
+            diagnostics.warnings = [];
+            updateErrorLog();
+            updateConsoleLog();
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Error capture page loaded');
+            checkConfig();
+            checkScripts();
+            checkDOM();
+            
+            // Auto-update every 500ms
+            setInterval(() => {
+                checkScripts();
+                checkDOM();
+            }, 500);
+        });
+    </script>
+</body>
+</html>
