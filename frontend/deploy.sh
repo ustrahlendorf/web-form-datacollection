@@ -17,8 +17,8 @@ echo "Environment: $ENVIRONMENT"
 echo ""
 
 # Validate environment
-if [[ "$ENVIRONMENT" != "dev" && "$ENVIRONMENT" != "prod" ]]; then
-    echo "Error: Environment must be 'dev' or 'prod'"
+if [[ "$ENVIRONMENT" != "dev" ]]; then
+    echo "Error: This project is dev-only. Environment must be 'dev'"
     exit 1
 fi
 
@@ -55,7 +55,7 @@ CLOUDFRONT_DOMAIN=$(aws cloudformation describe-stacks \
 
 if [[ -z "$S3_BUCKET" || -z "$DISTRIBUTION_ID" ]]; then
     echo "Error: Could not retrieve S3 bucket or CloudFront distribution ID from CDK outputs"
-    echo "Make sure the infrastructure has been deployed with: cdk deploy --all"
+    echo "Make sure the infrastructure has been deployed with: bash ../infrastructure/deploy-with-config.sh dev"
     exit 1
 fi
 

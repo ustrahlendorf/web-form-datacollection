@@ -18,15 +18,20 @@ echo "Region: $REGION"
 echo ""
 
 # Validate environment
-if [[ "$ENVIRONMENT" != "dev" && "$ENVIRONMENT" != "prod" ]]; then
-    echo "Error: Environment must be 'dev' or 'prod'"
+if [[ "$ENVIRONMENT" != "dev" ]]; then
+    echo "Error: This project is dev-only. Environment must be 'dev'"
     exit 1
 fi
 
 # Deploy CDK stacks
 echo "Deploying CDK stacks..."
 cd "$SCRIPT_DIR"
-cdk deploy --all --require-approval never
+cdk deploy \
+    "DataCollectionCognito-$ENVIRONMENT" \
+    "DataCollectionDynamoDB-$ENVIRONMENT" \
+    "DataCollectionAPI-$ENVIRONMENT" \
+    "DataCollectionFrontend-$ENVIRONMENT" \
+    --require-approval never
 
 echo ""
 echo "CDK deployment complete!"

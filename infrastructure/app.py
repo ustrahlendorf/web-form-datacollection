@@ -1,4 +1,4 @@
-"""AWS CDK Application for Data Collection Web Application."""
+"""AWS CDK Application for Data Collection Web Application (dev-only)."""
 
 import sys
 from pathlib import Path
@@ -6,48 +6,17 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from aws_cdk import (
-    App,
-    Environment,
-    Stack,
-)
-from constructs import Construct
-from infrastructure.stacks.base_stack import BaseStack
+from aws_cdk import App, Environment
 
-
-class DevStack(BaseStack):
-    """Development environment stack."""
-
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
-        """
-        Initialize the development stack.
-
-        Args:
-            scope: The parent construct
-            construct_id: The logical ID of the stack
-            **kwargs: Additional arguments to pass to BaseStack
-        """
-        super().__init__(scope, construct_id, environment_name="dev", **kwargs)
-
-
-class ProdStack(BaseStack):
-    """Production environment stack."""
-
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
-        """
-        Initialize the production stack.
-
-        Args:
-            scope: The parent construct
-            construct_id: The logical ID of the stack
-            **kwargs: Additional arguments to pass to BaseStack
-        """
-        super().__init__(scope, construct_id, environment_name="prod", **kwargs)
+from infrastructure.stacks.api_stack import APIStack
+from infrastructure.stacks.cognito_stack import CognitoStack
+from infrastructure.stacks.dynamodb_stack import DynamoDBStack
+from infrastructure.stacks.frontend_stack import FrontendStack
 
 
 def create_app() -> App:
     """
-    Create and configure the CDK App.
+    Create and configure the CDK App (dev-only).
 
     Returns:
         Configured CDK App instance
@@ -55,29 +24,50 @@ def create_app() -> App:
     app = App()
 
     # Define the environment configuration for eu-central-1
-    env_config = Environment(
-        region="eu-central-1",
+    env_config = Environment(region="eu-central-1")
+
+    environment_name = "dev"
+
+    # Create component stacks for development environment
+    cognito_stack = CognitoStack(
+        app,
+        f"DataCollectionCognito-{environment_name}",
+        environment_name=environment_name,
+        env=env_config,
+        description="Data Collection Web Application - Cognito (dev)",
     )
 
-    # Create development stack
-    DevStack(
+    dynamodb_stack = DynamoDBStack(
         app,
-        "DataCollectionWebAppDev",
+        f"DataCollectionDynamoDB-{environment_name}",
+        environment_name=environment_name,
         env=env_config,
-        description="Data Collection Web Application - Development Environment",
+        description="Data Collection Web Application - DynamoDB (dev)",
     )
 
-    # Create production stack
-    ProdStack(
+    api_stack = APIStack(
         app,
-        "DataCollectionWebAppProd",
+        f"DataCollectionAPI-{environment_name}",
+        environment_name=environment_name,
+        cognito_user_pool_id=cognito_stack.user_pool.user_pool_id,
         env=env_config,
-        description="Data Collection Web Application - Production Environment",
+        description="Data Collection Web Application - API (dev)",
     )
+
+    frontend_stack = FrontendStack(
+        app,
+        f"DataCollectionFrontend-{environment_name}",
+        environment_name=environment_name,
+        env=env_config,
+        description="Data Collection Web Application - Frontend (dev)",
+    )
+
+    # Ensure deployment ordering across stacks that use exports/imports.
+    api_stack.add_dependency(cognito_stack)
+    api_stack.add_dependency(dynamodb_stack)
 
     return app
 
 
 if __name__ == "__main__":
-    app = create_app()
-    app.synth()
+    create_app().synth()

@@ -19,8 +19,8 @@ echo "Region: $REGION"
 echo ""
 
 # Validate environment
-if [[ "$ENVIRONMENT" != "dev" && "$ENVIRONMENT" != "prod" ]]; then
-    echo "Error: Environment must be 'dev' or 'prod'"
+if [[ "$ENVIRONMENT" != "dev" ]]; then
+    echo "Error: This project is dev-only. Environment must be 'dev'"
     exit 1
 fi
 
@@ -42,7 +42,7 @@ CLOUDFRONT_DOMAIN=$(aws cloudformation describe-stacks \
 
 if [[ -z "$CLOUDFRONT_DOMAIN" ]]; then
     echo "Error: Could not retrieve CloudFront domain"
-    echo "Make sure the frontend stack has been deployed: cdk deploy DataCollectionWebAppFrontend-$ENVIRONMENT"
+    echo "Make sure the frontend stack has been deployed: cdk deploy DataCollectionFrontend-$ENVIRONMENT"
     exit 1
 fi
 
