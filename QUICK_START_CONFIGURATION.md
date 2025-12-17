@@ -67,7 +67,7 @@ window.APP_CONFIG = {
 
 | Issue | Solution |
 |-------|----------|
-| "Could not retrieve CloudFront domain" | Run `cdk deploy --all` first |
+| "Could not retrieve CloudFront domain" | Run `bash infrastructure/deploy-with-config.sh dev` first |
 | "Could not retrieve API endpoint" | Verify API stack deployed: `aws cloudformation describe-stacks --stack-name DataCollectionAPI-dev` |
 | "Could not retrieve Cognito configuration" | Verify Cognito stack deployed: `aws cloudformation describe-stacks --stack-name DataCollectionCognito-dev` |
 | CORS errors in browser | Verify CloudFront domain is in API CORS policy |

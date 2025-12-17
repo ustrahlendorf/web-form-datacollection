@@ -37,11 +37,16 @@ The application requires configuration of several AWS resources and endpoints:
 
 ### Step 1: Deploy CDK Infrastructure
 
-Deploy all CDK stacks to AWS:
+Deploy dev CDK stacks to AWS (dev-only):
 
 ```bash
 cd infrastructure/
-cdk deploy --all --require-approval never
+cdk deploy \
+  DataCollectionCognito-dev \
+  DataCollectionDynamoDB-dev \
+  DataCollectionAPI-dev \
+  DataCollectionFrontend-dev \
+  --require-approval never
 ```
 
 This creates:
@@ -104,7 +109,7 @@ The API Gateway CORS policy must include the CloudFront domain:
 cors_origins = [
     "http://localhost:3000",      # Local development
     "http://localhost:8000",      # Local development (alternative)
-    "https://d111111abcdef8.cloudfront.net",  # Production CloudFront
+    "https://d111111abcdef8.cloudfront.net",  # CloudFront (dev)
 ]
 ```
 
@@ -207,13 +212,7 @@ window.APP_CONFIG = {
 # Includes localhost URLs for local testing
 ```
 
-### Production Environment
-
-```bash
-# setup-env.sh prod
-# Creates .env with prod stack outputs
-# Uses CloudFront domain for all URLs
-```
+ℹ️ Note: this repository is currently configured as **dev-only** (production stacks removed).
 
 ## Deployment Workflow
 
@@ -240,7 +239,12 @@ bash deploy.sh dev
 ```bash
 # 1. Deploy infrastructure
 cd infrastructure/
-cdk deploy --all --require-approval never
+cdk deploy \
+  DataCollectionCognito-dev \
+  DataCollectionDynamoDB-dev \
+  DataCollectionAPI-dev \
+  DataCollectionFrontend-dev \
+  --require-approval never
 
 # 2. Retrieve configuration
 cd ../frontend/
@@ -295,14 +299,14 @@ bash deploy.sh dev
 
 ### CORS Policy
 
-- ✅ Only allows specific origins (localhost for dev, CloudFront for prod)
+- ✅ Only allows specific origins (localhost + CloudFront domain for dev)
 - ✅ Restricts to necessary HTTP methods (GET, POST, OPTIONS)
 - ✅ Restricts to necessary headers (Content-Type, Authorization)
 
 ### Cognito Callbacks
 
 - ✅ Only allows specific callback URLs
-- ✅ Uses HTTPS for production URLs
+- ✅ Uses HTTPS for CloudFront URL
 - ✅ Prevents open redirect vulnerabilities
 
 ### Environment Variables
@@ -334,7 +338,7 @@ This implementation satisfies the following requirements:
 ### Requirement 7.2: Environment-Specific Stacks
 > WHEN deploying to different environments THEN THE system SHALL use separate CDK stacks per environment
 
-✅ Separate stacks for dev and prod with environment-specific configuration
+ℹ️ Note: this repository is currently configured as **dev-only** (production stacks removed).
 
 ### Requirement 7.3: Resource Provisioning
 > WHEN the application is deployed THEN THE system SHALL provision all required resources: S3, CloudFront, API Gateway, Lambda, DynamoDB, Cognito

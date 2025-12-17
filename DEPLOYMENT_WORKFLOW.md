@@ -24,11 +24,13 @@ pip install -r requirements.txt
 # Synthesize CDK stacks
 cdk synth
 
-# Deploy all stacks (dev and prod)
-cdk deploy --all
-
-# Or deploy specific environment
-cdk deploy DataCollectionWebAppDev
+# Deploy dev stacks (dev-only)
+cdk deploy \
+  DataCollectionCognito-dev \
+  DataCollectionDynamoDB-dev \
+  DataCollectionAPI-dev \
+  DataCollectionFrontend-dev \
+  --require-approval never
 ```
 
 This creates:
@@ -46,7 +48,7 @@ aws cloudformation list-stacks --region eu-central-1
 
 # Get stack outputs
 aws cloudformation describe-stacks \
-    --stack-name DataCollectionWebAppDev \
+    --stack-name DataCollectionAPI-dev \
     --region eu-central-1 \
     --query "Stacks[0].Outputs" \
     --output table
@@ -183,44 +185,6 @@ aws cloudfront get-distribution \
 3. Verify you can only see your own submissions
 4. Verify you cannot see submissions from the first user
 
-## Phase 5: Production Deployment
-
-### Step 5.1: Deploy Production Infrastructure
-
-```bash
-cd infrastructure/
-
-# Deploy production stack
-cdk deploy DataCollectionWebAppProd
-```
-
-### Step 5.2: Setup Production Environment
-
-```bash
-cd frontend/
-
-# Setup production environment
-bash setup-env.sh prod
-
-# Verify .env file
-cat .env
-```
-
-### Step 5.3: Deploy Production Frontend
-
-```bash
-# Build and deploy to production
-bash build.sh
-bash deploy.sh prod
-```
-
-### Step 5.4: Verify Production Deployment
-
-```bash
-# Test production application
-# Open: https://your-prod-cloudfront-domain.cloudfront.net
-```
-
 ## Phase 6: Monitoring and Maintenance
 
 ### Step 6.1: Monitor CloudWatch Logs
@@ -326,17 +290,18 @@ aws cloudfront create-invalidation \
 
 ```bash
 # Delete CDK stacks
-cdk destroy --all
-
-# Or delete specific stack
-cdk destroy DataCollectionWebAppDev
+cdk destroy \
+  DataCollectionFrontend-dev \
+  DataCollectionAPI-dev \
+  DataCollectionCognito-dev \
+  DataCollectionDynamoDB-dev
 ```
 
 ## Deployment Checklist
 
 - [ ] AWS credentials configured
 - [ ] AWS CDK installed
-- [ ] Infrastructure deployed (`cdk deploy --all`)
+- [ ] Infrastructure deployed (dev-only)
 - [ ] Cognito User Pool created
 - [ ] DynamoDB table created
 - [ ] API Gateway deployed
@@ -357,16 +322,11 @@ cdk destroy DataCollectionWebAppDev
 
 ```bash
 # Setup and deploy (dev)
-cd infrastructure && cdk deploy --all
+cd infrastructure && bash deploy-with-config.sh dev
 cd ../frontend
 bash setup-env.sh dev
 bash build.sh
 bash deploy.sh dev
-
-# Setup and deploy (prod)
-bash setup-env.sh prod
-bash build.sh
-bash deploy.sh prod
 
 # View logs
 aws logs tail /aws/lambda/DataCollectionSubmitHandler-dev --follow
@@ -376,7 +336,7 @@ aws cloudformation describe-stacks --region eu-central-1
 
 # Get CloudFront URL
 aws cloudformation describe-stacks \
-    --stack-name DataCollectionWebAppFrontend-dev \
+    --stack-name DataCollectionFrontend-dev \
     --region eu-central-1 \
     --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDomainName'].OutputValue" \
     --output text

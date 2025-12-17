@@ -16,7 +16,7 @@ This document summarizes the implementation of task 20: "Deploy frontend to S3 a
 
 ### 2. Deployment Automation
 - **Created `deploy.sh`**: Comprehensive deployment script that:
-  - Validates environment (dev/prod)
+  - Validates environment (dev-only)
   - Retrieves S3 bucket name and CloudFront distribution ID from CDK outputs
   - Uploads frontend files to S3 with appropriate cache headers:
     - Static assets: 1-hour cache
@@ -111,9 +111,7 @@ bash deploy.sh dev
 ### For Production
 
 ```bash
-bash setup-env.sh prod
-bash build.sh
-bash deploy.sh prod
+# Not supported: this repository is currently dev-only.
 ```
 
 ## Requirements Satisfied
@@ -138,7 +136,7 @@ Specifically:
 
 ### Environment Management
 - Automatic environment variable injection from `.env` file
-- Support for multiple environments (dev/prod)
+- Dev-only environment
 - Fallback values for local development
 
 ### Cache Strategy
@@ -176,7 +174,7 @@ To complete the deployment:
 1. Ensure CDK infrastructure is deployed:
    ```bash
    cd infrastructure/
-   cdk deploy --all
+   bash deploy-with-config.sh dev
    ```
 
 2. Setup environment variables:

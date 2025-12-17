@@ -73,8 +73,8 @@ if cloudfront_domain:
 **Updated**: `infrastructure/stacks/cognito_stack.py`
 
 Cognito User Pool Client now includes:
-- Callback URLs: localhost (dev) + CloudFront domain (prod)
-- Logout URLs: localhost (dev) + CloudFront domain (prod)
+- Callback URLs: localhost (for local testing) + CloudFront domain (dev)
+- Logout URLs: localhost (for local testing) + CloudFront domain (dev)
 
 ```python
 callback_urls = ["http://localhost:3000", "http://localhost:8000"]
@@ -109,7 +109,7 @@ Comprehensive guide covering:
 - Cognito callback configuration
 - Automated configuration scripts
 - Configuration file formats
-- Environment-specific configuration (dev/prod)
+- Dev-only environment configuration
 - Deployment workflow
 - Troubleshooting guide
 - Security considerations
@@ -192,7 +192,12 @@ bash deploy.sh dev
 ```bash
 # 1. Deploy infrastructure
 cd infrastructure/
-cdk deploy --all --require-approval never
+cdk deploy \
+  DataCollectionCognito-dev \
+  DataCollectionDynamoDB-dev \
+  DataCollectionAPI-dev \
+  DataCollectionFrontend-dev \
+  --require-approval never
 
 # 2. Retrieve configuration
 cd ../frontend/
@@ -218,7 +223,7 @@ bash deploy.sh dev
 ### Requirement 7.2: Environment-Specific Stacks
 > WHEN deploying to different environments THEN THE system SHALL use separate CDK stacks per environment
 
-✅ **Satisfied**: Separate stacks for dev and prod with environment-specific configuration
+ℹ️ **Note**: The repository is currently configured as **dev-only** (production stacks removed).
 
 ### Requirement 7.3: Resource Provisioning
 > WHEN the application is deployed THEN THE system SHALL provision all required resources: S3, CloudFront, API Gateway, Lambda, DynamoDB, Cognito
@@ -248,7 +253,7 @@ bash deploy.sh dev
 ## Security Considerations
 
 ### CORS Policy
-- ✅ Only allows specific origins (localhost for dev, CloudFront for prod)
+- ✅ Only allows specific origins (localhost + CloudFront domain for dev)
 - ✅ Restricts to necessary HTTP methods (GET, POST, OPTIONS)
 - ✅ Restricts to necessary headers (Content-Type, Authorization)
 

@@ -24,7 +24,7 @@ Edit `.env` and fill in the values from your CDK deployment outputs:
 ```bash
 # Get outputs from CDK deployment
 aws cloudformation describe-stacks \
-    --stack-name DataCollectionWebAppFrontend-dev \
+    --stack-name DataCollectionFrontend-dev \
     --region eu-central-1 \
     --query "Stacks[0].Outputs" \
     --output table
@@ -63,10 +63,7 @@ This will:
 bash deploy.sh dev
 ```
 
-Or for production:
-```bash
-bash deploy.sh prod
-```
+Note: this repository is currently **dev-only**.
 
 The deployment script will:
 1. Build the frontend (if not already built)
@@ -96,7 +93,7 @@ You should see:
 **Solution**: Ensure the CDK infrastructure has been deployed:
 ```bash
 cd infrastructure/
-cdk deploy --all
+bash deploy-with-config.sh dev
 ```
 
 ### Issue: "Access Denied" when uploading to S3
@@ -128,7 +125,7 @@ bash build.sh
 
 # Get S3 bucket name
 S3_BUCKET=$(aws cloudformation describe-stacks \
-    --stack-name DataCollectionWebAppFrontend-dev \
+    --stack-name DataCollectionFrontend-dev \
     --region eu-central-1 \
     --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
     --output text)
@@ -138,7 +135,7 @@ aws s3 sync build/ s3://$S3_BUCKET/ --delete --region eu-central-1
 
 # Get CloudFront distribution ID
 DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-    --stack-name DataCollectionWebAppFrontend-dev \
+    --stack-name DataCollectionFrontend-dev \
     --region eu-central-1 \
     --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" \
     --output text)
