@@ -7,7 +7,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from aws_cdk import App, Environment
+from aws_cdk import App, Environment, Tags
 
 from infrastructure.stacks.api_stack import APIStack
 from infrastructure.stacks.cognito_stack import CognitoStack
@@ -23,6 +23,11 @@ def create_app() -> App:
         Configured CDK App instance
     """
     app = App()
+
+    # Global tags applied to all stacks in this app
+    Tags.of(app).add("Project", "data-collection")
+    Tags.of(app).add("ManagedBy", "CDK")
+    Tags.of(app).add("Creator", "uwe-strahlendorf")
 
     # Define the environment configuration.
     # CDK requires an account for non-environment-agnostic stacks; the CDK CLI
