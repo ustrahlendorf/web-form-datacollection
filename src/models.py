@@ -8,7 +8,7 @@ with UUID v4 identifiers and ISO-8601 UTC timestamps.
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import uuid4
-from typing import Optional
+from typing import Optional, Union
 from decimal import Decimal
 
 
@@ -82,7 +82,7 @@ def create_submission(
     uhrzeit: str,
     betriebsstunden: int,
     starts: int,
-    verbrauch_qm: Decimal,
+    verbrauch_qm: Union[Decimal, int, float, str],
     submission_id: Optional[str] = None,
     timestamp_utc: Optional[str] = None,
 ) -> Submission:
@@ -95,13 +95,17 @@ def create_submission(
         uhrzeit: Time in hh:mm format (24-hour)
         betriebsstunden: Operating hours (integer >= 0)
         starts: Number of starts (integer >= 0)
-        verbrauch_qm: Consumption per square meter (float, 0 < value < 20.0)
+        verbrauch_qm: Consumption per square meter (stored as Decimal)
         submission_id: Optional pre-generated UUID (auto-generated if not provided)
         timestamp_utc: Optional pre-generated timestamp (auto-generated if not provided)
 
     Returns:
         Submission instance with all fields populated
     """
+    # Coerce to Decimal for stable storage/serialization and to avoid float artifacts.
+    # Use Decimal(str(x)) so property tests (which do the same) match exactly.
+    verbrauch_qm_decimal = verbrauch_qm if isinstance(verbrauch_qm, Decimal) else Decimal(str(verbrauch_qm))
+
     return Submission(
         submission_id=submission_id or generate_submission_id(),
         user_id=user_id,
@@ -110,5 +114,5 @@ def create_submission(
         uhrzeit=uhrzeit,
         betriebsstunden=betriebsstunden,
         starts=starts,
-        verbrauch_qm=verbrauch_qm,
+        verbrauch_qm=verbrauch_qm_decimal,
     )
