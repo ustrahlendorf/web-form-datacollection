@@ -8,6 +8,7 @@ import pytest
 from datetime import datetime, timezone
 from uuid import UUID
 from hypothesis import given, strategies as st
+from decimal import Decimal
 from src.models import (
     Submission,
     generate_submission_id,
@@ -126,7 +127,8 @@ def test_create_submission_generates_valid_submission(
     assert submission.uhrzeit == uhrzeit, "uhrzeit should match input"
     assert submission.betriebsstunden == betriebsstunden, "betriebsstunden should match input"
     assert submission.starts == starts, "starts should match input"
-    assert submission.verbrauch_qm == verbrauch_qm, "verbrauch_qm should match input"
+    # verbrauch_qm is Decimal in the model now
+    assert submission.verbrauch_qm == Decimal(str(verbrauch_qm)), "verbrauch_qm should match input"
     assert submission.submission_id, "submission_id should be generated"
     assert submission.timestamp_utc, "timestamp_utc should be generated"
 
@@ -172,7 +174,8 @@ def test_submission_to_dict_contains_all_fields(
     assert submission_dict["uhrzeit"] == uhrzeit
     assert submission_dict["betriebsstunden"] == betriebsstunden
     assert submission_dict["starts"] == starts
-    assert submission_dict["verbrauch_qm"] == verbrauch_qm
+    # verbrauch_qm is Decimal in the model
+    assert submission_dict["verbrauch_qm"] == Decimal(str(verbrauch_qm))
 
 
 @given(

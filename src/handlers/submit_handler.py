@@ -9,6 +9,7 @@ import json
 import os
 import boto3
 from typing import Dict, Any
+from decimal import Decimal
 
 from src.models import create_submission
 from src.validators import validate_submission
@@ -147,7 +148,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Parse request body
         try:
             if isinstance(event.get("body"), str):
-                body = json.loads(event["body"])
+                # Parse JSON numbers as Decimal for DynamoDB compatibility (boto3 rejects float).
+                body = json.loads(event["body"], parse_float=Decimal)
             else:
                 body = event.get("body", {})
         except json.JSONDecodeError:
@@ -166,7 +168,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             uhrzeit=body["uhrzeit"],
             betriebsstunden=int(body["betriebsstunden"]),
             starts=int(body["starts"]),
-            verbrauch_qm=float(body["verbrauch_qm"]),
+            # Keep as Decimal (see json.loads(parse_float=Decimal) above)
+            verbrauch_qm=body["verbrauch_qm"],
         )
 
         # Write to DynamoDB

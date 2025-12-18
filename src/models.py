@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import uuid4
 from typing import Optional
+from decimal import Decimal
 
 
 @dataclass
@@ -34,7 +35,7 @@ class Submission:
     uhrzeit: str
     betriebsstunden: int
     starts: int
-    verbrauch_qm: float
+    verbrauch_qm: Decimal
 
     def to_dict(self) -> dict:
         """
@@ -81,7 +82,7 @@ def create_submission(
     uhrzeit: str,
     betriebsstunden: int,
     starts: int,
-    verbrauch_qm: float,
+    verbrauch_qm: Decimal,
     submission_id: Optional[str] = None,
     timestamp_utc: Optional[str] = None,
 ) -> Submission:

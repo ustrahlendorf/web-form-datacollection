@@ -9,6 +9,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from hypothesis import given, strategies as st, assume
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from src.handlers.submit_handler import (
     lambda_handler,
@@ -81,7 +82,8 @@ def test_submission_storage_round_trip(
     assert stored_item["uhrzeit"] == uhrzeit, "uhrzeit should match"
     assert stored_item["betriebsstunden"] == betriebsstunden, "betriebsstunden should match"
     assert stored_item["starts"] == starts, "starts should match"
-    assert stored_item["verbrauch_qm"] == verbrauch_qm, "verbrauch_qm should match"
+    # DynamoDB stores verbrauch_qm as Decimal, so compare as Decimal
+    assert stored_item["verbrauch_qm"] == Decimal(str(verbrauch_qm)), "verbrauch_qm should match"
     assert "submission_id" in stored_item, "submission_id should be present"
     assert "timestamp_utc" in stored_item, "timestamp_utc should be present"
 

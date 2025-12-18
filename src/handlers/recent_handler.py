@@ -10,10 +10,23 @@ import os
 import boto3
 from typing import Dict, Any
 from datetime import datetime, timezone, timedelta
+from decimal import Decimal
 
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource("dynamodb")
+
+
+def _json_default(obj):
+    """
+    JSON serializer for DynamoDB Decimal types.
+    
+    DynamoDB returns numeric values as Decimal, which json.dumps cannot serialize.
+    This helper converts Decimal to float for JSON encoding.
+    """
+    if isinstance(obj, Decimal):
+        return float(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 def get_table():
@@ -98,7 +111,7 @@ def format_error_response(status_code: int, error_message: str) -> Dict[str, Any
         "statusCode": status_code,
         "body": json.dumps({
             "error": error_message,
-        }),
+        }, default=_json_default),
         "headers": {
             "Content-Type": "application/json",
         },
@@ -119,7 +132,7 @@ def format_success_response(submissions: list) -> Dict[str, Any]:
         "statusCode": 200,
         "body": json.dumps({
             "submissions": submissions,
-        }),
+        }, default=_json_default),
         "headers": {
             "Content-Type": "application/json",
         },
