@@ -46,9 +46,29 @@ def extract_user_id(event: Dict[str, Any]) -> str:
         KeyError: If user_id cannot be extracted from JWT claims
     """
     try:
-        user_id = event["requestContext"]["authorizer"]["claims"]["sub"]
+        # HTTP API JWT authorizer shape:
+        #   requestContext.authorizer.jwt.claims.sub
+        # Legacy/test shape:
+        #   requestContext.authorizer.claims.sub
+        authorizer = (event.get("requestContext") or {}).get("authorizer") or {}
+
+        claims = None
+        jwt_block = authorizer.get("jwt")
+        if isinstance(jwt_block, dict):
+            claims = jwt_block.get("claims")
+
+        if not isinstance(claims, dict):
+            claims = authorizer.get("claims")
+
+        if not isinstance(claims, dict):
+            claims = {}
+
+        user_id = claims.get("sub")
+        if not user_id:
+            raise KeyError("sub claim missing")
+
         return user_id
-    except KeyError as e:
+    except Exception as e:
         raise KeyError(f"Could not extract user_id from JWT claims: {e}")
 
 
