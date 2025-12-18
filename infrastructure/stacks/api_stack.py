@@ -2,9 +2,9 @@
 
 from aws_cdk import (
     Stack,
-    aws_apigatewayv2 as apigw,
-    aws_apigatewayv2_authorizers as apigw_auth,
-    aws_apigatewayv2_integrations as apigw_integrations,
+    aws_apigatewayv2_alpha as apigw,
+    aws_apigatewayv2_authorizers_alpha as apigw_auth,
+    aws_apigatewayv2_integrations_alpha as apigw_integrations,
     aws_iam as iam,
     aws_lambda as lambda_,
     aws_logs as logs,
@@ -26,6 +26,8 @@ class APIStack(Stack):
         construct_id: str,
         environment_name: str,
         cognito_user_pool_id: str,
+        cognito_user_pool_client_id: str,
+        cloudfront_domain: str | None = None,
         **kwargs
     ) -> None:
         """
@@ -36,6 +38,8 @@ class APIStack(Stack):
             construct_id: The logical ID of the stack
             environment_name: The environment name (dev, prod, etc.)
             cognito_user_pool_id: The Cognito User Pool ID for JWT authorization
+            cognito_user_pool_client_id: The Cognito User Pool App Client ID (audience) for JWT authorization
+            cloudfront_domain: CloudFront distribution domain name for CORS (e.g. dxxxx.cloudfront.net)
             **kwargs: Additional arguments to pass to Stack
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -47,9 +51,8 @@ class APIStack(Stack):
             "http://localhost:3000",  # Local development
             "http://localhost:8000",  # Local development (alternative port)
         ]
-        
-        # Add CloudFront domain if available (will be set during deployment)
-        cloudfront_domain = os.environ.get("CLOUDFRONT_DOMAIN")
+
+        # Add CloudFront origin for the deployed frontend (passed from FrontendStack)
         if cloudfront_domain:
             cors_origins.append(f"https://{cloudfront_domain}")
         
@@ -74,7 +77,8 @@ class APIStack(Stack):
         # For Cognito User Pool, we use the issuer URL format
         jwt_authorizer = apigw_auth.HttpJwtAuthorizer(
             id="DataCollectionJWTAuthorizer",
-            jwt_audience=[cognito_user_pool_id],
+            # Audience must match the "aud" claim in tokens, which is the App Client ID (not the User Pool ID).
+            jwt_audience=[cognito_user_pool_client_id],
             jwt_issuer=f"https://cognito-idp.eu-central-1.amazonaws.com/{cognito_user_pool_id}",
             identity_source=["$request.header.Authorization"],
         )
@@ -290,7 +294,7 @@ class APIStack(Stack):
     def _wire_routes(
         self,
         http_api: apigw.HttpApi,
-        jwt_authorizer: apigw_auth.HttpUserPoolAuthorizer,
+        jwt_authorizer: apigw_auth.HttpJwtAuthorizer,
         submit_handler: lambda_.Function,
         history_handler: lambda_.Function,
         recent_handler: lambda_.Function,

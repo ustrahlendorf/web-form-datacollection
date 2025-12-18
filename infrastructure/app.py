@@ -1,5 +1,6 @@
 """AWS CDK Application for Data Collection Web Application (dev-only)."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -23,8 +24,13 @@ def create_app() -> App:
     """
     app = App()
 
-    # Define the environment configuration for eu-central-1
-    env_config = Environment(region="eu-central-1")
+    # Define the environment configuration.
+    # CDK requires an account for non-environment-agnostic stacks; the CDK CLI
+    # typically provides CDK_DEFAULT_ACCOUNT/CDK_DEFAULT_REGION automatically.
+    env_config = Environment(
+        account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
+        region=os.environ.get("CDK_DEFAULT_REGION", "eu-central-1"),
+    )
 
     environment_name = "dev"
 
@@ -45,15 +51,6 @@ def create_app() -> App:
         description="Data Collection Web Application - DynamoDB (dev)",
     )
 
-    api_stack = APIStack(
-        app,
-        f"DataCollectionAPI-{environment_name}",
-        environment_name=environment_name,
-        cognito_user_pool_id=cognito_stack.user_pool.user_pool_id,
-        env=env_config,
-        description="Data Collection Web Application - API (dev)",
-    )
-
     frontend_stack = FrontendStack(
         app,
         f"DataCollectionFrontend-{environment_name}",
@@ -62,7 +59,19 @@ def create_app() -> App:
         description="Data Collection Web Application - Frontend (dev)",
     )
 
+    api_stack = APIStack(
+        app,
+        f"DataCollectionAPI-{environment_name}",
+        environment_name=environment_name,
+        cognito_user_pool_id=cognito_stack.user_pool.user_pool_id,
+        cognito_user_pool_client_id=cognito_stack.user_pool_client.user_pool_client_id,
+        cloudfront_domain=frontend_stack.distribution.domain_name,
+        env=env_config,
+        description="Data Collection Web Application - API (dev)",
+    )
+
     # Ensure deployment ordering across stacks that use exports/imports.
+    api_stack.add_dependency(frontend_stack)
     api_stack.add_dependency(cognito_stack)
     api_stack.add_dependency(dynamodb_stack)
 

@@ -9,6 +9,20 @@ set -e
 ENVIRONMENT="${1:-dev}"
 REGION="eu-central-1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Ensure CDK has an explicit account/region to deploy into.
+# CDK can infer these sometimes, but it's safer to set them explicitly for scripts.
+export CDK_DEFAULT_REGION="$REGION"
+if [[ -z "${CDK_DEFAULT_ACCOUNT:-}" ]]; then
+    CDK_DEFAULT_ACCOUNT=$(aws sts get-caller-identity --query Account --output text --region "$REGION" 2>/dev/null || echo "")
+    if [[ -n "$CDK_DEFAULT_ACCOUNT" ]]; then
+        export CDK_DEFAULT_ACCOUNT
+    else
+        echo "Error: Unable to resolve AWS account (CDK_DEFAULT_ACCOUNT). Check your AWS credentials/config."
+        exit 1
+    fi
+fi
 
 echo "=========================================="
 echo "CDK Deployment with Configuration"
@@ -25,12 +39,13 @@ fi
 
 # Deploy CDK stacks
 echo "Deploying CDK stacks..."
-cd "$SCRIPT_DIR"
+# Run CDK from the project root so cdk.json (and its "app" command) is found.
+cd "$PROJECT_ROOT"
 cdk deploy \
     "DataCollectionCognito-$ENVIRONMENT" \
     "DataCollectionDynamoDB-$ENVIRONMENT" \
-    "DataCollectionAPI-$ENVIRONMENT" \
     "DataCollectionFrontend-$ENVIRONMENT" \
+    "DataCollectionAPI-$ENVIRONMENT" \
     --require-approval never
 
 echo ""
@@ -76,9 +91,13 @@ else
             aws cognito-idp update-user-pool-client \
                 --user-pool-id "$USER_POOL_ID" \
                 --client-id "$CLIENT_ID" \
-                --callback-urls "http://localhost:3000" "http://localhost:8000" "https://$CLOUDFRONT_DOMAIN" \
-                --logout-urls "http://localhost:3000" "http://localhost:8000" "https://$CLOUDFRONT_DOMAIN" \
-                --region "$REGION" 2>/dev/null || echo "Note: Could not update Cognito client URLs"
+                --allowed-o-auth-flows-user-pool-client \
+                --allowed-o-auth-flows code \
+                --allowed-o-auth-scopes openid email profile \
+                --supported-identity-providers COGNITO \
+                --callback-urls "http://localhost:3000" "http://localhost:8000" "https://$CLOUDFRONT_DOMAIN" "https://$CLOUDFRONT_DOMAIN/" \
+                --logout-urls "http://localhost:3000" "http://localhost:8000" "https://$CLOUDFRONT_DOMAIN" "https://$CLOUDFRONT_DOMAIN/" \
+                --region "$REGION" || echo "Note: Could not update Cognito client OAuth/callback/logout URLs"
         fi
     fi
 fi

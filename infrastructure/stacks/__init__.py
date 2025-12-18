@@ -1,5 +1,6 @@
 # CDK Stacks Package
+#
+# Intentionally avoid importing stack modules here to prevent import-time side effects
+# (and potential circular imports) when individual stacks are imported by CDK.
 
-from infrastructure.stacks.base_stack import BaseStack
-
-__all__ = ["BaseStack"]
+__all__ = []

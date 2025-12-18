@@ -71,7 +71,12 @@ class CognitoStack(Stack):
                     authorization_code_grant=True,
                     implicit_code_grant=False,
                 ),
-                scopes=[cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL],
+                # Frontend requests: openid + profile + email
+                scopes=[
+                    cognito.OAuthScope.OPENID,
+                    cognito.OAuthScope.PROFILE,
+                    cognito.OAuthScope.EMAIL,
+                ],
                 callback_urls=callback_urls,
                 logout_urls=logout_urls,
             ),
