@@ -26,6 +26,9 @@ class Submission:
         betriebsstunden: Operating hours (integer >= 0)
         starts: Number of starts (integer >= 0)
         verbrauch_qm: Consumption per square meter (float, 0 < value < 20.0)
+        delta_betriebsstunden: Delta to previous submission's operating hours (int; can be negative)
+        delta_starts: Delta to previous submission's starts (int; can be negative)
+        delta_verbrauch_qm: Delta to previous submission's consumption (Decimal; can be negative)
     """
 
     submission_id: str
@@ -36,6 +39,9 @@ class Submission:
     betriebsstunden: int
     starts: int
     verbrauch_qm: Decimal
+    delta_betriebsstunden: int = 0
+    delta_starts: int = 0
+    delta_verbrauch_qm: Decimal = Decimal("0")
 
     def to_dict(self) -> dict:
         """
@@ -53,6 +59,9 @@ class Submission:
             "betriebsstunden": self.betriebsstunden,
             "starts": self.starts,
             "verbrauch_qm": self.verbrauch_qm,
+            "delta_betriebsstunden": self.delta_betriebsstunden,
+            "delta_starts": self.delta_starts,
+            "delta_verbrauch_qm": self.delta_verbrauch_qm,
         }
 
 
@@ -83,6 +92,9 @@ def create_submission(
     betriebsstunden: int,
     starts: int,
     verbrauch_qm: Union[Decimal, int, float, str],
+    delta_betriebsstunden: int = 0,
+    delta_starts: int = 0,
+    delta_verbrauch_qm: Union[Decimal, int, float, str] = Decimal("0"),
     submission_id: Optional[str] = None,
     timestamp_utc: Optional[str] = None,
 ) -> Submission:
@@ -96,6 +108,9 @@ def create_submission(
         betriebsstunden: Operating hours (integer >= 0)
         starts: Number of starts (integer >= 0)
         verbrauch_qm: Consumption per square meter (stored as Decimal)
+        delta_betriebsstunden: Delta to previous submission's operating hours (stored as int)
+        delta_starts: Delta to previous submission's starts (stored as int)
+        delta_verbrauch_qm: Delta to previous submission's consumption (stored as Decimal)
         submission_id: Optional pre-generated UUID (auto-generated if not provided)
         timestamp_utc: Optional pre-generated timestamp (auto-generated if not provided)
 
@@ -105,6 +120,9 @@ def create_submission(
     # Coerce to Decimal for stable storage/serialization and to avoid float artifacts.
     # Use Decimal(str(x)) so property tests (which do the same) match exactly.
     verbrauch_qm_decimal = verbrauch_qm if isinstance(verbrauch_qm, Decimal) else Decimal(str(verbrauch_qm))
+    delta_verbrauch_qm_decimal = (
+        delta_verbrauch_qm if isinstance(delta_verbrauch_qm, Decimal) else Decimal(str(delta_verbrauch_qm))
+    )
 
     return Submission(
         submission_id=submission_id or generate_submission_id(),
@@ -115,4 +133,7 @@ def create_submission(
         betriebsstunden=betriebsstunden,
         starts=starts,
         verbrauch_qm=verbrauch_qm_decimal,
+        delta_betriebsstunden=delta_betriebsstunden,
+        delta_starts=delta_starts,
+        delta_verbrauch_qm=delta_verbrauch_qm_decimal,
     )

@@ -29,6 +29,7 @@ def test_end_to_end_flow_submit_and_retrieve(mock_history_dynamodb, mock_submit_
     # Setup mocks
     submit_table = MagicMock()
     mock_submit_dynamodb.Table.return_value = submit_table
+    submit_table.query.return_value = {"Items": [], "Count": 0}
     
     history_table = MagicMock()
     mock_history_dynamodb.Table.return_value = history_table
@@ -66,6 +67,9 @@ def test_end_to_end_flow_submit_and_retrieve(mock_history_dynamodb, mock_submit_
     stored_item = submit_table.put_item.call_args[1]["Item"]
     assert stored_item["submission_id"] == submission_id
     assert stored_item["user_id"] == user_id
+    assert stored_item["delta_betriebsstunden"] == 0
+    assert stored_item["delta_starts"] == 0
+    assert stored_item["delta_verbrauch_qm"] == 0 or str(stored_item["delta_verbrauch_qm"]) == "0"
 
     # Step 2: Retrieve from history
     history_event = {
@@ -108,6 +112,7 @@ def test_form_prepopulation_with_current_datetime(mock_dynamodb):
     """
     mock_table = MagicMock()
     mock_dynamodb.Table.return_value = mock_table
+    mock_table.query.return_value = {"Items": [], "Count": 0}
 
     # Get current date/time
     now = datetime.now(timezone.utc)
@@ -483,6 +488,8 @@ def test_multiple_submissions_and_history_retrieval(mock_history_dynamodb, mock_
     """
     submit_table = MagicMock()
     mock_submit_dynamodb.Table.return_value = submit_table
+    # Default: no previous items; specific deltas are not asserted in this integration test
+    submit_table.query.return_value = {"Items": [], "Count": 0}
     
     history_table = MagicMock()
     mock_history_dynamodb.Table.return_value = history_table

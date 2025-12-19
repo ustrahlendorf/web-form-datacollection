@@ -45,6 +45,8 @@ def test_submission_storage_round_trip(
     # Mock DynamoDB table
     mock_table = MagicMock()
     mock_dynamodb.Table.return_value = mock_table
+    # No previous submissions for this user → deltas should be 0
+    mock_table.query.return_value = {"Items": [], "Count": 0}
 
     # Create event
     event = {
@@ -84,8 +86,128 @@ def test_submission_storage_round_trip(
     assert stored_item["starts"] == starts, "starts should match"
     # DynamoDB stores verbrauch_qm as Decimal, so compare as Decimal
     assert stored_item["verbrauch_qm"] == Decimal(str(verbrauch_qm)), "verbrauch_qm should match"
+    assert stored_item["delta_betriebsstunden"] == 0, "delta_betriebsstunden should default to 0 for first submission"
+    assert stored_item["delta_starts"] == 0, "delta_starts should default to 0 for first submission"
+    assert stored_item["delta_verbrauch_qm"] == Decimal("0"), "delta_verbrauch_qm should default to 0 for first submission"
     assert "submission_id" in stored_item, "submission_id should be present"
     assert "timestamp_utc" in stored_item, "timestamp_utc should be present"
+
+
+@patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
+@patch("src.handlers.submit_handler.dynamodb")
+def test_submit_handler_computes_deltas_when_previous_exists(mock_dynamodb):
+    """
+    For a submission where a previous submission exists, the handler SHALL compute deltas (new - previous).
+    """
+    mock_table = MagicMock()
+    mock_dynamodb.Table.return_value = mock_table
+
+    # Previous item (latest)
+    mock_table.query.return_value = {
+        "Items": [
+            {
+                "submission_id": "prev-sub",
+                "user_id": "user-123",
+                "timestamp_utc": "2025-12-15T08:30:00Z",
+                "datum": "15.12.2025",
+                "uhrzeit": "08:30",
+                "betriebsstunden": 100,
+                "starts": 5,
+                "verbrauch_qm": Decimal("10.5"),
+                "delta_betriebsstunden": 0,
+                "delta_starts": 0,
+                "delta_verbrauch_qm": Decimal("0"),
+            }
+        ],
+        "Count": 1,
+    }
+
+    event = {
+        "requestContext": {
+            "authorizer": {
+                "claims": {
+                    "sub": "user-123",
+                }
+            }
+        },
+        "body": json.dumps(
+            {
+                "datum": "15.12.2025",
+                "uhrzeit": "09:30",
+                "betriebsstunden": 110,
+                "starts": 7,
+                "verbrauch_qm": 12.0,
+            }
+        ),
+    }
+
+    response = lambda_handler(event, None)
+
+    assert response["statusCode"] == 200
+    mock_table.query.assert_called_once()
+    mock_table.put_item.assert_called_once()
+
+    stored_item = mock_table.put_item.call_args[1]["Item"]
+    assert stored_item["delta_betriebsstunden"] == 10
+    assert stored_item["delta_starts"] == 2
+    assert stored_item["delta_verbrauch_qm"] == Decimal("1.5")
+
+
+@patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
+@patch("src.handlers.submit_handler.dynamodb")
+def test_submit_handler_body_as_dict_coerces_decimal_and_computes_deltas(mock_dynamodb):
+    """
+    If the event body is already a dict (not a JSON string), the handler SHALL still compute
+    delta_verbrauch_qm safely by coercing to Decimal before doing arithmetic.
+    """
+    mock_table = MagicMock()
+    mock_dynamodb.Table.return_value = mock_table
+
+    # Previous item (latest) with Decimal consumption value (DynamoDB style)
+    mock_table.query.return_value = {
+        "Items": [
+            {
+                "submission_id": "prev-sub",
+                "user_id": "user-123",
+                "timestamp_utc": "2025-12-15T08:30:00Z",
+                "datum": "15.12.2025",
+                "uhrzeit": "08:30",
+                "betriebsstunden": 100,
+                "starts": 5,
+                "verbrauch_qm": Decimal("10.5"),
+            }
+        ],
+        "Count": 1,
+    }
+
+    # Body as dict with float consumption value
+    event = {
+        "requestContext": {
+            "authorizer": {
+                "claims": {
+                    "sub": "user-123",
+                }
+            }
+        },
+        "body": {
+            "datum": "15.12.2025",
+            "uhrzeit": "09:30",
+            "betriebsstunden": 110,
+            "starts": 7,
+            "verbrauch_qm": 12.0,
+        },
+    }
+
+    response = lambda_handler(event, None)
+
+    assert response["statusCode"] == 200
+    mock_table.query.assert_called_once()
+    mock_table.put_item.assert_called_once()
+
+    stored_item = mock_table.put_item.call_args[1]["Item"]
+    assert stored_item["delta_betriebsstunden"] == 10
+    assert stored_item["delta_starts"] == 2
+    assert stored_item["delta_verbrauch_qm"] == Decimal("1.5")
 
 
 # ============================================================================
@@ -116,6 +238,7 @@ def test_invalid_data_rejection_bad_date(mock_dynamodb, invalid_datum):
 
     mock_table = MagicMock()
     mock_dynamodb.Table.return_value = mock_table
+    mock_table.query.return_value = {"Items": [], "Count": 0}
 
     event = {
         "requestContext": {
@@ -156,6 +279,7 @@ def test_invalid_data_rejection_bad_consumption(mock_dynamodb, invalid_verbrauch
     """
     mock_table = MagicMock()
     mock_dynamodb.Table.return_value = mock_table
+    mock_table.query.return_value = {"Items": [], "Count": 0}
 
     event = {
         "requestContext": {
@@ -198,6 +322,7 @@ def test_authentication_required_missing_jwt(mock_dynamodb):
     """
     mock_table = MagicMock()
     mock_dynamodb.Table.return_value = mock_table
+    mock_table.query.return_value = {"Items": [], "Count": 0}
 
     # Event without JWT claims
     event = {
@@ -232,6 +357,7 @@ def test_authentication_required_missing_request_context(mock_dynamodb):
     """
     mock_table = MagicMock()
     mock_dynamodb.Table.return_value = mock_table
+    mock_table.query.return_value = {"Items": [], "Count": 0}
 
     # Event without requestContext
     event = {
@@ -330,6 +456,7 @@ def test_submit_handler_with_valid_data(mock_dynamodb):
     """
     mock_table = MagicMock()
     mock_dynamodb.Table.return_value = mock_table
+    mock_table.query.return_value = {"Items": [], "Count": 0}
 
     event = {
         "requestContext": {
@@ -365,6 +492,7 @@ def test_submit_handler_with_missing_field(mock_dynamodb):
     """
     mock_table = MagicMock()
     mock_dynamodb.Table.return_value = mock_table
+    mock_table.query.return_value = {"Items": [], "Count": 0}
 
     event = {
         "requestContext": {
@@ -396,6 +524,7 @@ def test_submit_handler_with_database_error(mock_dynamodb):
     mock_table = MagicMock()
     mock_table.put_item.side_effect = Exception("Database error")
     mock_dynamodb.Table.return_value = mock_table
+    mock_table.query.return_value = {"Items": [], "Count": 0}
 
     event = {
         "requestContext": {

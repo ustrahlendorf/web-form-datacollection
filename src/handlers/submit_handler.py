@@ -11,6 +11,8 @@ import boto3
 from typing import Dict, Any
 from decimal import Decimal
 
+from boto3.dynamodb.conditions import Key
+
 from src.models import create_submission
 from src.validators import validate_submission
 
@@ -162,19 +164,65 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             return format_error_response(400, "Validation failed", error_details)
 
         # Create submission object
-        submission = create_submission(
-            user_id=user_id,
-            datum=body["datum"],
-            uhrzeit=body["uhrzeit"],
-            betriebsstunden=int(body["betriebsstunden"]),
-            starts=int(body["starts"]),
-            # Keep as Decimal (see json.loads(parse_float=Decimal) above)
-            verbrauch_qm=body["verbrauch_qm"],
-        )
-
-        # Write to DynamoDB
         try:
             table = get_table()
+            # Find latest previous submission for this user to compute deltas
+            previous_item = None
+            try:
+                previous_result = table.query(
+                    KeyConditionExpression=Key("user_id").eq(user_id),
+                    ScanIndexForward=False,
+                    Limit=1,
+                )
+                if not isinstance(previous_result, dict):
+                    previous_result = {}
+                items = previous_result.get("Items") or []
+                if not isinstance(items, list):
+                    items = []
+                if items and isinstance(items[0], dict):
+                    previous_item = items[0]
+            except Exception as e:
+                # If this fails, fall back to 0 deltas (do not block submission).
+                print(f"DynamoDB query error (previous submission): {str(e)}")
+
+            betriebsstunden = int(body["betriebsstunden"])
+            starts = int(body["starts"])
+            # Normalize to Decimal for DynamoDB compatibility and safe arithmetic.
+            # - If body came from json.loads(..., parse_float=Decimal), this is already Decimal.
+            # - If body is a dict (e.g., tests / non-APIGW invocations), this may be float/int/str.
+            verbrauch_qm_raw = body["verbrauch_qm"]
+            verbrauch_qm = (
+                verbrauch_qm_raw
+                if isinstance(verbrauch_qm_raw, Decimal)
+                else Decimal(str(verbrauch_qm_raw))
+            )
+
+            if previous_item:
+                prev_betriebsstunden = int(previous_item.get("betriebsstunden", 0))
+                prev_starts = int(previous_item.get("starts", 0))
+                prev_verbrauch = previous_item.get("verbrauch_qm", Decimal("0"))
+                prev_verbrauch_decimal = prev_verbrauch if isinstance(prev_verbrauch, Decimal) else Decimal(str(prev_verbrauch))
+
+                delta_betriebsstunden = betriebsstunden - prev_betriebsstunden
+                delta_starts = starts - prev_starts
+                delta_verbrauch_qm = verbrauch_qm - prev_verbrauch_decimal
+            else:
+                delta_betriebsstunden = 0
+                delta_starts = 0
+                delta_verbrauch_qm = Decimal("0")
+
+            submission = create_submission(
+                user_id=user_id,
+                datum=body["datum"],
+                uhrzeit=body["uhrzeit"],
+                betriebsstunden=betriebsstunden,
+                starts=starts,
+                verbrauch_qm=verbrauch_qm,
+                delta_betriebsstunden=delta_betriebsstunden,
+                delta_starts=delta_starts,
+                delta_verbrauch_qm=delta_verbrauch_qm,
+            )
+
             table.put_item(Item=submission.to_dict())
         except Exception as e:
             print(f"DynamoDB write error: {str(e)}")
