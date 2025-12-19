@@ -26,7 +26,7 @@ Out of scope for Release 1:
 | Uhrzeit | uhrzeit | string | Yes | hh:mm (24h) |
 | Betriebsstunden | betriebsstunden | integer | Yes | >= 0 |
 | Starts | starts | integer | Yes | >= 0 |
-| Verbrauch in qm | verbrauch_qm | float | Yes | 0 < value < 20.0 |
+| Verbrauch in qm | verbrauch_qm | number (stored as Decimal) | Yes | 0 < value < 20.0 |
 
 Normalization:
 - Decimal comma or dot accepted in UI, stored as dot.
@@ -37,11 +37,24 @@ Normalization:
 - timestamp_utc (ISO-8601 UTC)
 - user_id (Cognito sub)
 
+### 3.3 Derived Fields (Delta vs Previous Submission)
+After each submission, the backend computes deltas relative to the **previous submission of the same user** (ordered by `timestamp_utc` descending):
+
+- `delta_betriebsstunden` = current `betriebsstunden` − previous `betriebsstunden` (int; can be negative)
+- `delta_starts` = current `starts` − previous `starts` (int; can be negative)
+- `delta_verbrauch_qm` = current `verbrauch_qm` − previous `verbrauch_qm` (Decimal; can be negative)
+
+For a user’s **first** submission, all delta values are stored as **0**.
+
+UI display:
+- On the **form page**, the “Recent Submissions” list shows each value together with its delta (e.g. `123 (+5)`).
+
 ## 4. View History Page
 - Shows submissions of the authenticated user only
 - Sorted by timestamp_utc descending
 - Read-only
 - Paginated (default 20 items)
+- Displays delta columns for operating hours, starts, and consumption
 
 ## 5. API Specification
 
@@ -93,6 +106,9 @@ Attributes:
 - betriebsstunden
 - starts
 - verbrauch_qm
+- delta_betriebsstunden
+- delta_starts
+- delta_verbrauch_qm
 
 ## 8. Architecture
 - S3 + CloudFront for frontend

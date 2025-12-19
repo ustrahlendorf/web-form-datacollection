@@ -4,9 +4,9 @@
 
 ---
 
-## Current Status: 85% Complete ✓
+## Current Status: ✅ Live (dev)
 
-The application is **mostly deployed** but **not yet accessible** to users. The backend infrastructure is fully operational, but the frontend needs to be deployed to S3.
+The application is deployed and accessible to users in the **dev** environment.
 
 ---
 
@@ -55,22 +55,9 @@ The application is **mostly deployed** but **not yet accessible** to users. The 
 
 ---
 
-## What's Missing ❌
+## What's Missing
 
-### Only 1 Step Remaining: Deploy Frontend Files to S3
-
-The frontend build exists locally but hasn't been uploaded to S3 yet.
-
-**Current State:**
-- Frontend files built locally: ✅ `web-form-verbrauch/frontend/build/`
-- Files uploaded to S3: ❌ S3 bucket is empty
-- Configuration injected: ❌ Using placeholder values
-
-**What needs to happen:**
-1. Generate `.env` file with actual AWS configuration
-2. Rebuild frontend with real configuration
-3. Upload files to S3
-4. Invalidate CloudFront cache
+No deployment blockers at the moment.
 
 ---
 
@@ -162,6 +149,11 @@ Once the 3 steps above are complete, users can:
 4. **View recent submissions** (last 3 from past 3 days)
 
 5. **View full history** with pagination (20 items per page)
+
+6. **See delta values (Δ)**
+   - For each submission the UI shows deltas vs the previous submission for the same user:
+     - `delta_betriebsstunden`, `delta_starts`, `delta_verbrauch_qm`
+   - First submission per user stores delta values as 0
 
 6. **Data isolation** - Each user sees only their own data
 

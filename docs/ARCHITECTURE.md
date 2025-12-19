@@ -136,8 +136,11 @@ sequenceDiagram
         
         Note over Lambda: Extract user_id from JWT claims<br/>Parse JSON with parse_float=Decimal
         Lambda->>Lambda: Validate input data
-        Lambda->>Lambda: Create submission object
-        Lambda->>DDB: PutItem<br/>{user_id: "sub", timestamp_utc: "ISO-8601", verbrauch_qm: Decimal("10.5")}
+        Lambda->>DDB: Query latest previous submission<br/>PK=user_id, ScanIndexForward=false, Limit=1
+        DDB-->>Lambda: previous_item (or none)
+        Lambda->>Lambda: Compute deltas (current - previous)<br/>(first submission => deltas=0)
+        Lambda->>Lambda: Create submission object (includes delta_* fields)
+        Lambda->>DDB: PutItem<br/>{user_id, timestamp_utc, verbrauch_qm: Decimal("10.5"), delta_betriebsstunden, delta_starts, delta_verbrauch_qm}
         DDB-->>Lambda: Success
         Lambda-->>API: 200 OK<br/>{submission_id, timestamp_utc}
         API-->>User: Success response
@@ -248,6 +251,9 @@ sequenceDiagram
   - `betriebsstunden` (Number) - Operating hours
   - `starts` (Number) - Start count
   - `verbrauch_qm` (Number - Decimal) - Consumption in cubic meters
+  - `delta_betriebsstunden` (Number) - Delta to previous submission (can be negative)
+  - `delta_starts` (Number) - Delta to previous submission (can be negative)
+  - `delta_verbrauch_qm` (Number - Decimal) - Delta to previous submission (can be negative)
 - **Billing Mode**: Pay-per-request (on-demand)
 
 ## Security Architecture

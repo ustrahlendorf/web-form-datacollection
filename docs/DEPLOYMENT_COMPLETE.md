@@ -74,7 +74,7 @@ But the actual stack name is:
    - Time (hh:mm format)
    - Operating hours (integer ≥ 0)
    - Starts count (integer ≥ 0)
-   - Consumption (float 0 < value < 20.0)
+   - Consumption (number; stored as Decimal, 0 < value < 20.0)
 
 3. **View Recent Submissions**
    - Last 3 submissions from past 3 days
@@ -86,6 +86,7 @@ But the actual stack name is:
    - 20 items per page
    - Sorted by timestamp (newest first)
    - Read-only display
+   - Shows delta columns (Δ) for operating hours, starts, and consumption
 
 5. **Data Isolation**
    - Each user sees only their own data
@@ -268,14 +269,7 @@ aws cloudfront create-invalidation \
 
 ### Optional: Production Deployment
 
-To deploy to production:
-
-```bash
-cd frontend/
-bash setup-env.sh prod
-bash build.sh
-bash deploy.sh prod
-```
+This repository is currently **dev-only** (production stacks removed).
 
 ### Optional: Custom Domain
 

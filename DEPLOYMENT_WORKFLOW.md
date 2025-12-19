@@ -28,8 +28,8 @@ cdk synth
 cdk deploy \
   DataCollectionCognito-dev \
   DataCollectionDynamoDB-dev \
-  DataCollectionAPI-dev \
   DataCollectionFrontend-dev \
+  DataCollectionAPI-dev \
   --require-approval never
 ```
 
@@ -59,6 +59,13 @@ aws cloudformation describe-stacks \
 ### Step 2.1: Deploy Lambda Functions
 
 Lambda functions are automatically deployed by CDK. Verify they're working:
+
+If you change backend behavior (e.g., new stored attributes), redeploy the API stack:
+
+```bash
+cd infrastructure/
+cdk deploy DataCollectionAPI-dev --require-approval never
+```
 
 ```bash
 # Test submit endpoint
@@ -169,7 +176,7 @@ aws cloudfront get-distribution \
 3. Fill in the form fields
 4. Click Submit
 5. Verify success message appears
-6. Check that recent submissions are updated
+6. Check that recent submissions are updated (including delta values after the second submission)
 
 ### Step 4.3: Test History Page
 
@@ -177,6 +184,7 @@ aws cloudfront get-distribution \
 2. Verify submissions are displayed
 3. Test pagination (if more than 20 submissions)
 4. Verify sorting (newest first)
+5. Verify delta columns are shown and values match (current - previous)
 
 ### Step 4.4: Test Data Isolation
 
