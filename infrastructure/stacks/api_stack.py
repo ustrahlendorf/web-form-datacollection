@@ -172,14 +172,6 @@ class APIStack(Stack):
         Returns:
             Lambda Function construct
         """
-        # Create CloudWatch Log Group for Lambda
-        log_group = logs.LogGroup(
-            self,
-            "SubmitHandlerLogs",
-            log_group_name=f"/aws/lambda/data-collection-submit-{self.environment_name}",
-            retention=logs.RetentionDays.ONE_WEEK,
-        )
-
         submit_fn = lambda_.Function(
             self,
             "SubmitHandler",
@@ -196,10 +188,10 @@ class APIStack(Stack):
             timeout=Duration.seconds(30),
             memory_size=256,
             description="Lambda handler for form submission endpoint",
+            # Configure retention for the *actual* Lambda log group:
+            # /aws/lambda/<function name>
+            log_retention=logs.RetentionDays.ONE_WEEK,
         )
-
-        # Grant CloudWatch Logs permissions
-        log_group.grant_write(submit_fn);
 
         return submit_fn
 
@@ -216,14 +208,6 @@ class APIStack(Stack):
         Returns:
             Lambda Function construct
         """
-        # Create CloudWatch Log Group for Lambda
-        log_group = logs.LogGroup(
-            self,
-            "HistoryHandlerLogs",
-            log_group_name=f"/aws/lambda/data-collection-history-{self.environment_name}",
-            retention=logs.RetentionDays.ONE_WEEK,
-        )
-
         history_fn = lambda_.Function(
             self,
             "HistoryHandler",
@@ -240,10 +224,10 @@ class APIStack(Stack):
             timeout=Duration.seconds(30),
             memory_size=256,
             description="Lambda handler for history retrieval endpoint",
+            # Configure retention for the *actual* Lambda log group:
+            # /aws/lambda/<function name>
+            log_retention=logs.RetentionDays.ONE_WEEK,
         )
-
-        # Grant CloudWatch Logs permissions
-        log_group.grant_write(history_fn);
 
         return history_fn
 
@@ -260,14 +244,6 @@ class APIStack(Stack):
         Returns:
             Lambda Function construct
         """
-        # Create CloudWatch Log Group for Lambda
-        log_group = logs.LogGroup(
-            self,
-            "RecentHandlerLogs",
-            log_group_name=f"/aws/lambda/data-collection-recent-{self.environment_name}",
-            retention=logs.RetentionDays.ONE_WEEK,
-        )
-
         recent_fn = lambda_.Function(
             self,
             "RecentHandler",
@@ -284,10 +260,10 @@ class APIStack(Stack):
             timeout=Duration.seconds(30),
             memory_size=256,
             description="Lambda handler for recent submissions endpoint",
+            # Configure retention for the *actual* Lambda log group:
+            # /aws/lambda/<function name>
+            log_retention=logs.RetentionDays.ONE_WEEK,
         )
-
-        # Grant CloudWatch Logs permissions
-        log_group.grant_write(recent_fn);
 
         return recent_fn
 
