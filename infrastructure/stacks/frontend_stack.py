@@ -6,6 +6,8 @@ from aws_cdk import (
     aws_cloudfront as cloudfront,
     aws_cloudfront_origins as origins,
     aws_s3_deployment as s3_deployment,
+    aws_lambda as lambda_,
+    aws_logs as logs,
     CfnOutput,
     RemovalPolicy,
     Duration,
@@ -81,6 +83,11 @@ class FrontendStack(Stack):
             object_ownership=s3.ObjectOwnership.OBJECT_WRITER,
         )
 
+        # CDK implements `auto_delete_objects=True` using a Custom Resource backed by a provider Lambda.
+        # That provider Lambda gets its own log group (/aws/lambda/<function-name>) which otherwise
+        # keeps the default "Never expire" retention. Set it to 1 week.
+        self._set_s3_auto_delete_provider_log_retention()
+
         # Create CloudFront distribution
         distribution = cloudfront.Distribution(
             self,
@@ -143,4 +150,27 @@ class FrontendStack(Stack):
             value=distribution.distribution_id,
             export_name=f"DataCollectionCloudFrontDistributionId-{environment_name}",
             description="CloudFront distribution ID for cache invalidation",
+        )
+
+    def _set_s3_auto_delete_provider_log_retention(self) -> None:
+        """
+        Set CloudWatch Logs retention for the CDK-managed S3 auto-delete-objects provider Lambda.
+
+        CDK creates this provider automatically when any S3 Bucket in the stack uses
+        `auto_delete_objects=True`. The log group name is derived from the provider Lambda function name,
+        which includes a CDK-generated hash suffix.
+        """
+        provider = self.node.try_find_child("Custom::S3AutoDeleteObjectsCustomResourceProvider")
+        if not provider:
+            return
+
+        handler = provider.node.try_find_child("Handler")
+        if not isinstance(handler, lambda_.Function):
+            return
+
+        logs.LogRetention(
+            self,
+            "S3AutoDeleteObjectsProviderLogRetention",
+            log_group_name=f"/aws/lambda/{handler.function_name}",
+            retention=logs.RetentionDays.ONE_WEEK,
         )
