@@ -121,8 +121,9 @@ class APIStack(Stack):
         )
 
         # Get DynamoDB table name from CloudFormation export
+        # Point the application to the historical table.
         submissions_table_name = Fn.import_value(
-            f"DataCollectionSubmissionsTableName-{environment_name}"
+            f"DataCollectionSubmissionsTableName2025-{environment_name}"
         )
 
         # Create Lambda functions
