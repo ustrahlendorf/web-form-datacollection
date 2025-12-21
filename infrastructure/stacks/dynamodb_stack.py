@@ -48,6 +48,7 @@ class DynamoDBStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             encryption=dynamodb.TableEncryption.AWS_MANAGED,
+            # Keep historical data unless explicitly removed out-of-band.
             removal_policy=RemovalPolicy.RETAIN,
             point_in_time_recovery=True,
         )
