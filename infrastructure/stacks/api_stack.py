@@ -103,6 +103,9 @@ class APIStack(Stack):
         submissions_table_arn = Fn.import_value(
             f"DataCollectionSubmissionsTableArn-{environment_name}"
         )
+        submissions_2025_table_arn = Fn.import_value(
+            f"DataCollectionSubmissionsTableArn2025-{environment_name}"
+        )
 
         lambda_execution_role.add_to_policy(
             iam.PolicyStatement(
@@ -113,7 +116,7 @@ class APIStack(Stack):
                     "dynamodb:Query",
                     "dynamodb:Scan",
                 ],
-                resources=[submissions_table_arn],
+                resources=[submissions_table_arn, submissions_2025_table_arn],
             )
         )
 
