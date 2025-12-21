@@ -31,25 +31,6 @@ class DynamoDBStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
         self.environment_name = environment_name
 
-        # Create DynamoDB table for submissions
-        submissions_table = dynamodb.Table(
-            self,
-            "SubmissionsTable",
-            table_name=f"submissions-{environment_name}",
-            partition_key=dynamodb.Attribute(
-                name="user_id",
-                type=dynamodb.AttributeType.STRING,
-            ),
-            sort_key=dynamodb.Attribute(
-                name="timestamp_utc",
-                type=dynamodb.AttributeType.STRING,
-            ),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            encryption=dynamodb.TableEncryption.AWS_MANAGED,
-            removal_policy=RemovalPolicy.RETAIN,
-            point_in_time_recovery=True,
-        )
-
         # Create DynamoDB table for historical submissions import (fixed name).
         # This is intentionally NOT environment-suffixed because the requirement is a
         # specific table name: submissions-2025.
@@ -72,26 +53,7 @@ class DynamoDBStack(Stack):
         )
 
         # Store reference for use by other stacks
-        self.submissions_table = submissions_table
         self.submissions_2025_table = submissions_2025_table
-
-        # Export table name for Lambda functions
-        CfnOutput(
-            self,
-            "SubmissionsTableName",
-            value=submissions_table.table_name,
-            export_name=f"DataCollectionSubmissionsTableName-{environment_name}",
-            description="DynamoDB submissions table name",
-        )
-
-        # Export table ARN for IAM policies
-        CfnOutput(
-            self,
-            "SubmissionsTableArn",
-            value=submissions_table.table_arn,
-            export_name=f"DataCollectionSubmissionsTableArn-{environment_name}",
-            description="DynamoDB submissions table ARN",
-        )
 
         # Export 2025 table name/ARN for IAM policies and tooling (scoped by env to avoid export collisions)
         CfnOutput(

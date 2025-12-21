@@ -100,9 +100,6 @@ class APIStack(Stack):
 
         # Add DynamoDB permissions (least-privilege)
         # Get DynamoDB table ARN from CloudFormation export
-        submissions_table_arn = Fn.import_value(
-            f"DataCollectionSubmissionsTableArn-{environment_name}"
-        )
         submissions_2025_table_arn = Fn.import_value(
             f"DataCollectionSubmissionsTableArn2025-{environment_name}"
         )
@@ -116,7 +113,7 @@ class APIStack(Stack):
                     "dynamodb:Query",
                     "dynamodb:Scan",
                 ],
-                resources=[submissions_table_arn, submissions_2025_table_arn],
+                resources=[submissions_2025_table_arn],
             )
         )
 
