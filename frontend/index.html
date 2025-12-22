@@ -31,64 +31,70 @@
                     <div class="form-section">
                         <h3>New Submission</h3>
                         <form id="submission-form">
-                            <div class="form-group">
-                                <label for="datum">Date (dd.mm.yyyy)</label>
-                                <input 
-                                    type="text" 
-                                    id="datum" 
-                                    name="datum" 
-                                    placeholder="dd.mm.yyyy"
-                                    required
-                                >
-                                <span class="error-message" id="datum-error"></span>
-                            </div>
+                            <div class="form-grid">
+                                <div class="form-row form-row-2">
+                                    <div class="form-group">
+                                        <label for="datum">Date (dd.mm.yyyy)</label>
+                                        <input 
+                                            type="text" 
+                                            id="datum" 
+                                            name="datum" 
+                                            placeholder="dd.mm.yyyy"
+                                            required
+                                        >
+                                        <span class="error-message" id="datum-error"></span>
+                                    </div>
 
-                            <div class="form-group">
-                                <label for="uhrzeit">Time (hh:mm)</label>
-                                <input 
-                                    type="text" 
-                                    id="uhrzeit" 
-                                    name="uhrzeit" 
-                                    placeholder="hh:mm"
-                                    required
-                                >
-                                <span class="error-message" id="uhrzeit-error"></span>
-                            </div>
+                                    <div class="form-group">
+                                        <label for="uhrzeit">Time (hh:mm)</label>
+                                        <input 
+                                            type="text" 
+                                            id="uhrzeit" 
+                                            name="uhrzeit" 
+                                            placeholder="hh:mm"
+                                            required
+                                        >
+                                        <span class="error-message" id="uhrzeit-error"></span>
+                                    </div>
+                                </div>
 
-                            <div class="form-group">
-                                <label for="betriebsstunden">Operating Hours</label>
-                                <input 
-                                    type="number" 
-                                    id="betriebsstunden" 
-                                    name="betriebsstunden" 
-                                    min="0"
-                                    required
-                                >
-                                <span class="error-message" id="betriebsstunden-error"></span>
-                            </div>
+                                <div class="form-row form-row-3">
+                                    <div class="form-group">
+                                        <label for="betriebsstunden">Operating Hours</label>
+                                        <input 
+                                            type="number" 
+                                            id="betriebsstunden" 
+                                            name="betriebsstunden" 
+                                            min="0"
+                                            required
+                                        >
+                                        <span class="error-message" id="betriebsstunden-error"></span>
+                                    </div>
 
-                            <div class="form-group">
-                                <label for="starts">Starts</label>
-                                <input 
-                                    type="number" 
-                                    id="starts" 
-                                    name="starts" 
-                                    min="0"
-                                    required
-                                >
-                                <span class="error-message" id="starts-error"></span>
-                            </div>
+                                    <div class="form-group">
+                                        <label for="starts">Starts</label>
+                                        <input 
+                                            type="number" 
+                                            id="starts" 
+                                            name="starts" 
+                                            min="0"
+                                            required
+                                        >
+                                        <span class="error-message" id="starts-error"></span>
+                                    </div>
 
-                            <div class="form-group">
-                                <label for="verbrauch_qm">Consumption (kWh/m²)</label>
-                                <input 
-                                    type="text" 
-                                    id="verbrauch_qm" 
-                                    name="verbrauch_qm" 
-                                    placeholder="0.00"
-                                    required
-                                >
-                                <span class="error-message" id="verbrauch_qm-error"></span>
+                                    <div class="form-group">
+                                        <label for="verbrauch_qm">Consumption (kWh/m²)</label>
+                                        <input 
+                                            type="text" 
+                                            id="verbrauch_qm" 
+                                            name="verbrauch_qm" 
+                                            placeholder="0.00"
+                                            required
+                                        >
+                                        <span class="error-message" id="verbrauch_qm-error"></span>
+                                    </div>
+                                </div>
                             </div>
 
                             <button type="submit" class="btn btn-primary">Submit</button>
