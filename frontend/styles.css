@@ -111,6 +111,28 @@ h3 {
     margin-bottom: 2rem;
 }
 
+.form-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.form-row {
+    display: grid;
+    gap: 1rem;
+}
+
+.form-row-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-row-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.form-row .form-group {
+    margin-bottom: 0;
+}
+
 .form-group {
     margin-bottom: 1.5rem;
 }
@@ -346,6 +368,11 @@ input[type="number"].error {
 
     .container {
         padding: 1rem;
+    }
+
+    .form-row-2,
+    .form-row-3 {
+        grid-template-columns: 1fr;
     }
 
     .recent-item-data {
