@@ -331,6 +331,68 @@ input[type="number"].error {
     font-weight: 500;
 }
 
+/* Analyze (Statistics) */
+.analyze-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem;
+    align-items: start;
+}
+
+.analyze-card {
+    background-color: #f9f9f9;
+    border: 1px solid #ecf0f1;
+    border-radius: 8px;
+    padding: 1.25rem;
+    min-height: 160px;
+}
+
+.analyze-card-title {
+    margin-bottom: 1rem;
+    color: #34495e;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.analyze-metrics {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.analyze-metric {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(236, 240, 241, 0.9);
+}
+
+.analyze-metric:last-child {
+    border-bottom: none;
+}
+
+.analyze-metric-label {
+    font-weight: 500;
+    color: #7f8c8d;
+}
+
+.analyze-metric-value {
+    color: #2c3e50;
+    font-weight: 600;
+    text-align: right;
+}
+
+.analyze-placeholder {
+    border: 2px dashed #bdc3c7;
+    background: rgba(255, 255, 255, 0.6);
+    color: #95a5a6;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
 /* Login Section */
 .login-container {
     display: flex;
@@ -394,5 +456,9 @@ input[type="number"].error {
 
     .pagination {
         flex-wrap: wrap;
+    }
+
+    .analyze-grid {
+        grid-template-columns: 1fr;
     }
 }
