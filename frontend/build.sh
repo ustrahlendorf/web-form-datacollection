@@ -65,6 +65,36 @@ console.log('Application Configuration Loaded:', {
 });
 EOF
 
+# Cache-busting: create content-hashed asset filenames and rewrite build/index.html to reference them.
+# This prevents browsers from using stale cached JS/CSS between deployments.
+hash_file() {
+    # Use sha256 and keep it short for readable filenames.
+    shasum -a 256 "$1" | awk '{print substr($1,1,12)}'
+}
+
+echo "Applying cache-busting (content-hash filenames)..."
+APP_HASH="$(hash_file "$BUILD_DIR/app.js")"
+AUTH_HASH="$(hash_file "$BUILD_DIR/auth.js")"
+CONFIG_HASH="$(hash_file "$BUILD_DIR/config.js")"
+CSS_HASH="$(hash_file "$BUILD_DIR/styles.css")"
+
+mv "$BUILD_DIR/app.js" "$BUILD_DIR/app.${APP_HASH}.js"
+mv "$BUILD_DIR/auth.js" "$BUILD_DIR/auth.${AUTH_HASH}.js"
+mv "$BUILD_DIR/config.js" "$BUILD_DIR/config.${CONFIG_HASH}.js"
+mv "$BUILD_DIR/styles.css" "$BUILD_DIR/styles.${CSS_HASH}.css"
+
+# macOS/BSD sed requires an explicit backup suffix argument; use '' for in-place without backups.
+sed -i '' -e "s|href=\"styles.css\"|href=\"styles.${CSS_HASH}.css\"|g" "$BUILD_DIR/index.html"
+sed -i '' -e "s|src=\"config.js\"|src=\"config.${CONFIG_HASH}.js\"|g" "$BUILD_DIR/index.html"
+sed -i '' -e "s|src=\"auth.js\"|src=\"auth.${AUTH_HASH}.js\"|g" "$BUILD_DIR/index.html"
+sed -i '' -e "s|src=\"app.js\"|src=\"app.${APP_HASH}.js\"|g" "$BUILD_DIR/index.html"
+
+echo "Cache-busting version:"
+echo "  app.${APP_HASH}.js"
+echo "  auth.${AUTH_HASH}.js"
+echo "  config.${CONFIG_HASH}.js"
+echo "  styles.${CSS_HASH}.css"
+
 echo "Frontend build complete!"
 echo "Build directory: $BUILD_DIR"
 echo ""

@@ -571,7 +571,24 @@ function computeInclusiveDays(earliestSubmission, latestSubmission) {
     return diffDays + 1;
 }
 
-function computeYtdTotals(earliestSubmission, latestSubmission) {
+function sumConsumptionAcrossSubmissions(submissions) {
+    if (!Array.isArray(submissions) || submissions.length === 0) {
+        return null;
+    }
+
+    let sum = 0;
+    let seenAny = false;
+
+    for (const s of submissions) {
+        const n = normalizeNumber(s && s.verbrauch_qm);
+        if (n === null) continue;
+        sum += n;
+        seenAny = true;
+    }
+    return seenAny ? sum : null;
+}
+
+function computeYtdTotals(earliestSubmission, latestSubmission, submissionsInRange = null) {
     if (!earliestSubmission || !latestSubmission) {
         return null;
     }
@@ -580,15 +597,13 @@ function computeYtdTotals(earliestSubmission, latestSubmission) {
     const latestHours = normalizeNumber(latestSubmission.betriebsstunden);
     const earliestStarts = normalizeNumber(earliestSubmission.starts);
     const latestStarts = normalizeNumber(latestSubmission.starts);
-    const earliestConsumption = normalizeNumber(earliestSubmission.verbrauch_qm);
-    const latestConsumption = normalizeNumber(latestSubmission.verbrauch_qm);
 
     const totalOperatingHours = (earliestHours === null || latestHours === null) ? null : (latestHours - earliestHours);
     const totalStarts = (earliestStarts === null || latestStarts === null) ? null : (latestStarts - earliestStarts);
-    const totalConsumption = (earliestConsumption === null || latestConsumption === null) ? null : (latestConsumption - earliestConsumption);
+    // Consumption is per-entry (not cumulative), so total consumption is the SUM from earliest through latest.
+    const totalConsumption = sumConsumptionAcrossSubmissions(submissionsInRange);
 
     const days = computeInclusiveDays(earliestSubmission, latestSubmission);
-
     return {
         earliest: earliestSubmission,
         latest: latestSubmission,
@@ -674,6 +689,34 @@ async function fetchEarliestSubmission() {
     return overallEarliest || lastPageOldest;
 }
 
+async function fetchAllSubmissions() {
+    // Pages through /history until next_token is exhausted and returns all submissions.
+    // Includes safeguards to avoid infinite loops if the API misbehaves.
+    let nextToken = null;
+    const all = [];
+
+    let pagesFetched = 0;
+    const MAX_PAGES = 500;
+
+    do {
+        const page = await fetchHistoryPage(100, nextToken);
+        const submissions = page.submissions;
+
+        for (const s of submissions) {
+            if (s && typeof s === 'object') {
+                all.push(s);
+            }
+        }
+
+        nextToken = page.nextToken;
+        pagesFetched += 1;
+        if (pagesFetched > MAX_PAGES) {
+            break;
+        }
+    } while (nextToken);
+    return all;
+}
+
 function getAnalyzeTotalsContainer() {
     // First column of the Analyze grid (Totals).
     return document.querySelector('#analyze-page .analyze-grid .analyze-col') ||
@@ -756,17 +799,22 @@ async function loadAnalyze() {
             return;
         }
 
-        const [latest, earliest] = await Promise.all([
-            fetchLatestSubmission(),
-            fetchEarliestSubmission(),
-        ]);
-
-        if (!latest || !earliest) {
+        const submissions = await fetchAllSubmissions();
+        if (!Array.isArray(submissions) || submissions.length === 0) {
             renderAnalyzeEmpty();
             return;
         }
 
-        const stats = computeYtdTotals(earliest, latest);
+        const sorted = submissions.slice().sort(compareSubmissionsByDay);
+        const earliest = sorted.find((s) => getSubmissionUtcDay(s)) || sorted[0] || null;
+        const latest = sorted.slice().reverse().find((s) => getSubmissionUtcDay(s)) || sorted[sorted.length - 1] || null;
+
+        if (!earliest || !latest) {
+            renderAnalyzeEmpty();
+            return;
+        }
+
+        const stats = computeYtdTotals(earliest, latest, sorted);
         if (!stats) {
             renderAnalyzeError('Failed to compute statistics.');
             return;
