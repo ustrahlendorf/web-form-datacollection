@@ -86,6 +86,24 @@ You should see:
 - The login page if not authenticated
 - The form page after logging in with Cognito
 
+### Step 5: Verify Analyze (YTD Statistics)
+
+The **Analyze** page is a **frontend-only** feature. No infrastructure/CDK redeploy is required unless you changed backend APIs.
+
+After logging in:
+
+1. Click **Analyze** in the top navigation.
+2. Confirm the header text **“Statistics Year to Date”** is visible.
+3. Confirm the **Totals** card renders values for:
+   - Operating hours
+   - Starts
+   - Consumption
+   - Days
+
+Notes:
+- If you have **fewer than 2 submissions**, the Analyze page will show an empty state (there’s no “earliest vs latest” pair to compare).
+- Analyze computes totals using the **earliest and latest** items from `/history` (it may page through history), so on very large histories it can take a moment to load.
+
 ## Troubleshooting
 
 ### Issue: "Could not retrieve S3 bucket or CloudFront distribution ID"
@@ -109,6 +127,15 @@ bash deploy-with-config.sh dev
 1. Check the browser console for errors
 2. Verify the API endpoint is accessible
 3. Ensure Cognito configuration matches your User Pool settings
+
+### Issue: Analyze shows "Failed to load statistics" (or empty when you expect data)
+
+**Common causes / checks**:
+1. Ensure you are logged in (Analyze requires authentication).
+2. Ensure the API `/history` endpoint is reachable and returns items:
+   - Open DevTools → Network → look for `GET .../history`
+3. Ensure you have at least **two** submissions to compute deltas (earliest vs latest).
+4. If `/history` is failing, check CloudWatch logs for the history handler Lambda.
 
 ### Issue: "Invalid client id" error during login
 

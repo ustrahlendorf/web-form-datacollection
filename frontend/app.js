@@ -113,6 +113,8 @@ function navigateToPage(page) {
     // Load page-specific data
     if (page === 'history') {
         loadHistory();
+    } else if (page === 'analyze') {
+        loadAnalyze();
     } else if (page === 'form') {
         initializeFormPage();
     }
@@ -503,6 +505,280 @@ function updatePaginationControls(hasNextPage) {
     }
 }
 
+// Analyze (YTD Statistics) Functions
+function parseGermanDateToUtcMidnight(dateStr) {
+    if (typeof dateStr !== 'string') {
+        return null;
+    }
+    const trimmed = dateStr.trim();
+    const match = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!match) {
+        return null;
+    }
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+    if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) {
+        return null;
+    }
+    // Use UTC midnight to avoid DST/timezone skew when computing day deltas.
+    const d = new Date(Date.UTC(year, month - 1, day));
+    // Validate round-trip
+    if (d.getUTCFullYear() !== year || d.getUTCMonth() !== (month - 1) || d.getUTCDate() !== day) {
+        return null;
+    }
+    return d;
+}
+
+function getSubmissionUtcDay(submission) {
+    if (!submission || typeof submission !== 'object') {
+        return null;
+    }
+
+    // Prefer the explicit dd.mm.yyyy field.
+    const fromDatum = parseGermanDateToUtcMidnight(submission.datum);
+    if (fromDatum) {
+        return fromDatum;
+    }
+
+    // Fallback to timestamp_utc (ISO string).
+    if (typeof submission.timestamp_utc === 'string' && submission.timestamp_utc.trim() !== '') {
+        const ts = new Date(submission.timestamp_utc);
+        if (!Number.isNaN(ts.getTime())) {
+            return new Date(Date.UTC(ts.getUTCFullYear(), ts.getUTCMonth(), ts.getUTCDate()));
+        }
+    }
+
+    return null;
+}
+
+function compareSubmissionsByDay(a, b) {
+    const da = getSubmissionUtcDay(a);
+    const db = getSubmissionUtcDay(b);
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+    return da.getTime() - db.getTime();
+}
+
+function computeInclusiveDays(earliestSubmission, latestSubmission) {
+    const start = getSubmissionUtcDay(earliestSubmission);
+    const end = getSubmissionUtcDay(latestSubmission);
+    if (!start || !end) {
+        return null;
+    }
+    const diffDays = Math.round((end.getTime() - start.getTime()) / 86400000);
+    return diffDays + 1;
+}
+
+function computeYtdTotals(earliestSubmission, latestSubmission) {
+    if (!earliestSubmission || !latestSubmission) {
+        return null;
+    }
+
+    const earliestHours = normalizeNumber(earliestSubmission.betriebsstunden);
+    const latestHours = normalizeNumber(latestSubmission.betriebsstunden);
+    const earliestStarts = normalizeNumber(earliestSubmission.starts);
+    const latestStarts = normalizeNumber(latestSubmission.starts);
+    const earliestConsumption = normalizeNumber(earliestSubmission.verbrauch_qm);
+    const latestConsumption = normalizeNumber(latestSubmission.verbrauch_qm);
+
+    const totalOperatingHours = (earliestHours === null || latestHours === null) ? null : (latestHours - earliestHours);
+    const totalStarts = (earliestStarts === null || latestStarts === null) ? null : (latestStarts - earliestStarts);
+    const totalConsumption = (earliestConsumption === null || latestConsumption === null) ? null : (latestConsumption - earliestConsumption);
+
+    const days = computeInclusiveDays(earliestSubmission, latestSubmission);
+
+    return {
+        earliest: earliestSubmission,
+        latest: latestSubmission,
+        totalOperatingHours,
+        totalStarts,
+        totalConsumption,
+        days,
+    };
+}
+
+function formatMetricValue(value, opts = {}) {
+    const { kind = 'int', decimals = 2 } = opts;
+    const n = normalizeNumber(value);
+    if (n === null) {
+        return '—';
+    }
+    if (kind === 'decimal') {
+        return n.toFixed(decimals);
+    }
+    return String(Math.trunc(n));
+}
+
+async function fetchHistoryPage(limit, nextToken) {
+    let url = `${CONFIG.API_ENDPOINT}/history?limit=${encodeURIComponent(String(limit))}`;
+    if (nextToken) {
+        url += `&next_token=${encodeURIComponent(nextToken)}`;
+    }
+    const response = await authenticatedFetch(url);
+    if (!response || !response.ok) {
+        throw new Error('Failed to load history');
+    }
+    const data = await response.json();
+    return {
+        submissions: (data && Array.isArray(data.submissions)) ? data.submissions : [],
+        nextToken: (data && data.next_token) ? data.next_token : null,
+    };
+}
+
+async function fetchLatestSubmission() {
+    const { submissions } = await fetchHistoryPage(1, null);
+    const latest = submissions.length > 0 && typeof submissions[0] === 'object' ? submissions[0] : null;
+    return latest;
+}
+
+async function fetchEarliestSubmission() {
+    // We page through the /history endpoint until next_token is exhausted.
+    // The plan calls out: "keep the oldest item from the final page".
+    // To be robust to ordering quirks, we also track the earliest by date across all items.
+    let nextToken = null;
+    let lastPageOldest = null;
+    let overallEarliest = null;
+
+    // Safety valve to avoid infinite loops if the API misbehaves.
+    let pagesFetched = 0;
+    const MAX_PAGES = 500;
+
+    do {
+        const page = await fetchHistoryPage(100, nextToken);
+        const submissions = page.submissions;
+
+        if (submissions.length > 0) {
+            const oldestFromThisPage = submissions[submissions.length - 1];
+            lastPageOldest = oldestFromThisPage;
+
+            for (const s of submissions) {
+                if (!overallEarliest) {
+                    overallEarliest = s;
+                    continue;
+                }
+                if (compareSubmissionsByDay(s, overallEarliest) < 0) {
+                    overallEarliest = s;
+                }
+            }
+        }
+
+        nextToken = page.nextToken;
+        pagesFetched += 1;
+        if (pagesFetched > MAX_PAGES) {
+            break;
+        }
+    } while (nextToken);
+
+    return overallEarliest || lastPageOldest;
+}
+
+function getAnalyzeTotalsContainer() {
+    // First column of the Analyze grid (Totals).
+    return document.querySelector('#analyze-page .analyze-grid .analyze-col') ||
+           document.querySelector('#analyze-page .analyze-grid > div') ||
+           null;
+}
+
+function renderAnalyzeLoading() {
+    const container = getAnalyzeTotalsContainer();
+    if (!container) return;
+    container.innerHTML = `
+        <h3>Totals</h3>
+        <p class="empty-state">Loading statistics...</p>
+    `;
+}
+
+function renderAnalyzeError(message) {
+    const container = getAnalyzeTotalsContainer();
+    if (!container) return;
+    const safeMsg = (typeof message === 'string' && message.trim() !== '') ? message.trim() : 'Failed to load statistics';
+    container.innerHTML = `
+        <h3>Totals</h3>
+        <p class="empty-state">${safeMsg}</p>
+    `;
+}
+
+function renderAnalyzeEmpty() {
+    const container = getAnalyzeTotalsContainer();
+    if (!container) return;
+    container.innerHTML = `
+        <h3>Totals</h3>
+        <p class="empty-state">No submissions found yet.</p>
+    `;
+}
+
+function renderAnalyzeTotals(stats) {
+    const container = getAnalyzeTotalsContainer();
+    if (!container) return;
+
+    const earliestDay = getSubmissionUtcDay(stats.earliest);
+    const latestDay = getSubmissionUtcDay(stats.latest);
+    const rangeText = (earliestDay && latestDay)
+        ? `From ${earliestDay.toLocaleDateString('de-DE')} to ${latestDay.toLocaleDateString('de-DE')}`
+        : 'Date range unavailable';
+
+    container.innerHTML = `
+        <div class="analyze-card">
+            <div class="analyze-card-title">Totals</div>
+            <div class="analyze-metrics">
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Operating hours</span>
+                    <span class="analyze-metric-value">${formatMetricValue(stats.totalOperatingHours, { kind: 'int' })}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Starts</span>
+                    <span class="analyze-metric-value">${formatMetricValue(stats.totalStarts, { kind: 'int' })}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Consumption</span>
+                    <span class="analyze-metric-value">${formatMetricValue(stats.totalConsumption, { kind: 'decimal', decimals: 2 })}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Days</span>
+                    <span class="analyze-metric-value">${stats.days === null ? '—' : String(stats.days)}</span>
+                </div>
+            </div>
+            <div style="margin-top: 1rem; color: #7f8c8d; font-size: 0.95rem;">
+                ${rangeText}
+            </div>
+        </div>
+    `;
+}
+
+async function loadAnalyze() {
+    renderAnalyzeLoading();
+
+    try {
+        if (typeof authenticatedFetch !== 'function') {
+            renderAnalyzeError('Not authenticated yet.');
+            return;
+        }
+
+        const [latest, earliest] = await Promise.all([
+            fetchLatestSubmission(),
+            fetchEarliestSubmission(),
+        ]);
+
+        if (!latest || !earliest) {
+            renderAnalyzeEmpty();
+            return;
+        }
+
+        const stats = computeYtdTotals(earliest, latest);
+        if (!stats) {
+            renderAnalyzeError('Failed to compute statistics.');
+            return;
+        }
+
+        renderAnalyzeTotals(stats);
+    } catch (error) {
+        console.error('Error loading analyze statistics:', error);
+        renderAnalyzeError('Failed to load statistics');
+    }
+}
+
 // Utility Functions
 function formatTimestamp(isoString) {
     const date = new Date(isoString);
@@ -572,6 +848,10 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         initializeFormPage,
         prefillFromLatestSubmission,
+        parseGermanDateToUtcMidnight,
+        getSubmissionUtcDay,
+        computeInclusiveDays,
+        computeYtdTotals,
         __setAuthenticatedFetchForTests: (fn) => {
             authenticatedFetch = fn;
         },

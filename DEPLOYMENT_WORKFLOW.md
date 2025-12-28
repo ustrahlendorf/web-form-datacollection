@@ -193,6 +193,21 @@ aws cloudfront get-distribution \
 3. Verify you can only see your own submissions
 4. Verify you cannot see submissions from the first user
 
+### Step 4.5: Test Analyze Page (YTD Statistics)
+
+The **Analyze** page is a **frontend-only** feature that uses the existing `/history` API to compute totals (latest − earliest) and inclusive calendar days.
+
+1. Navigate to **Analyze**.
+2. Verify the header **“Statistics Year to Date”** is shown.
+3. Verify the Totals card renders values for:
+   - Operating hours
+   - Starts
+   - Consumption
+   - Days
+4. Verify behavior with different data volumes:
+   - With **0–1 submissions**: Analyze shows an empty state (no totals).
+   - With **2+ submissions**: totals are computed from earliest vs latest.
+
 ## Phase 6: Monitoring and Maintenance
 
 ### Step 6.1: Monitor CloudWatch Logs
@@ -322,6 +337,7 @@ cdk destroy \
 - [ ] Authentication tested
 - [ ] Form submission tested
 - [ ] History page tested
+- [ ] Analyze page tested (YTD statistics)
 - [ ] Data isolation verified
 - [ ] CloudWatch logs monitored
 - [ ] Production deployment completed (if applicable)
