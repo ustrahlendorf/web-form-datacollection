@@ -72,3 +72,49 @@ class DynamoDBStack(Stack):
             export_name=f"DataCollectionSubmissionsTableArn2025-{environment_name}",
             description="DynamoDB submissions-2025 table ARN",
         )
+
+        # Add next-year table ahead of roll-over.
+        # This is also intentionally NOT environment-suffixed because the requirement is a
+        # specific table name: submissions-2026.
+        #
+        # IMPORTANT: This change is non-impacting to the running app as long as the API stack
+        # continues to import the 2025 table exports. The 2026 table is created and exported
+        # ahead of time so the roll-over can be performed as a separate (small) change.
+        submissions_2026_table = dynamodb.Table(
+            self,
+            "Submissions2026Table",
+            table_name="submissions-2026",
+            partition_key=dynamodb.Attribute(
+                name="user_id",
+                type=dynamodb.AttributeType.STRING,
+            ),
+            sort_key=dynamodb.Attribute(
+                name="timestamp_utc",
+                type=dynamodb.AttributeType.STRING,
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption=dynamodb.TableEncryption.AWS_MANAGED,
+            # Keep historical data unless explicitly removed out-of-band.
+            removal_policy=RemovalPolicy.RETAIN,
+            point_in_time_recovery=True,
+        )
+
+        # Store reference for use by other stacks (future roll-over)
+        self.submissions_2026_table = submissions_2026_table
+
+        # Export 2026 table name/ARN for future IAM policies and tooling (scoped by env to avoid export collisions)
+        CfnOutput(
+            self,
+            "Submissions2026TableName",
+            value=submissions_2026_table.table_name,
+            export_name=f"DataCollectionSubmissionsTableName2026-{environment_name}",
+            description="DynamoDB submissions-2026 table name",
+        )
+
+        CfnOutput(
+            self,
+            "Submissions2026TableArn",
+            value=submissions_2026_table.table_arn,
+            export_name=f"DataCollectionSubmissionsTableArn2026-{environment_name}",
+            description="DynamoDB submissions-2026 table ARN",
+        )
