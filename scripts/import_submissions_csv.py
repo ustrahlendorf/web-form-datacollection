@@ -81,6 +81,14 @@ def _format_iso_utc(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _datum_to_iso(datum_ddmmyyyy: str) -> str:
+    """
+    Convert dd.mm.yyyy -> YYYY-MM-DD for correct lexical range filtering.
+    """
+    v = (datum_ddmmyyyy or "").strip()
+    return datetime.strptime(v, "%d.%m.%Y").date().isoformat()
+
+
 def _coerce_int(value: Any, field: str) -> int:
     v = "" if value is None else str(value).strip()
     if v == "":
@@ -147,6 +155,9 @@ def row_to_item(
         raise ValueError("Missing required field: datum")
     if not item["uhrzeit"]:
         raise ValueError("Missing required field: uhrzeit")
+
+    # Derived field for filtering/analytics
+    item["datum_iso"] = _datum_to_iso(item["datum"])
 
     item["betriebsstunden"] = _coerce_int(row.get("betriebsstunden"), "betriebsstunden")
     item["starts"] = _coerce_int(row.get("starts"), "starts")

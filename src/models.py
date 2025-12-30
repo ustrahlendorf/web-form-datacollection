@@ -22,6 +22,7 @@ class Submission:
         user_id: Cognito subject identifier of the authenticated user
         timestamp_utc: ISO-8601 formatted UTC timestamp of submission creation
         datum: Date in dd.mm.yyyy format
+        datum_iso: Date in YYYY-MM-DD format (derived from datum; used for filtering/analytics)
         uhrzeit: Time in hh:mm format (24-hour)
         betriebsstunden: Operating hours (integer >= 0)
         starts: Number of starts (integer >= 0)
@@ -35,6 +36,7 @@ class Submission:
     user_id: str
     timestamp_utc: str
     datum: str
+    datum_iso: str
     uhrzeit: str
     betriebsstunden: int
     starts: int
@@ -55,6 +57,7 @@ class Submission:
             "user_id": self.user_id,
             "timestamp_utc": self.timestamp_utc,
             "datum": self.datum,
+            "datum_iso": self.datum_iso,
             "uhrzeit": self.uhrzeit,
             "betriebsstunden": self.betriebsstunden,
             "starts": self.starts,
@@ -83,6 +86,20 @@ def generate_timestamp_utc() -> str:
         ISO-8601 formatted UTC timestamp (YYYY-MM-DDTHH:MM:SSZ)
     """
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def datum_to_iso(datum: str) -> str:
+    """
+    Convert a business date in dd.mm.yyyy format to ISO format (YYYY-MM-DD).
+
+    We store `datum` for UX and backwards compatibility, but `datum_iso` is the
+    canonical field for range filtering and partitioning because lexical order
+    matches chronological order.
+    """
+    if not isinstance(datum, str):
+        raise TypeError("datum must be a string")
+    d = datetime.strptime(datum.strip(), "%d.%m.%Y").date()
+    return d.isoformat()
 
 
 def create_submission(
@@ -129,6 +146,7 @@ def create_submission(
         user_id=user_id,
         timestamp_utc=timestamp_utc or generate_timestamp_utc(),
         datum=datum,
+        datum_iso=datum_to_iso(datum),
         uhrzeit=uhrzeit,
         betriebsstunden=betriebsstunden,
         starts=starts,

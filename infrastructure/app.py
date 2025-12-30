@@ -11,6 +11,7 @@ from aws_cdk import App, Environment, Tags
 
 from infrastructure.stacks.api_stack import APIStack
 from infrastructure.stacks.cognito_stack import CognitoStack
+from infrastructure.stacks.datalake_stack import DataLakeStack
 from infrastructure.stacks.dynamodb_stack import DynamoDBStack
 from infrastructure.stacks.frontend_stack import FrontendStack
 
@@ -56,6 +57,14 @@ def create_app() -> App:
         description="Data Collection Web Application - DynamoDB (dev)",
     )
 
+    datalake_stack = DataLakeStack(
+        app,
+        f"DataCollectionDataLake-{environment_name}",
+        environment_name=environment_name,
+        env=env_config,
+        description="Data Collection Web Application - DataLake (dev)",
+    )
+
     frontend_stack = FrontendStack(
         app,
         f"DataCollectionFrontend-{environment_name}",
@@ -79,6 +88,7 @@ def create_app() -> App:
     api_stack.add_dependency(frontend_stack)
     api_stack.add_dependency(cognito_stack)
     api_stack.add_dependency(dynamodb_stack)
+    api_stack.add_dependency(datalake_stack)
 
     return app
 
