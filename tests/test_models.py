@@ -163,6 +163,7 @@ def test_submission_to_dict_contains_all_fields(
     assert "user_id" in submission_dict, "Dictionary should contain user_id"
     assert "timestamp_utc" in submission_dict, "Dictionary should contain timestamp_utc"
     assert "datum" in submission_dict, "Dictionary should contain datum"
+    assert "datum_iso" in submission_dict, "Dictionary should contain datum_iso"
     assert "uhrzeit" in submission_dict, "Dictionary should contain uhrzeit"
     assert "betriebsstunden" in submission_dict, "Dictionary should contain betriebsstunden"
     assert "starts" in submission_dict, "Dictionary should contain starts"
@@ -171,6 +172,7 @@ def test_submission_to_dict_contains_all_fields(
     # Verify values match
     assert submission_dict["user_id"] == user_id
     assert submission_dict["datum"] == datum
+    assert submission_dict["datum_iso"] == datetime.strptime(datum, "%d.%m.%Y").date().isoformat()
     assert submission_dict["uhrzeit"] == uhrzeit
     assert submission_dict["betriebsstunden"] == betriebsstunden
     assert submission_dict["starts"] == starts
