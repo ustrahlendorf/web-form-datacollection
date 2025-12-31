@@ -17,6 +17,8 @@ class DynamoDBStack(Stack):
         scope: Construct,
         construct_id: str,
         environment_name: str,
+        active_submissions_table_name: str,
+        passive_submissions_table_name: str,
         **kwargs
     ) -> None:
         """
@@ -26,18 +28,37 @@ class DynamoDBStack(Stack):
             scope: The parent construct
             construct_id: The logical ID of the stack
             environment_name: The environment name (dev, prod, etc.)
+            active_submissions_table_name: Physical table name for the active (current) submissions table
+            passive_submissions_table_name: Physical table name for the passive (previous) submissions table
             **kwargs: Additional arguments to pass to Stack
         """
         super().__init__(scope, construct_id, **kwargs)
         self.environment_name = environment_name
 
-        # Create DynamoDB table for historical submissions import (fixed name).
-        # This is intentionally NOT environment-suffixed because the requirement is a
-        # specific table name: submissions-2025.
+        if not active_submissions_table_name:
+            raise ValueError("active_submissions_table_name must not be empty")
+        if not passive_submissions_table_name:
+            raise ValueError("passive_submissions_table_name must not be empty")
+        if active_submissions_table_name == passive_submissions_table_name:
+            raise ValueError(
+                "active_submissions_table_name and passive_submissions_table_name must be different"
+            )
+
+        # IMPORTANT:
+        # - We create BOTH physical tables from the two provided names.
+        # - We assign the names to construct IDs in a stable way (sorted order) so swapping
+        #   ACTIVE/PASSIVE env vars does NOT trigger CloudFormation table replacements.
+        # - The *role* (active vs passive) is expressed only via exports and API wiring.
+        table_name_a, table_name_b = sorted(
+            [str(active_submissions_table_name), str(passive_submissions_table_name)]
+        )
+
+        # Create DynamoDB table for active submissions.
+        # We keep the construct IDs stable to avoid CloudFormation resource replacement.
         submissions_2025_table = dynamodb.Table(
             self,
             "Submissions2025Table",
-            table_name="submissions-2025",
+            table_name=table_name_a,
             partition_key=dynamodb.Attribute(
                 name="user_id",
                 type=dynamodb.AttributeType.STRING,
@@ -56,34 +77,12 @@ class DynamoDBStack(Stack):
         # Store reference for use by other stacks
         self.submissions_2025_table = submissions_2025_table
 
-        # Export 2025 table name/ARN for IAM policies and tooling (scoped by env to avoid export collisions)
-        CfnOutput(
-            self,
-            "Submissions2025TableName",
-            value=submissions_2025_table.table_name,
-            export_name=f"DataCollectionSubmissionsTableName2025-{environment_name}",
-            description="DynamoDB submissions-2025 table name",
-        )
-
-        CfnOutput(
-            self,
-            "Submissions2025TableArn",
-            value=submissions_2025_table.table_arn,
-            export_name=f"DataCollectionSubmissionsTableArn2025-{environment_name}",
-            description="DynamoDB submissions-2025 table ARN",
-        )
-
-        # Add next-year table ahead of roll-over.
-        # This is also intentionally NOT environment-suffixed because the requirement is a
-        # specific table name: submissions-2026.
-        #
-        # IMPORTANT: This change is non-impacting to the running app as long as the API stack
-        # continues to import the 2025 table exports. The 2026 table is created and exported
-        # ahead of time so the roll-over can be performed as a separate (small) change.
+        # Create DynamoDB table for passive submissions (previous year / roll-over source).
+        # We keep the construct IDs stable to avoid CloudFormation resource replacement.
         submissions_2026_table = dynamodb.Table(
             self,
             "Submissions2026Table",
-            table_name="submissions-2026",
+            table_name=table_name_b,
             partition_key=dynamodb.Attribute(
                 name="user_id",
                 type=dynamodb.AttributeType.STRING,
@@ -102,19 +101,85 @@ class DynamoDBStack(Stack):
         # Store reference for use by other stacks (future roll-over)
         self.submissions_2026_table = submissions_2026_table
 
-        # Export 2026 table name/ARN for future IAM policies and tooling (scoped by env to avoid export collisions)
+        # IMPORTANT:
+        # CDK's `table.table_name` is commonly a Token at synth-time (even if `table_name=` is set),
+        # so using it as a dict key and then looking up via the raw env var string can fail.
+        # We instead key by the *known input strings* to keep selection deterministic at runtime.
+        tables_by_name = {
+            table_name_a: submissions_2025_table,
+            table_name_b: submissions_2026_table,
+        }
+        try:
+            active_table = tables_by_name[active_submissions_table_name]
+            passive_table = tables_by_name[passive_submissions_table_name]
+        except KeyError as exc:
+            raise KeyError(
+                "Provided table name was not one of the two tables created in this stack. "
+                f"active_submissions_table_name={active_submissions_table_name!r}, "
+                f"passive_submissions_table_name={passive_submissions_table_name!r}, "
+                f"created={[table_name_a, table_name_b]!r}"
+            ) from exc
+
+        # ---------------------------------------------------------------------
+        # Backward-compatible (LEGACY) exports
+        #
+        # Older deployed stacks (e.g. DataCollectionAPI-dev) may still import:
+        # - DataCollectionSubmissionsTableName2025-<env>
+        # - DataCollectionSubmissionsTableArn2025-<env>
+        #
+        # CloudFormation blocks deleting an Export that is in-use by another stack,
+        # which can put this stack into UPDATE_ROLLBACK_COMPLETE.
+        #
+        # We keep these legacy exports temporarily and point them to the *active* table
+        # (the semantics the old "2025" export effectively had: "current submissions table").
+        # Once all stacks have migrated to the new Active/Passive exports, these can be removed.
+        # ---------------------------------------------------------------------
         CfnOutput(
             self,
-            "Submissions2026TableName",
-            value=submissions_2026_table.table_name,
-            export_name=f"DataCollectionSubmissionsTableName2026-{environment_name}",
-            description="DynamoDB submissions-2026 table name",
+            "LegacySubmissionsTableName2025",
+            value=active_table.table_name,
+            export_name=f"DataCollectionSubmissionsTableName2025-{environment_name}",
+            description="LEGACY (temporary): kept for stacks importing the old 2025 table name export",
         )
 
         CfnOutput(
             self,
-            "Submissions2026TableArn",
-            value=submissions_2026_table.table_arn,
-            export_name=f"DataCollectionSubmissionsTableArn2026-{environment_name}",
-            description="DynamoDB submissions-2026 table ARN",
+            "LegacySubmissionsTableArn2025",
+            value=active_table.table_arn,
+            export_name=f"DataCollectionSubmissionsTableArn2025-{environment_name}",
+            description="LEGACY (temporary): kept for stacks importing the old 2025 table ARN export",
+        )
+
+        # Export active table name/ARN (scoped by env to avoid export collisions)
+        CfnOutput(
+            self,
+            "SubmissionsActiveTableName",
+            value=active_table.table_name,
+            export_name=f"DataCollectionSubmissionsActiveTableName-{environment_name}",
+            description="DynamoDB submissions active table name",
+        )
+
+        CfnOutput(
+            self,
+            "SubmissionsActiveTableArn",
+            value=active_table.table_arn,
+            export_name=f"DataCollectionSubmissionsActiveTableArn-{environment_name}",
+            description="DynamoDB submissions active table ARN",
+        )
+
+        # Export passive table name/ARN (scoped by env to avoid export collisions)
+        CfnOutput(
+            self,
+            "SubmissionsPassiveTableName",
+            value=passive_table.table_name,
+            export_name=f"DataCollectionSubmissionsPassiveTableName-{environment_name}",
+            description="DynamoDB submissions passive table name",
+        )
+
+        CfnOutput(
+            self,
+            "SubmissionsPassiveTableArn",
+            value=passive_table.table_arn,
+            export_name=f"DataCollectionSubmissionsPassiveTableArn-{environment_name}",
+            description="DynamoDB submissions passive table ARN",
         )

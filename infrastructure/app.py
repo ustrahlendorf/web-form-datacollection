@@ -40,6 +40,27 @@ def create_app() -> App:
 
     environment_name = "dev"
 
+    # External configuration for DynamoDB table naming (active/passive).
+    # These MUST be provided at deploy time so we never silently fall back to a hardcoded year.
+    active_submissions_table_name = os.environ.get("ACTIVE_SUBMISSIONS_TABLE_NAME")
+    passive_submissions_table_name = os.environ.get("PASSIVE_SUBMISSIONS_TABLE_NAME")
+
+    missing = [
+        name
+        for name, value in [
+            ("ACTIVE_SUBMISSIONS_TABLE_NAME", active_submissions_table_name),
+            ("PASSIVE_SUBMISSIONS_TABLE_NAME", passive_submissions_table_name),
+        ]
+        if not value
+    ]
+    if missing:
+        raise SystemExit(
+            "Missing required environment variables for DynamoDB naming: "
+            + ", ".join(missing)
+            + ". "
+            + "Set them before running 'cdk synth/deploy'."
+        )
+
     # Create component stacks for development environment
     cognito_stack = CognitoStack(
         app,
@@ -53,6 +74,8 @@ def create_app() -> App:
         app,
         f"DataCollectionDynamoDB-{environment_name}",
         environment_name=environment_name,
+        active_submissions_table_name=str(active_submissions_table_name),
+        passive_submissions_table_name=str(passive_submissions_table_name),
         env=env_config,
         description="Data Collection Web Application - DynamoDB (dev)",
     )
