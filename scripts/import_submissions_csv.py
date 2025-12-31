@@ -4,7 +4,7 @@ One-off CSV importer for the Data Collection application.
 Purpose
 -------
 Import historical submission rows from a prepared CSV file into a DynamoDB table
-(`submissions-2025` by default).
+(defaults to `ACTIVE_SUBMISSIONS_TABLE_NAME` / `SUBMISSIONS_TABLE` if set; otherwise require `--table`).
 
 The prepared CSV matches the `submissions-dev` item attribute layout, but the
 primary key attributes (`user_id`, `timestamp_utc`) may be missing. This script
@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -31,10 +32,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 from uuid import uuid4
 
-import boto3
 
-
-DEFAULT_TABLE_NAME = "submissions-2025"
 DEFAULT_REGION = "eu-central-1"
 DEFAULT_USER_ID = "53e4e8d2-0061-7063-6f27-aeb8e89b9515"
 
@@ -50,6 +48,16 @@ class ImportConfig:
     delimiter: str
     dry_run: bool
     limit: Optional[int]
+
+def _default_table_name_from_env() -> Optional[str]:
+    """
+    Prefer the active submissions table name from deployment/runtime configuration.
+
+    Supported env vars:
+    - ACTIVE_SUBMISSIONS_TABLE_NAME (preferred)
+    - SUBMISSIONS_TABLE
+    """
+    return os.environ.get("ACTIVE_SUBMISSIONS_TABLE_NAME") or os.environ.get("SUBMISSIONS_TABLE")
 
 
 def _parse_iso_utc_timestamp(value: str) -> datetime:
@@ -219,10 +227,13 @@ def iter_items_from_csv(
 
 def parse_args(argv: Optional[list[str]] = None) -> ImportConfig:
     parser = argparse.ArgumentParser(
-        description="Import prepared submissions CSV into DynamoDB (submissions-2025 by default)."
+        description=(
+            "Import prepared submissions CSV into DynamoDB "
+            "(uses ACTIVE_SUBMISSIONS_TABLE_NAME / SUBMISSIONS_TABLE by default)."
+        )
     )
     parser.add_argument("--csv", required=True, help="Path to prepared CSV file")
-    parser.add_argument("--table", default=DEFAULT_TABLE_NAME, help="Target DynamoDB table name")
+    parser.add_argument("--table", default=None, help="Target DynamoDB table name")
     parser.add_argument("--region", default=DEFAULT_REGION, help="AWS region")
     parser.add_argument("--user-id", default=DEFAULT_USER_ID, help="Constant user_id to inject")
     parser.add_argument(
@@ -250,6 +261,13 @@ def parse_args(argv: Optional[list[str]] = None) -> ImportConfig:
     if not csv_path.exists():
         raise SystemExit(f"CSV file does not exist: {csv_path}")
 
+    table_name = str(args.table).strip() if args.table else (_default_table_name_from_env() or "").strip()
+    if not table_name:
+        raise SystemExit(
+            "Missing DynamoDB table name. Provide --table or set ACTIVE_SUBMISSIONS_TABLE_NAME "
+            "(preferred) / SUBMISSIONS_TABLE."
+        )
+
     if args.start_timestamp_utc:
         start_dt = _parse_iso_utc_timestamp(args.start_timestamp_utc)
     else:
@@ -257,7 +275,7 @@ def parse_args(argv: Optional[list[str]] = None) -> ImportConfig:
 
     return ImportConfig(
         csv_path=csv_path,
-        table_name=str(args.table),
+        table_name=table_name,
         region=str(args.region),
         user_id=str(args.user_id),
         start_timestamp_utc=start_dt,
@@ -270,6 +288,9 @@ def parse_args(argv: Optional[list[str]] = None) -> ImportConfig:
 
 def main(argv: Optional[list[str]] = None) -> int:
     cfg = parse_args(argv)
+
+    # Import lazily so unit tests that only use helper functions can run without boto3/botocore.
+    import boto3
 
     count = 0
     first_ts: Optional[str] = None

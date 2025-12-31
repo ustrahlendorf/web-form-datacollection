@@ -18,15 +18,12 @@ Safety:
 from __future__ import annotations
 
 import argparse
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-import boto3
-from botocore.exceptions import ClientError
 
-
-DEFAULT_TABLE_NAME = "submissions-2025"
 DEFAULT_REGION = "eu-central-1"
 
 
@@ -37,6 +34,16 @@ class BackfillConfig:
     dry_run: bool
     limit: Optional[int]
 
+def _default_table_name_from_env() -> Optional[str]:
+    """
+    Prefer the active submissions table name from deployment/runtime configuration.
+
+    Supported env vars:
+    - ACTIVE_SUBMISSIONS_TABLE_NAME (preferred)
+    - SUBMISSIONS_TABLE
+    """
+    return os.environ.get("ACTIVE_SUBMISSIONS_TABLE_NAME") or os.environ.get("SUBMISSIONS_TABLE")
+
 
 def _datum_to_iso(datum_ddmmyyyy: str) -> str:
     v = (datum_ddmmyyyy or "").strip()
@@ -45,13 +52,21 @@ def _datum_to_iso(datum_ddmmyyyy: str) -> str:
 
 def parse_args(argv: Optional[list[str]] = None) -> BackfillConfig:
     parser = argparse.ArgumentParser(description="Backfill datum_iso on existing DynamoDB items.")
-    parser.add_argument("--table", default=DEFAULT_TABLE_NAME, help="DynamoDB table name")
+    parser.add_argument("--table", default=None, help="DynamoDB table name")
     parser.add_argument("--region", default=DEFAULT_REGION, help="AWS region")
     parser.add_argument("--dry-run", action="store_true", help="Compute counts but do not update items")
     parser.add_argument("--limit", type=int, default=None, help="Process at most N items (debug/testing)")
     args = parser.parse_args(argv)
+
+    table_name = str(args.table).strip() if args.table else (_default_table_name_from_env() or "").strip()
+    if not table_name:
+        raise SystemExit(
+            "Missing DynamoDB table name. Provide --table or set ACTIVE_SUBMISSIONS_TABLE_NAME "
+            "(preferred) / SUBMISSIONS_TABLE."
+        )
+
     return BackfillConfig(
-        table_name=str(args.table),
+        table_name=table_name,
         region=str(args.region),
         dry_run=bool(args.dry_run),
         limit=args.limit,
@@ -60,6 +75,11 @@ def parse_args(argv: Optional[list[str]] = None) -> BackfillConfig:
 
 def main(argv: Optional[list[str]] = None) -> int:
     cfg = parse_args(argv)
+
+    # Import lazily so this module can be imported in test environments without AWS deps.
+    import boto3
+    from botocore.exceptions import ClientError
+
     dynamodb = boto3.resource("dynamodb", region_name=cfg.region)
     table = dynamodb.Table(cfg.table_name)
 

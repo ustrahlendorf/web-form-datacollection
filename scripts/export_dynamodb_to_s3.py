@@ -36,16 +36,13 @@ import argparse
 import gzip
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, Iterable, Optional, Tuple
 
-import boto3
-from boto3.dynamodb.conditions import Attr
 
-
-DEFAULT_TABLE_NAME = "submissions-2025"
 DEFAULT_REGION = "eu-central-1"
 DEFAULT_PREFIX_BASE = "exports/submissions"
 
@@ -60,6 +57,16 @@ class ExportConfig:
     month: int
     dry_run: bool
     limit: Optional[int]
+
+def _default_table_name_from_env() -> Optional[str]:
+    """
+    Prefer the active submissions table name from the deployment configuration.
+
+    We support both names for convenience:
+    - ACTIVE_SUBMISSIONS_TABLE_NAME (preferred for CDK-driven deployments)
+    - SUBMISSIONS_TABLE (runtime Lambda env var name)
+    """
+    return os.environ.get("ACTIVE_SUBMISSIONS_TABLE_NAME") or os.environ.get("SUBMISSIONS_TABLE")
 
 
 def _format_iso_utc(dt: datetime) -> str:
@@ -124,6 +131,9 @@ def _iter_scan_items(
     """
     Scan the DynamoDB table and yield items whose datum_iso is in [start,end).
     """
+    # Import lazily so unit tests that only use helper functions can run without boto3/botocore.
+    from boto3.dynamodb.conditions import Attr
+
     # FilterExpression is applied server-side after scan reads items.
     # With ~365 rows total this is fine; later we can rework schema/index if needed.
     filter_expr = Attr("datum_iso").gte(start_datum_iso) & Attr("datum_iso").lt(end_datum_iso)
@@ -191,7 +201,7 @@ def parse_args(argv: Optional[list[str]] = None) -> ExportConfig:
         description="Export DynamoDB monthly snapshot to S3 (gzipped JSONL + manifest)."
     )
     parser.add_argument("--bucket", required=True, help="Target S3 bucket name (DataLake bucket)")
-    parser.add_argument("--table", default=DEFAULT_TABLE_NAME, help="Source DynamoDB table name")
+    parser.add_argument("--table", default=None, help="Source DynamoDB table name")
     parser.add_argument("--region", default=DEFAULT_REGION, help="AWS region")
     parser.add_argument(
         "--prefix-base",
@@ -205,12 +215,19 @@ def parse_args(argv: Optional[list[str]] = None) -> ExportConfig:
 
     args = parser.parse_args(argv)
 
+    table_name = str(args.table).strip() if args.table else (_default_table_name_from_env() or "").strip()
+    if not table_name:
+        raise SystemExit(
+            "Missing DynamoDB table name. Provide --table or set ACTIVE_SUBMISSIONS_TABLE_NAME "
+            "(preferred) / SUBMISSIONS_TABLE."
+        )
+
     prefix_base = str(args.prefix_base).strip().strip("/")
     if not prefix_base:
         raise SystemExit("prefix-base must not be empty")
 
     return ExportConfig(
-        table_name=str(args.table),
+        table_name=table_name,
         region=str(args.region),
         bucket=str(args.bucket),
         prefix_base=prefix_base,
@@ -223,6 +240,9 @@ def parse_args(argv: Optional[list[str]] = None) -> ExportConfig:
 
 def main(argv: Optional[list[str]] = None) -> int:
     cfg = parse_args(argv)
+
+    # Import lazily so unit tests can import this module without AWS dependencies.
+    import boto3
 
     start_datum_iso, end_datum_iso = _month_window_iso_date(cfg.year, cfg.month)
     snapshot_dt = datetime.now(timezone.utc)

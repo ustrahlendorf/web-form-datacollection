@@ -22,7 +22,7 @@ Notes:
 
 - **AWS credentials** available to `boto3` (env vars, shared config, SSO, instance profile, …)
 - The **DataLake bucket** exists (created by CDK stack `DataCollectionDataLake-dev`)
-- The **DynamoDB table** exists (currently `submissions-2025`)
+- The **DynamoDB table** exists (use the current active table; see `docs/YEAR_ROLL_OVER_README.md`)
 
 ### Find the DataLake bucket name
 
@@ -36,9 +36,9 @@ You can also look up the CloudFormation export:
 Run from the repo folder `web-form-verbrauch/`:
 
 ```bash
+export ACTIVE_SUBMISSIONS_TABLE_NAME=submissions-2025
 python scripts/export_dynamodb_to_s3.py \
   --bucket data-collection-datalake-dev-123456789012-eu-central-1 \
-  --table submissions-2025 \
   --region eu-central-1 \
   --year 2025 \
   --month 1
@@ -47,9 +47,9 @@ python scripts/export_dynamodb_to_s3.py \
 Dry-run (no upload; prints what would happen):
 
 ```bash
+export ACTIVE_SUBMISSIONS_TABLE_NAME=submissions-2025
 python scripts/export_dynamodb_to_s3.py \
   --bucket data-collection-datalake-dev-123456789012-eu-central-1 \
-  --table submissions-2025 \
   --region eu-central-1 \
   --year 2025 \
   --month 1 \

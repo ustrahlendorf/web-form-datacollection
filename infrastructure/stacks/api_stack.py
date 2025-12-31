@@ -99,9 +99,9 @@ class APIStack(Stack):
         )
 
         # Add DynamoDB permissions (least-privilege)
-        # Get DynamoDB table ARN from CloudFormation export
-        submissions_2025_table_arn = Fn.import_value(
-            f"DataCollectionSubmissionsTableArn2025-{environment_name}"
+        # Get active DynamoDB table ARN from CloudFormation export
+        submissions_active_table_arn = Fn.import_value(
+            f"DataCollectionSubmissionsActiveTableArn-{environment_name}"
         )
 
         lambda_execution_role.add_to_policy(
@@ -113,25 +113,29 @@ class APIStack(Stack):
                     "dynamodb:Query",
                     "dynamodb:Scan",
                 ],
-                resources=[submissions_2025_table_arn],
+                resources=[submissions_active_table_arn],
             )
         )
 
-        # Get DynamoDB table name from CloudFormation export
-        # Point the application to the historical table.
+        # Get active DynamoDB table name from CloudFormation export.
         submissions_table_name = Fn.import_value(
-            f"DataCollectionSubmissionsTableName2025-{environment_name}"
+            f"DataCollectionSubmissionsActiveTableName-{environment_name}"
+        )
+
+        # Optional: also provide passive table name for future tooling/migrations.
+        passive_submissions_table_name = Fn.import_value(
+            f"DataCollectionSubmissionsPassiveTableName-{environment_name}"
         )
 
         # Create Lambda functions
         submit_handler = self._create_submit_handler(
-            lambda_execution_role, submissions_table_name
+            lambda_execution_role, submissions_table_name, passive_submissions_table_name
         )
         history_handler = self._create_history_handler(
-            lambda_execution_role, submissions_table_name
+            lambda_execution_role, submissions_table_name, passive_submissions_table_name
         )
         recent_handler = self._create_recent_handler(
-            lambda_execution_role, submissions_table_name
+            lambda_execution_role, submissions_table_name, passive_submissions_table_name
         )
 
         # Wire Lambda functions to API Gateway routes with JWT authorization
@@ -161,7 +165,10 @@ class APIStack(Stack):
         )
 
     def _create_submit_handler(
-        self, lambda_execution_role: iam.Role, table_name: str
+        self,
+        lambda_execution_role: iam.Role,
+        table_name: str,
+        passive_table_name: str | None = None,
     ) -> lambda_.Function:
         """
         Create Lambda function for POST /submit endpoint.
@@ -185,6 +192,11 @@ class APIStack(Stack):
             role=lambda_execution_role,
             environment={
                 "SUBMISSIONS_TABLE": table_name,
+                **(
+                    {"PASSIVE_SUBMISSIONS_TABLE": passive_table_name}
+                    if passive_table_name
+                    else {}
+                ),
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -197,7 +209,10 @@ class APIStack(Stack):
         return submit_fn
 
     def _create_history_handler(
-        self, lambda_execution_role: iam.Role, table_name: str
+        self,
+        lambda_execution_role: iam.Role,
+        table_name: str,
+        passive_table_name: str | None = None,
     ) -> lambda_.Function:
         """
         Create Lambda function for GET /history endpoint.
@@ -221,6 +236,11 @@ class APIStack(Stack):
             role=lambda_execution_role,
             environment={
                 "SUBMISSIONS_TABLE": table_name,
+                **(
+                    {"PASSIVE_SUBMISSIONS_TABLE": passive_table_name}
+                    if passive_table_name
+                    else {}
+                ),
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -233,7 +253,10 @@ class APIStack(Stack):
         return history_fn
 
     def _create_recent_handler(
-        self, lambda_execution_role: iam.Role, table_name: str
+        self,
+        lambda_execution_role: iam.Role,
+        table_name: str,
+        passive_table_name: str | None = None,
     ) -> lambda_.Function:
         """
         Create Lambda function for GET /recent endpoint.
@@ -257,6 +280,11 @@ class APIStack(Stack):
             role=lambda_execution_role,
             environment={
                 "SUBMISSIONS_TABLE": table_name,
+                **(
+                    {"PASSIVE_SUBMISSIONS_TABLE": passive_table_name}
+                    if passive_table_name
+                    else {}
+                ),
             },
             timeout=Duration.seconds(30),
             memory_size=256,

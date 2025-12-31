@@ -7,13 +7,12 @@ and returns paginated results sorted by timestamp descending.
 
 import json
 import os
-import boto3
 from typing import Dict, Any, Optional
 from decimal import Decimal
 
 
-# Initialize DynamoDB client
-dynamodb = boto3.resource("dynamodb")
+# Lazily initialized DynamoDB resource (tests patch this symbol).
+dynamodb = None
 
 
 def _json_default(obj):
@@ -38,6 +37,12 @@ def get_table():
     Raises:
         KeyError: If SUBMISSIONS_TABLE environment variable is not set
     """
+    global dynamodb
+    if dynamodb is None:
+        # Import boto3 lazily so unit tests that don't need AWS dependencies can import this module.
+        import boto3
+        dynamodb = boto3.resource("dynamodb")
+
     table_name = os.environ.get("SUBMISSIONS_TABLE")
     if not table_name:
         raise KeyError("SUBMISSIONS_TABLE environment variable not set")
