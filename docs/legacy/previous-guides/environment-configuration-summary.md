@@ -98,7 +98,7 @@ Automated deployment script that:
 
 ### 6. Documentation
 
-**Created**: `ENVIRONMENT_CONFIGURATION.md`
+**Created (legacy)**: `docs/legacy/previous-guides/environment-configuration.md`
 
 Comprehensive guide covering:
 - Configuration architecture and flow
@@ -235,7 +235,8 @@ bash deploy.sh dev
 ### Created
 - `frontend/config.js` - Configuration template (auto-generated during build)
 - `infrastructure/deploy-with-config.sh` - Automated deployment script
-- `ENVIRONMENT_CONFIGURATION.md` - Comprehensive configuration guide
+- `docs/getting-started.md` - Canonical guide
+- `docs/legacy/previous-guides/environment-configuration.md` - Legacy comprehensive guide
 - `ENVIRONMENT_CONFIGURATION_SUMMARY.md` - This summary document
 
 ### Modified

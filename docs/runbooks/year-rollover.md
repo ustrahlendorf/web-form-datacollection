@@ -156,7 +156,7 @@ If something is wrong after cutover:
 ### Legacy deployments (do not use unless you’re on an old stack wiring model)
 
 If your deployment still uses CloudFormation `Export`/`ImportValue` wiring (pre-SSM refactor), see:
-- `docs/legacy/YEAR_ROLL_OVER_CLOUDFORMATION_EXPORT_IN_USE_FIX.md`
+- `docs/legacy/year-roll-over-cloudformation-export-in-use-fix.md`
 
 ### Ops scripts (table selection)
 

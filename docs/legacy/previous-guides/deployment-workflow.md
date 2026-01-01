@@ -395,7 +395,8 @@ aws cloudformation describe-stacks \
 For detailed information:
 - Infrastructure: See `infrastructure/README.md`
 - Frontend: See `frontend/README.md`
-- Deployment: See `frontend/DEPLOYMENT.md`
+- Canonical deployment guide: `docs/getting-started.md`
+- Legacy frontend deployment guide: `docs/legacy/previous-guides/frontend-deployment.md`
 - Backend: See `src/handlers/` documentation
 
 ## Next Steps

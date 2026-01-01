@@ -135,6 +135,6 @@ Deploys frontend to S3 and invalidates CloudFront cache
 
 ## Documentation
 
-- **Full Guide**: See `ENVIRONMENT_CONFIGURATION.md`
-- **Implementation Details**: See `ENVIRONMENT_CONFIGURATION_SUMMARY.md`
-- **Deployment Guide**: See `frontend/DEPLOYMENT.md`
+- **Canonical Guide**: See `docs/getting-started.md`
+- **Implementation Details (legacy)**: See `docs/legacy/previous-guides/environment-configuration-summary.md`
+- **Frontend Deployment (legacy)**: See `docs/legacy/previous-guides/frontend-deployment.md`

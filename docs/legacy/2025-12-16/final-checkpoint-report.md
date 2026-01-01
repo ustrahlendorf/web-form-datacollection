@@ -295,10 +295,9 @@ None. The application is fully functional and ready for production use.
 ## Support & Documentation
 
 - **Specification**: `.kiro/specs/data-collection-webapp/`
-- **Deployment Guide**: `web-form-verbrauch/DEPLOYMENT_WORKFLOW.md`
-- **Quick Start**: `web-form-verbrauch/QUICK_START_CONFIGURATION.md`
+- **Canonical Guide**: `web-form-verbrauch/docs/getting-started.md`
 - **Frontend Docs**: `web-form-verbrauch/frontend/README.md`
-- **Security Details**: `web-form-verbrauch/SECURITY_VALIDATION_SUMMARY.md`
+- **Security (evergreen)**: `web-form-verbrauch/docs/reference/security.md`
 - **GitHub Repository**: https://github.com/ustrahlendorf/web-form-datacollection
 
 ---

@@ -30,7 +30,7 @@ frontend/
 ├── deploy.sh               # Deployment script
 ├── setup-env.sh            # Environment setup script
 ├── .env.example            # Environment variables template
-├── DEPLOYMENT.md           # Detailed deployment guide
+├── README.md               # This file
 ├── package.json            # NPM dependencies
 ├── jest.config.js          # Jest test configuration
 ├── form.test.js            # Form component tests
@@ -131,7 +131,7 @@ These are injected during the build process from the `.env` file.
 
 ## Deployment
 
-For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
+For detailed deployment instructions, see `../docs/getting-started.md`.
 
 ### Quick Deployment
 
@@ -228,7 +228,7 @@ MIT
 ## Support
 
 For issues or questions:
-1. Check [DEPLOYMENT.md](DEPLOYMENT.md) for deployment troubleshooting
+1. Check `../docs/operations/troubleshooting.md` first
 2. Review browser console for error messages
 3. Check CloudWatch logs for API errors
 4. Verify AWS credentials and permissions
