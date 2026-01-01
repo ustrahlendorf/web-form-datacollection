@@ -14,6 +14,7 @@ from infrastructure.stacks.cognito_stack import CognitoStack
 from infrastructure.stacks.datalake_stack import DataLakeStack
 from infrastructure.stacks.dynamodb_stack import DynamoDBStack
 from infrastructure.stacks.frontend_stack import FrontendStack
+from infrastructure.stacks.init_stack import InitStack
 
 
 def create_app() -> App:
@@ -62,6 +63,14 @@ def create_app() -> App:
         )
 
     # Create component stacks for development environment
+    init_stack = InitStack(
+        app,
+        f"DataCollectionInit-{environment_name}",
+        environment_name=environment_name,
+        env=env_config,
+        description="Data Collection Web Application - Init (dev)",
+    )
+
     cognito_stack = CognitoStack(
         app,
         f"DataCollectionCognito-{environment_name}",
@@ -108,6 +117,10 @@ def create_app() -> App:
     )
 
     # Ensure deployment ordering across stacks that use exports/imports.
+    # InitStack owns the stable SSM "contract" parameters and must exist first so other stacks
+    # can safely read/extend the namespace over time.
+    dynamodb_stack.add_dependency(init_stack)
+    api_stack.add_dependency(init_stack)
     api_stack.add_dependency(frontend_stack)
     api_stack.add_dependency(cognito_stack)
     api_stack.add_dependency(dynamodb_stack)

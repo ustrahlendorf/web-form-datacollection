@@ -1,5 +1,25 @@
 # Quick Start: Environment Configuration
 
+## Recommended: deploy infrastructure via Taskfile (repo root)
+
+From the repo root (`AWS-kiro/`), you can deploy the infra stacks with Taskfile guardrails:
+
+```bash
+task doctor
+
+# one-time: creates static SSM parameters under /HeatingDataCollection
+task deploy-init
+
+# deploy/update DynamoDB pointers and API wiring
+task deploy-dynamodb
+task deploy-api
+task deploy-frontend
+```
+
+Notes:
+- The Taskfile loads `taskfile.env` automatically (including `SSM_NAMESPACE_PREFIX=/HeatingDataCollection`).
+- Frontend asset upload is still performed from `web-form-verbrauch/frontend/` (see below).
+
 ## One-Command Deployment
 
 Deploy the entire application with a single command:

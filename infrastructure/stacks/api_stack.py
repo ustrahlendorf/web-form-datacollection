@@ -8,9 +8,9 @@ from aws_cdk import (
     aws_iam as iam,
     aws_lambda as lambda_,
     aws_logs as logs,
+    aws_ssm as ssm,
     CfnOutput,
     Duration,
-    Fn,
     RemovalPolicy,
 )
 from constructs import Construct
@@ -99,9 +99,10 @@ class APIStack(Stack):
         )
 
         # Add DynamoDB permissions (least-privilege)
-        # Get active DynamoDB table ARN from CloudFormation export
-        submissions_active_table_arn = Fn.import_value(
-            f"DataCollectionSubmissionsActiveTableArn-{environment_name}"
+        # Read active DynamoDB table ARN from SSM Parameter Store pointer (owned by DynamoDBStack).
+        # This avoids tight coupling to CloudFormation exports/imports and makes rollovers deterministic.
+        submissions_active_table_arn = ssm.StringParameter.value_for_string_parameter(
+            self, "/HeatingDataCollection/Submissions/Active/TableArn"
         )
 
         lambda_execution_role.add_to_policy(
@@ -117,25 +118,20 @@ class APIStack(Stack):
             )
         )
 
-        # Get active DynamoDB table name from CloudFormation export.
-        submissions_table_name = Fn.import_value(
-            f"DataCollectionSubmissionsActiveTableName-{environment_name}"
-        )
-
-        # Optional: also provide passive table name for future tooling/migrations.
-        passive_submissions_table_name = Fn.import_value(
-            f"DataCollectionSubmissionsPassiveTableName-{environment_name}"
+        # Read active DynamoDB table name from SSM Parameter Store pointer (owned by DynamoDBStack).
+        submissions_table_name = ssm.StringParameter.value_for_string_parameter(
+            self, "/HeatingDataCollection/Submissions/Active/TableName"
         )
 
         # Create Lambda functions
         submit_handler = self._create_submit_handler(
-            lambda_execution_role, submissions_table_name, passive_submissions_table_name
+            lambda_execution_role, submissions_table_name
         )
         history_handler = self._create_history_handler(
-            lambda_execution_role, submissions_table_name, passive_submissions_table_name
+            lambda_execution_role, submissions_table_name
         )
         recent_handler = self._create_recent_handler(
-            lambda_execution_role, submissions_table_name, passive_submissions_table_name
+            lambda_execution_role, submissions_table_name
         )
 
         # Wire Lambda functions to API Gateway routes with JWT authorization
