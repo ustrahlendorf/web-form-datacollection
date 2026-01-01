@@ -3,6 +3,7 @@
 from aws_cdk import (
     Stack,
     aws_dynamodb as dynamodb,
+    aws_ssm as ssm,
     CfnOutput,
     RemovalPolicy,
 )
@@ -11,6 +12,8 @@ from constructs import Construct
 
 class DynamoDBStack(Stack):
     """Stack for DynamoDB table and data persistence configuration."""
+
+    SSM_PREFIX = "/HeatingDataCollection"
 
     def __init__(
         self,
@@ -119,6 +122,43 @@ class DynamoDBStack(Stack):
                 f"passive_submissions_table_name={passive_submissions_table_name!r}, "
                 f"created={[table_name_a, table_name_b]!r}"
             ) from exc
+
+        # ---------------------------------------------------------------------
+        # SSM Parameter Store pointers (single-environment namespace)
+        #
+        # These parameters provide a stable indirection layer for the "active vs passive"
+        # submissions table pointers, avoiding brittle CloudFormation Export/Import coupling.
+        #
+        # Ownership: DynamoDBStack (these values change during annual rollover)
+        # ---------------------------------------------------------------------
+        self.submissions_active_table_name_pointer = ssm.StringParameter(
+            self,
+            "SubmissionsActiveTableNamePointer",
+            parameter_name=f"{self.SSM_PREFIX}/Submissions/Active/TableName",
+            string_value=active_table.table_name,
+            description="Pointer: active (current) DynamoDB submissions table name",
+        )
+        self.submissions_active_table_arn_pointer = ssm.StringParameter(
+            self,
+            "SubmissionsActiveTableArnPointer",
+            parameter_name=f"{self.SSM_PREFIX}/Submissions/Active/TableArn",
+            string_value=active_table.table_arn,
+            description="Pointer: active (current) DynamoDB submissions table ARN",
+        )
+        self.submissions_passive_table_name_pointer = ssm.StringParameter(
+            self,
+            "SubmissionsPassiveTableNamePointer",
+            parameter_name=f"{self.SSM_PREFIX}/Submissions/Passive/TableName",
+            string_value=passive_table.table_name,
+            description="Pointer: passive (previous) DynamoDB submissions table name",
+        )
+        self.submissions_passive_table_arn_pointer = ssm.StringParameter(
+            self,
+            "SubmissionsPassiveTableArnPointer",
+            parameter_name=f"{self.SSM_PREFIX}/Submissions/Passive/TableArn",
+            string_value=passive_table.table_arn,
+            description="Pointer: passive (previous) DynamoDB submissions table ARN",
+        )
 
         # ---------------------------------------------------------------------
         # Backward-compatible (LEGACY) exports

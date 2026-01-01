@@ -15,6 +15,29 @@ This document provides a complete step-by-step workflow for deploying the Data C
 
 ### Step 1.1: Deploy CDK Infrastructure
 
+#### Option A (recommended): use the repo root Taskfile
+
+From the repo root (`AWS-kiro/`), the Taskfile provides guardrails and consistent defaults:
+
+```bash
+# from repo root
+task doctor
+
+# one-time: deploy the SSM "contract" parameters (InitStack)
+task deploy-init
+
+# deploy DynamoDB pointers + API + frontend infrastructure
+task deploy-dynamodb
+task deploy-api
+task deploy-frontend
+```
+
+Notes:
+- `taskfile.env` is loaded automatically and contains `SSM_NAMESPACE_PREFIX=/HeatingDataCollection` for the single-environment setup.
+- CDK synth/deploy requires `ACTIVE_SUBMISSIONS_TABLE_NAME` and `PASSIVE_SUBMISSIONS_TABLE_NAME` to be set; the Taskfile enforces this for DynamoDB/API/Frontend deploys.
+
+#### Option B: manual CDK commands (legacy)
+
 ```bash
 cd infrastructure/
 
@@ -26,6 +49,7 @@ cdk synth
 
 # Deploy dev stacks (dev-only)
 cdk deploy \
+  DataCollectionInit-dev \
   DataCollectionCognito-dev \
   DataCollectionDynamoDB-dev \
   DataCollectionFrontend-dev \

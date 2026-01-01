@@ -1,35 +1,48 @@
-# Year Roll-Over Runbook (active ↔ passive)
+# Year Roll-Over Runbook (active ↔ passive, via SSM pointers)
 
 This repo models submissions as **two DynamoDB tables**:
 - **active**: current year (used by frontend/API)
 - **passive**: previous year (kept for roll-over / migration tooling)
 
-The roll-over is an **infrastructure + configuration switch**: update which physical table is considered “active” and redeploy.
+The roll-over is an **infrastructure switch**: update which physical table is considered “active” by updating **SSM Parameter Store pointers**, then redeploy the API so Lambdas + IAM point at the new active table.
 
 ---
 
+### One-time prerequisite: deploy InitStack (SSM contract)
+
+InitStack creates the stable SSM “contract” parameters under the namespace prefix (single environment, no env segment):
+- `SSM_NAMESPACE_PREFIX=/HeatingDataCollection` (see `taskfile.env`)
+
+Deploy it once before your first roll-over:
+
+```bash
+# from repo root
+task deploy-init
+
+# optional: verify InitStack parameters exist
+task ssm:init:show
+```
+
 ### Key facts (how the system is wired)
 
-- **External configuration (required at deploy time)**
-  - `ACTIVE_SUBMISSIONS_TABLE_NAME`
-  - `PASSIVE_SUBMISSIONS_TABLE_NAME`
+- **SSM “contract” (required at deploy time)**
+  - The API stack reads these parameters at deploy time (not at runtime):
+    - `/HeatingDataCollection/Submissions/Active/TableName`
+    - `/HeatingDataCollection/Submissions/Active/TableArn`
+    - `/HeatingDataCollection/Submissions/Passive/TableName`
+    - `/HeatingDataCollection/Submissions/Passive/TableArn`
 
 - **DynamoDB (CDK)**
   - The table schema is unchanged:
     - Partition key: `user_id`
     - Sort key: `timestamp_utc` (ISO-8601 UTC string)
   - Tables use **PITR** and **RemovalPolicy.RETAIN**.
-  - `DynamoDBStack` creates/keeps both physical tables named by the two env vars and exports role-based outputs:
-    - `DataCollectionSubmissionsActiveTableName-<env>`
-    - `DataCollectionSubmissionsActiveTableArn-<env>`
-    - `DataCollectionSubmissionsPassiveTableName-<env>`
-    - `DataCollectionSubmissionsPassiveTableArn-<env>`
-  - Swapping the env var values swaps the **exports** (active ↔ passive) while keeping the **same two tables** (no renames during the swap).
+  - `DynamoDBStack` owns the pointer values by publishing the **active/passive table name + ARN** into SSM under the paths above.
 
 - **API / Lambda**
   - Lambda handlers do **not** hardcode a year; they read the active table from env var `SUBMISSIONS_TABLE`.
-  - `APIStack` imports the **active** exports, sets `SUBMISSIONS_TABLE`, and grants DynamoDB permissions to the **active table ARN only**.
-  - (Optional) `PASSIVE_SUBMISSIONS_TABLE` is also provided to Lambdas for future tooling/migrations.
+  - `APIStack` reads **Active/TableName** from SSM, sets `SUBMISSIONS_TABLE`, and grants DynamoDB permissions to **Active/TableArn only**.
+  - Because the API reads SSM at **deploy time**, you must redeploy the API after changing the SSM pointers.
 
 ---
 
@@ -51,16 +64,23 @@ If you need **cross-year history** or **cross-year deltas**, implement it explic
 
 ### Cutover sequence (safe order)
 
-The safe order matters because `APIStack` imports table values from exports.
+The safe order matters because the API stack must be redeployed to pick up the new SSM pointer values.
+
+### Operational guidance (helps avoid edge cases)
+
+- Pick a controlled cutover window where you can watch logs for ~15–30 minutes.
+- Avoid heavy usage during the flip (reduces the chance of “writes split across years”).
+- Optional: ask users for a short “quiet period” (a couple minutes) right around the flip.
 
 #### T-2 days (prepare)
 
-- **Step A — Finalize exports/backups**
+- **Step A — Finalize S3 exports/backups**
   - Export remaining months for the current active year (at minimum December).
   - Verify S3 manifests exist and look correct.
 
-- **Step B — Ensure both tables exist and are exported**
-  - Deploy `DynamoDBStack` with env vars set to the two physical table names you want to keep, for example:
+- **Step B — Ensure both tables exist**
+  - Ensure the next-year table exists (can be done weeks before cutover).
+  - If your `DynamoDBStack` uses environment variables to define the two physical table names, set them to the two physical table names you want to keep, for example:
 
 ```bash
 export ACTIVE_SUBMISSIONS_TABLE_NAME=submissions-2025
@@ -70,7 +90,7 @@ export PASSIVE_SUBMISSIONS_TABLE_NAME=submissions-2026
   - Verify:
     - both tables exist
     - PITR is enabled
-    - the active/passive CloudFormation exports exist for your environment
+    - the SSM pointer parameters exist (see verification commands below)
 
 #### T0 (Jan 1, shortly after midnight): switch
 
@@ -82,7 +102,7 @@ export PASSIVE_SUBMISSIONS_TABLE_NAME=submissions-2025
 ```
 
 - **Step D — Deploy in order**
-  - Deploy `DynamoDBStack` first (updates exports)
+  - Deploy `DynamoDBStack` first (updates the SSM pointers)
   - Deploy `APIStack` next (repoints Lambdas and IAM to the new active table)
 
 - **Step E — Smoke test**
@@ -91,6 +111,37 @@ export PASSIVE_SUBMISSIONS_TABLE_NAME=submissions-2025
     - `/recent` works
     - `/history` works
     - UI can submit and shows recent submissions
+  - Monitor CloudWatch logs for the submit/recent/history Lambdas for 5–10 minutes:
+    - `AccessDenied` (usually IAM points at the wrong table ARN)
+    - `ResourceNotFoundException` (usually table name mismatch / wrong pointer)
+
+---
+
+### Verification (SSM pointers + DynamoDB)
+
+Run these checks before and after cutover.
+
+#### 1) Read pointer parameters
+
+```bash
+aws ssm get-parameter --name "/HeatingDataCollection/Submissions/Active/TableName" --query "Parameter.Value" --output text
+aws ssm get-parameter --name "/HeatingDataCollection/Submissions/Active/TableArn"  --query "Parameter.Value" --output text
+aws ssm get-parameter --name "/HeatingDataCollection/Submissions/Passive/TableName" --query "Parameter.Value" --output text
+aws ssm get-parameter --name "/HeatingDataCollection/Submissions/Passive/TableArn"  --query "Parameter.Value" --output text
+```
+
+Expected:
+- Active points to the current-year table (e.g. `submissions-2026` right after Jan 1 cutover).
+- Passive points to the previous-year table (e.g. `submissions-2025` right after Jan 1 cutover).
+
+#### 2) Confirm the active table exists and is the one receiving writes
+
+```bash
+ACTIVE_TABLE="$(aws ssm get-parameter --name "/HeatingDataCollection/Submissions/Active/TableName" --query "Parameter.Value" --output text)"
+aws dynamodb describe-table --table-name "$ACTIVE_TABLE" --query "Table.TableStatus" --output text
+```
+
+After deploying `APIStack`, submit one record and confirm it lands in `$ACTIVE_TABLE`.
 
 ---
 
@@ -101,6 +152,11 @@ If something is wrong after cutover:
 - Both tables are retained; data remains intact.
 
 ---
+
+### Legacy deployments (do not use unless you’re on an old stack wiring model)
+
+If your deployment still uses CloudFormation `Export`/`ImportValue` wiring (pre-SSM refactor), see:
+- `docs/legacy/YEAR_ROLL_OVER_CLOUDFORMATION_EXPORT_IN_USE_FIX.md`
 
 ### Ops scripts (table selection)
 
