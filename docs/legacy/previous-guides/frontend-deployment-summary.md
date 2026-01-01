@@ -49,7 +49,7 @@ This document summarizes the implementation of task 20: "Deploy frontend to S3 a
   - Provides fallback values for local development
 
 ### 5. Documentation
-- **Created `DEPLOYMENT.md`**: Comprehensive deployment guide including:
+- **Created (legacy) `DEPLOYMENT.md`**: Comprehensive deployment guide including:
   - Prerequisites and setup steps
   - Step-by-step deployment instructions
   - Environment variable configuration
@@ -76,7 +76,7 @@ frontend/
 ├── build.sh                    # Build script (updated)
 ├── deploy.sh                   # Deployment script (new)
 ├── setup-env.sh                # Environment setup (new)
-├── DEPLOYMENT.md               # Deployment guide (new)
+├── DEPLOYMENT.md               # Deployment guide (legacy; moved to docs/legacy/previous-guides/frontend-deployment.md)
 ├── README.md                   # Frontend README (updated)
 ├── index.html                  # HTML (updated with config.js)
 ├── app.js                      # App logic (updated for config)
@@ -211,7 +211,9 @@ To complete the deployment:
 
 ## Troubleshooting
 
-Common issues and solutions are documented in `DEPLOYMENT.md`:
+Common issues and solutions are documented in:
+- `docs/getting-started.md` (canonical)
+- `docs/legacy/previous-guides/frontend-deployment.md` (legacy)
 - Could not retrieve S3 bucket or CloudFront distribution ID
 - Access Denied when uploading to S3
 - Application shows "Failed to load recent submissions"
@@ -222,9 +224,9 @@ Common issues and solutions are documented in `DEPLOYMENT.md`:
 ### Created
 - `frontend/deploy.sh` - Deployment automation script
 - `frontend/setup-env.sh` - Environment setup script
-- `frontend/DEPLOYMENT.md` - Comprehensive deployment guide
+- `docs/legacy/previous-guides/frontend-deployment.md` - Legacy comprehensive frontend deployment guide
 - `frontend/README.md` - Frontend application documentation
-- `FRONTEND_DEPLOYMENT_SUMMARY.md` - This summary document
+- `docs/legacy/previous-guides/frontend-deployment-summary.md` - This summary document
 
 ### Modified
 - `frontend/build.sh` - Enhanced with config.js generation

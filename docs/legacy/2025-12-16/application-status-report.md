@@ -210,8 +210,7 @@ bash deploy.sh dev
 ## Support
 
 For detailed information:
-- Deployment guide: `DEPLOYMENT_WORKFLOW.md`
-- Quick start: `QUICK_START_CONFIGURATION.md`
+- Canonical guide: `docs/getting-started.md`
 - Frontend docs: `frontend/README.md`
-- Security details: `SECURITY_VALIDATION_SUMMARY.md`
+- Security (evergreen): `docs/reference/security.md`
 

@@ -22,7 +22,7 @@ Notes:
 
 - **AWS credentials** available to `boto3` (env vars, shared config, SSO, instance profile, …)
 - The **DataLake bucket** exists (created by CDK stack `DataCollectionDataLake-dev`)
-- The **DynamoDB table** exists (use the current active table; see `docs/YEAR_ROLL_OVER_README.md`)
+- The **DynamoDB table** exists (use the current active table; see `runbooks/year-rollover.md`)
 
 ### Find the DataLake bucket name
 

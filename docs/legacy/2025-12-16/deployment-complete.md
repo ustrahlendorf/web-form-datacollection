@@ -293,10 +293,9 @@ To automate deployments:
 
 ## Support & Documentation
 
-- **Deployment Guide**: `DEPLOYMENT_WORKFLOW.md`
-- **Quick Start**: `QUICK_START_CONFIGURATION.md`
+- **Canonical Guide**: `docs/getting-started.md`
 - **Frontend Docs**: `frontend/README.md`
-- **Security Details**: `SECURITY_VALIDATION_SUMMARY.md`
+- **Security (evergreen)**: `docs/reference/security.md`
 - **GitHub Repository**: https://github.com/ustrahlendorf/web-form-datacollection
 
 ---

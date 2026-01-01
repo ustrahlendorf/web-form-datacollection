@@ -5,7 +5,7 @@
 This document applies only to older deployments where `APIStack` used CloudFormation `Export`/`ImportValue` wiring for DynamoDB table names/ARNs.
 
 The current design uses **SSM Parameter Store pointers** under `/HeatingDataCollection/Submissions/...` to decouple the stacks. For the up-to-date roll-over procedure, see:
-- `docs/YEAR_ROLL_OVER_README.md`
+- `docs/runbooks/year-rollover.md`
 
 ### Summary (what went wrong)
 
@@ -106,6 +106,6 @@ With Option A, you repeat the same procedure annually:
 
 ### Note about the runbook
 
-The runbook (`YEAR_ROLL_OVER_README.md`) describes passive as “optional” for API/Lambdas, but the current `APIStack` imports passive. Option A aligns the implementation with the runbook intent.
+The runbook (`runbooks/year-rollover.md`) describes passive as “optional” for API/Lambdas, but the current `APIStack` imports passive. Option A aligns the implementation with the runbook intent.
 
 
