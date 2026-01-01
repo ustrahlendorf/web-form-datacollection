@@ -1,0 +1,226 @@
+version: "3"
+
+# Run all tasks in silent mode by default (do not echo commands).
+silent: true
+
+# Load non-secret Taskfile inputs from a repo-local env file.
+# This keeps stack wiring inputs (e.g. table names, SSM namespace) out of code and out of shell history.
+dotenv: ["taskfile.env"]
+
+# Repo entrypoint for common dev/ops actions.
+# Note: This Taskfile lives at the git repo root (`web-form-verbrauch/`).
+#
+# Usage examples:
+#   task doctor
+#   task deploy-init
+#   ACTIVE_SUBMISSIONS_TABLE_NAME=submissions-2025 PASSIVE_SUBMISSIONS_TABLE_NAME=submissions-2026 task cdk:synth
+#   task deploy-dynamodb
+#
+# Notes:
+# - This project expects ACTIVE_/PASSIVE_ table names to be set explicitly for CDK synth/deploy.
+# - Python/Node environments (e.g. venv, npm install) are assumed to be prepared by the user.
+
+vars:
+  # Task working directory root (this repo).
+  APP_DIR: .
+  # This repository currently supports DEV only.
+  # We intentionally do not support prod/staging environments via Taskfile to reduce risk.
+  ENV_NAME: dev
+  AWS_REGION: '{{default "eu-central-1" .AWS_REGION}}'
+  # Keep jsii/CDK runtime caches inside the repo so tasks work in sandboxed environments.
+  JSII_CACHE_DIR: ".jsii-package-cache"
+
+tasks:
+  default:
+    desc: "List available tasks"
+    cmds:
+      - task -l
+
+  doctor-base:
+    desc: "Preflight checks (tooling only)"
+    cmds:
+      - command -v python3 >/dev/null
+      - command -v node >/dev/null
+      - command -v cdk >/dev/null
+
+  doctor-aws:
+    desc: "Preflight checks (AWS CLI installed)"
+    cmds:
+      - command -v aws >/dev/null
+
+  doctor-dynamodb-names:
+    desc: "Preflight checks (required DynamoDB naming env vars)"
+    cmds:
+      - test -n "$ACTIVE_SUBMISSIONS_TABLE_NAME"
+      - test -n "$PASSIVE_SUBMISSIONS_TABLE_NAME"
+      - test "$ACTIVE_SUBMISSIONS_TABLE_NAME" != "$PASSIVE_SUBMISSIONS_TABLE_NAME"
+
+  doctor-init:
+    desc: "Preflight checks for InitStack (requires SSM namespace env var)"
+    deps: [doctor-base]
+    cmds:
+      - test -n "$SSM_NAMESPACE_PREFIX"
+
+  doctor:
+    desc: "Preflight checks (tooling + required env vars)"
+    deps: [doctor-base, doctor-dynamodb-names]
+
+  test:
+    desc: "Run backend + frontend tests"
+    deps: [test-backend, test-frontend]
+
+  test-backend:
+    desc: "Run pytest"
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - python3 -m pytest -q
+
+  test-frontend:
+    desc: "Run frontend tests"
+    dir: "{{.APP_DIR}}/frontend"
+    cmds:
+      - npm test
+
+  cdk:synth:
+    desc: "CDK synth (requires ACTIVE_/PASSIVE_ table env vars)"
+    deps: [doctor]
+    dir: "{{.APP_DIR}}"
+    env:
+      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
+      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
+    cmds:
+      - cdk synth
+
+  cdk:diff:
+    desc: "CDK diff (requires ACTIVE_/PASSIVE_ table env vars)"
+    deps: [doctor]
+    dir: "{{.APP_DIR}}"
+    env:
+      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
+      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
+    cmds:
+      - cdk diff
+
+  deploy-init:
+    desc: "Deploy Init stack (dev) - static SSM parameters under /HeatingDataCollection/"
+    deps: [doctor-init]
+    dir: "{{.APP_DIR}}"
+    env:
+      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
+      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
+    cmds:
+      - |
+        # The current CDK app requires DynamoDB table names to be set at import/synth time.
+        # InitStack itself does not depend on these values, so we provide safe placeholders
+        # when running this Init-only deploy task.
+        export ACTIVE_SUBMISSIONS_TABLE_NAME="${ACTIVE_SUBMISSIONS_TABLE_NAME:-__unused_active__}"
+        export PASSIVE_SUBMISSIONS_TABLE_NAME="${PASSIVE_SUBMISSIONS_TABLE_NAME:-__unused_passive__}"
+
+        # Guardrail: this task expects InitStack to be wired into the CDK app.
+        # If it isn't, CDK will error with a less obvious message.
+        if ! cdk list | grep -q '^DataCollectionInit-dev$'; then
+          echo "ERROR: CDK app does not expose stack 'DataCollectionInit-dev' yet." >&2
+          echo "Hint: wire InitStack in web-form-verbrauch/infrastructure/app.py (task: wire-init)." >&2
+          exit 2
+        fi
+        cdk deploy --exclusively "DataCollectionInit-dev"
+
+  deploy-dynamodb:
+    desc: "Deploy DynamoDB stack (dev)"
+    deps: [doctor]
+    dir: "{{.APP_DIR}}"
+    env:
+      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
+      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
+    cmds:
+      - cdk deploy "DataCollectionDynamoDB-dev"
+
+  deploy-api:
+    desc: "Deploy API stack (dev)"
+    deps: [doctor]
+    dir: "{{.APP_DIR}}"
+    env:
+      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
+      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
+    cmds:
+      # Important: deploy API without pulling in dependency stacks.
+      # This is required for year roll-over recovery where DynamoDB exports are blocked
+      # until the API stack is updated to stop importing passive exports.
+      - cdk deploy --exclusively "DataCollectionAPI-dev"
+
+  deploy-api-with-deps:
+    desc: "Deploy API stack (dev) including dependency stacks (CDK default behavior)"
+    deps: [doctor]
+    dir: "{{.APP_DIR}}"
+    env:
+      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
+      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
+    cmds:
+      - cdk deploy "DataCollectionAPI-dev"
+
+  deploy-frontend:
+    desc: "Deploy Frontend stack (dev)"
+    deps: [doctor]
+    dir: "{{.APP_DIR}}"
+    env:
+      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
+      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
+    cmds:
+      - cdk deploy "DataCollectionFrontend-dev"
+
+  ssm:init:show:
+    desc: "Show InitStack SSM parameters (expects InitStack deployed)"
+    deps: [doctor-aws, doctor-init]
+    cmds:
+      - |
+        set -e
+        pfx="${SSM_NAMESPACE_PREFIX}"
+
+        get_param () {
+          name="$1"
+          aws --region "${AWS_REGION}" ssm get-parameter --name "${name}" --output json
+        }
+
+        get_param "${pfx}/Config/SchemaVersion"
+        get_param "${pfx}/FeatureFlags/EnablePassiveReads"
+        get_param "${pfx}/Operations/Rollover/RunbookVersion"
+
+  env:print:
+    desc: "Print shell exports for ACTIVE_/PASSIVE_ table names (use with eval)"
+    vars:
+      # Prefer explicit task args; fall back to current shell env vars if present.
+      ACTIVE: '{{default .ACTIVE_SUBMISSIONS_TABLE_NAME .ACTIVE}}'
+      PASSIVE: '{{default .PASSIVE_SUBMISSIONS_TABLE_NAME .PASSIVE}}'
+    cmds:
+      - test -n "{{.ACTIVE}}"
+      - test -n "{{.PASSIVE}}"
+      - test "{{.ACTIVE}}" != "{{.PASSIVE}}"
+      - |
+        python3 -c '
+        import shlex
+        active = "{{.ACTIVE}}"
+        passive = "{{.PASSIVE}}"
+        print("export ACTIVE_SUBMISSIONS_TABLE_NAME=" + shlex.quote(active))
+        print("export PASSIVE_SUBMISSIONS_TABLE_NAME=" + shlex.quote(passive))
+        '
+
+  env:show:
+    desc: "Show current shell values for *_SUBMISSIONS_TABLE_NAME (with basic warnings)"
+    cmds:
+      - |
+        # Mirrors: env | grep _SUBMISSIONS_TABLE_NAME
+        env | grep -E '^(ACTIVE|PASSIVE)_SUBMISSIONS_TABLE_NAME=' || true
+
+        # Basic warnings (non-fatal)
+        if [ -z "${ACTIVE_SUBMISSIONS_TABLE_NAME:-}" ]; then
+          echo "WARN: ACTIVE_SUBMISSIONS_TABLE_NAME is not set" >&2
+        fi
+        if [ -z "${PASSIVE_SUBMISSIONS_TABLE_NAME:-}" ]; then
+          echo "WARN: PASSIVE_SUBMISSIONS_TABLE_NAME is not set" >&2
+        fi
+        if [ -n "${ACTIVE_SUBMISSIONS_TABLE_NAME:-}" ] && [ -n "${PASSIVE_SUBMISSIONS_TABLE_NAME:-}" ] && \
+           [ "${ACTIVE_SUBMISSIONS_TABLE_NAME}" = "${PASSIVE_SUBMISSIONS_TABLE_NAME}" ]; then
+          echo "WARN: ACTIVE_SUBMISSIONS_TABLE_NAME == PASSIVE_SUBMISSIONS_TABLE_NAME (${ACTIVE_SUBMISSIONS_TABLE_NAME})" >&2
+        fi
+
+
