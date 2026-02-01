@@ -120,9 +120,13 @@ def _require_first(items: list[dict], *, url: str, what: str, auth_mod) -> dict:
 
 def _require_key(obj: dict, key: str, *, url: str, what: str, auth_mod) -> str:
     value = obj.get(key)
-    if not value or not isinstance(value, str):
+    # Viessmann APIs sometimes return identifiers as integers (e.g. installation "id": 194640).
+    # We accept string or int identifiers and always return a string for downstream URL building.
+    if value is None or value == "":
         raise auth_mod.CliError(f"Missing or invalid '{key}' in first {what} item from {url}.")
-    return value
+    if isinstance(value, (str, int)):
+        return str(value)
+    raise auth_mod.CliError(f"Missing or invalid '{key}' in first {what} item from {url}.")
 
 
 def api_get_json(*, session: requests.Session, url: str, access_token: str, cfg: Any, log, auth_mod) -> Any:
