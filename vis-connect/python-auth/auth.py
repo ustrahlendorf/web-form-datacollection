@@ -260,7 +260,7 @@ def _extract_code_from_url(url: str) -> Optional[str]:
     return None
 
 
-def extract_authorization_code(*, response: requests.Response, log: logging.LoggerAdapter) -> str:
+def extract_authorization_code(*, response: requests.Response, log: Optional[logging.LoggerAdapter] = None) -> str:
     """
     Robustly extract an authorization code from an authorize call response.
     """
@@ -269,20 +269,22 @@ def extract_authorization_code(*, response: requests.Response, log: logging.Logg
     if location:
         code = _extract_code_from_url(location)
         if code:
-            log.debug(
-                "authorization code extracted from Location header",
-                extra={"run_id": log.extra.get("run_id")},
-            )
+            if log is not None:
+                log.debug(
+                    "authorization code extracted from Location header",
+                    extra={"run_id": log.extra.get("run_id")},
+                )
             return code
 
     # 2) Final URL (if redirects were followed elsewhere).
     if response.url:
         code = _extract_code_from_url(response.url)
         if code:
-            log.debug(
-                "authorization code extracted from response.url",
-                extra={"run_id": log.extra.get("run_id")},
-            )
+            if log is not None:
+                log.debug(
+                    "authorization code extracted from response.url",
+                    extra={"run_id": log.extra.get("run_id")},
+                )
             return code
 
     # 3) Fallback: HTML/text body regex similar to the PHP script.
@@ -290,10 +292,11 @@ def extract_authorization_code(*, response: requests.Response, log: logging.Logg
     body = response.text or ""
     m = re.search(r'code=([^"&\s]+)', body)
     if m:
-        log.debug(
-            "authorization code extracted from response body regex",
-            extra={"run_id": log.extra.get("run_id")},
-        )
+        if log is not None:
+            log.debug(
+                "authorization code extracted from response body regex",
+                extra={"run_id": log.extra.get("run_id")},
+            )
         return m.group(1)
 
     raise CliError(
