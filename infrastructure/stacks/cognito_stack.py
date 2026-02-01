@@ -30,12 +30,12 @@ class CognitoStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
         self.environment_name = environment_name
 
-        # Create Cognito User Pool with self-signup enabled
+        # Create Cognito User Pool with self-signup disabled (admin/invite only)
         user_pool = cognito.UserPool(
             self,
             "DataCollectionUserPool",
             user_pool_name=f"data-collection-{environment_name}",
-            self_sign_up_enabled=True,
+            self_sign_up_enabled=False,
             sign_in_aliases=cognito.SignInAliases(email=True),
             password_policy=cognito.PasswordPolicy(
                 min_length=8,

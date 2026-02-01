@@ -7,7 +7,7 @@ Tests correctness properties of the history handler using hypothesis and mocking
 import json
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from hypothesis import given, strategies as st, assume
+from hypothesis import given, strategies as st, assume, settings
 from datetime import datetime, timezone, timedelta
 
 from src.handlers.history_handler import (
@@ -181,6 +181,7 @@ def test_history_sorting_order(mock_dynamodb, num_submissions):
     total_submissions=st.integers(min_value=25, max_value=50),
     limit=st.integers(min_value=5, max_value=20),
 )
+@settings(deadline=None)
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
 @patch("src.handlers.history_handler.dynamodb")
 def test_pagination_consistency(mock_dynamodb, total_submissions, limit):

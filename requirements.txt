@@ -3,6 +3,7 @@ aws-cdk-lib==2.100.0
 aws-cdk.aws-apigatewayv2-alpha==2.100.0a0
 aws-cdk.aws-apigatewayv2-authorizers-alpha==2.100.0a0
 aws-cdk.aws-apigatewayv2-integrations-alpha==2.100.0a0
+requests==2.32.5
 pytest==7.4.3
 hypothesis==6.88.0
 # python-dateutil 2.8.2 triggers a Python 3.12 DeprecationWarning via dateutil.tz
