@@ -2,12 +2,8 @@
 """
 Fetch Viessmann IoT configuration (installation id, gateway serial, device id).
 
-This module is intentionally implemented as a standalone file (not a Python
-package) because the repo path includes hyphens (e.g. `vis-connect/`), which
-prevents regular imports without additional packaging.
-
-We reuse the existing OAuth implementation from `auth.py` (same folder) and
-then call the IoT equipment endpoints with:
+This module reuses the existing OAuth implementation from `auth.py` (same
+package) and then calls the IoT equipment endpoints with:
 
     Authorization: Bearer <access_token>
 
@@ -21,16 +17,21 @@ from each list endpoint and extract:
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import sys
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Optional
 
 import requests
+
+try:
+    # Normal, package-friendly import (preferred).
+    from . import auth as auth_mod
+except ImportError:  # pragma: no cover
+    # Support running this file directly (e.g. `python get_iot_config.py` from this folder).
+    import auth as auth_mod  # type: ignore[no-redef]
 
 IOT_INSTALLATIONS_URL = "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations"
 IOT_GATEWAYS_URL = "https://api.viessmann-climatesolutions.com/iot/v2/equipment/gateways"
@@ -38,29 +39,6 @@ IOT_DEVICES_URL_TMPL = (
     "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations/{installation_id}/"
     "gateways/{gateway_serial}/devices"
 )
-
-
-def _load_auth_module():
-    """
-    Load sibling `auth.py` by file path.
-
-    This avoids relying on `sys.path` / package structure (the directory name
-    contains hyphens, so normal imports are brittle in this repo).
-    """
-    module_name = "vis_connect_python_auth"
-    if module_name in sys.modules:
-        return sys.modules[module_name]
-
-    auth_path = Path(__file__).resolve().parent / "auth.py"
-    spec = importlib.util.spec_from_file_location(module_name, auth_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Failed to create import spec for {auth_path}")
-
-    module = importlib.util.module_from_spec(spec)
-    # Register so dataclasses / postponed annotations can resolve module name.
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
 
 
 @dataclass(frozen=True)
@@ -218,8 +196,6 @@ def get_iot_config(
     - VIESSMANN_CALLBACK_URI (optional)
     - VIESSMANN_SCOPE        (optional)
     """
-    auth_mod = _load_auth_module()
-
     run_id = uuid.uuid4().hex[:12]
     effective_log_level = log_level or os.getenv("VIESSMANN_LOG_LEVEL") or "INFO"
     log = auth_mod.configure_logging(run_id=run_id, level=effective_log_level)
@@ -316,7 +292,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     Prints the resolved identifiers as JSON to stdout.
     """
     args = _parse_args(argv)
-    auth_mod = _load_auth_module()
     try:
         cfg = get_iot_config(
             timeout_seconds=float(args.timeout_seconds),

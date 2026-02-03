@@ -1,5 +1,5 @@
 """
-Offline unit tests for `vis-connect/python-auth/get_iot_config.py`.
+Offline unit tests for `vis_connect.python_auth.get_iot_config`.
 
 We do not perform network calls:
 - OAuth calls (/authorize, /token) are satisfied by a fake Session.post().
@@ -8,27 +8,13 @@ We do not perform network calls:
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
-from pathlib import Path
 
 import pytest
 import requests
 
 
-def _load_get_iot_config_module():
-    """
-    Load the module by file path because `vis-connect/` contains hyphens.
-    """
-    repo_root = Path(__file__).resolve().parents[1]  # web-form-verbrauch/
-    mod_path = repo_root / "vis-connect" / "python-auth" / "get_iot_config.py"
-    spec = importlib.util.spec_from_file_location("vis_connect_get_iot_config", mod_path)
-    assert spec and spec.loader, f"Failed to create import spec for {mod_path}"
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)  # type: ignore[assignment]
-    return module
+import vis_connect.python_auth.auth as auth_mod
 
 
 def _make_json_response(payload, *, status_code: int = 200, url: str = "https://example.invalid") -> requests.Response:
@@ -59,9 +45,9 @@ class FakeSession:
         self.get_calls: list[dict] = []
 
     def post(self, url: str, **kwargs):  # noqa: ANN001 - mimic requests.Session.post
-        if url == self._mod._load_auth_module().AUTHORIZE_URL:
+        if url == auth_mod.AUTHORIZE_URL:
             return _make_redirect_response(location="http://localhost:4200/?code=fake-auth-code")
-        if url == self._mod._load_auth_module().TOKEN_URL:
+        if url == auth_mod.TOKEN_URL:
             return _make_json_response({"access_token": "FAKE_ACCESS_TOKEN"}, url=url)
         raise AssertionError(f"Unexpected POST url: {url}")
 
@@ -78,7 +64,9 @@ class FakeSession:
 
 @pytest.fixture()
 def mod():
-    return _load_get_iot_config_module()
+    import vis_connect.python_auth.get_iot_config as get_iot_mod
+
+    return get_iot_mod
 
 
 def test_get_iot_config_happy_path_picks_first_and_sets_bearer_header(monkeypatch, mod) -> None:
@@ -123,7 +111,7 @@ def test_get_iot_config_empty_installations_raises(monkeypatch, mod) -> None:
     )
     monkeypatch.setattr(mod.requests, "Session", lambda: fake_session)
 
-    with pytest.raises(mod._load_auth_module().CliError):
+    with pytest.raises(auth_mod.CliError):
         mod.get_iot_config()
 
 
@@ -141,6 +129,6 @@ def test_get_iot_config_missing_installation_id_raises(monkeypatch, mod) -> None
     )
     monkeypatch.setattr(mod.requests, "Session", lambda: fake_session)
 
-    with pytest.raises(mod._load_auth_module().CliError):
+    with pytest.raises(auth_mod.CliError):
         mod.get_iot_config()
 

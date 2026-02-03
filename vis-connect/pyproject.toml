@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# Distribution name uses a hyphen; import package will be `vis_connect`.
+name = "vis-connect"
+version = "0.0.0"
+description = "Viessmann VIS Connect tooling (Python)"
+requires-python = ">=3.10"
+dependencies = ["requests"]
+
+[project.scripts]
+vis-connect-auth = "vis_connect.python_auth.auth:main"
+vis-connect-iot-config = "vis_connect.python_auth.get_iot_config:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["vis_connect*"]

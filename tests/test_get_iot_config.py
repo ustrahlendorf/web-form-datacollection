@@ -1,32 +1,10 @@
-import importlib.util
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
-import sys
 
 import pytest
 
-
-def _load_module_by_path(path: Path, *, module_name: str):
-    spec = importlib.util.spec_from_file_location(module_name, str(path))
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Failed to create import spec for {path}")
-    module = importlib.util.module_from_spec(spec)
-    # Register before exec so dataclasses + postponed annotations can resolve
-    # cls.__module__ via sys.modules during import-time processing.
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def _load_get_iot_config_module():
-    """
-    Load get_iot_config.py by file path (repo contains hyphenated dirs).
-    """
-    web_form_root = Path(__file__).resolve().parent.parent
-    mod_path = web_form_root / "vis-connect" / "python-auth" / "get_iot_config.py"
-    return _load_module_by_path(mod_path, module_name="get_iot_config_under_test")
-
+import vis_connect.python_auth.auth as auth_mod
+import vis_connect.python_auth.get_iot_config as get_iot_mod
 
 def _make_cfg(*, timeout_seconds: float = 12.5, ssl_verify: bool = True):
     return SimpleNamespace(timeout_seconds=timeout_seconds, ssl_verify=ssl_verify)
@@ -49,9 +27,6 @@ def _assert_called_with_bearer_header(call, *, expected_url: str, token: str, ti
 
 
 def test_get_installation_id_sets_bearer_header_and_picks_first() -> None:
-    mod = _load_get_iot_config_module()
-    auth_mod = mod._load_auth_module()
-
     token = "test-token"
     cfg = _make_cfg(timeout_seconds=7.0, ssl_verify=False)
     session = Mock()
@@ -59,7 +34,7 @@ def test_get_installation_id_sets_bearer_header_and_picks_first() -> None:
         {"data": [{"id": "inst-1"}, {"id": "inst-2"}]},
     )
 
-    installation_id = mod.get_installation_id(
+    installation_id = get_iot_mod.get_installation_id(
         session=session,
         access_token=token,
         cfg=cfg,
@@ -70,7 +45,7 @@ def test_get_installation_id_sets_bearer_header_and_picks_first() -> None:
     assert installation_id == "inst-1"
     _assert_called_with_bearer_header(
         session.get.call_args,
-        expected_url=mod.IOT_INSTALLATIONS_URL,
+        expected_url=get_iot_mod.IOT_INSTALLATIONS_URL,
         token=token,
         timeout_seconds=cfg.timeout_seconds,
         ssl_verify=cfg.ssl_verify,
@@ -78,9 +53,6 @@ def test_get_installation_id_sets_bearer_header_and_picks_first() -> None:
 
 
 def test_get_gateway_serial_sets_bearer_header_and_picks_first() -> None:
-    mod = _load_get_iot_config_module()
-    auth_mod = mod._load_auth_module()
-
     token = "test-token"
     cfg = _make_cfg(timeout_seconds=30.0, ssl_verify=True)
     session = Mock()
@@ -88,7 +60,7 @@ def test_get_gateway_serial_sets_bearer_header_and_picks_first() -> None:
         [{"serial": "gw-1"}, {"serial": "gw-2"}],
     )
 
-    gateway_serial = mod.get_gateway_serial(
+    gateway_serial = get_iot_mod.get_gateway_serial(
         session=session,
         access_token=token,
         cfg=cfg,
@@ -99,7 +71,7 @@ def test_get_gateway_serial_sets_bearer_header_and_picks_first() -> None:
     assert gateway_serial == "gw-1"
     _assert_called_with_bearer_header(
         session.get.call_args,
-        expected_url=mod.IOT_GATEWAYS_URL,
+        expected_url=get_iot_mod.IOT_GATEWAYS_URL,
         token=token,
         timeout_seconds=cfg.timeout_seconds,
         ssl_verify=cfg.ssl_verify,
@@ -107,9 +79,6 @@ def test_get_gateway_serial_sets_bearer_header_and_picks_first() -> None:
 
 
 def test_get_device_id_sets_bearer_header_and_picks_first() -> None:
-    mod = _load_get_iot_config_module()
-    auth_mod = mod._load_auth_module()
-
     token = "test-token"
     cfg = _make_cfg(timeout_seconds=3.25, ssl_verify=True)
     session = Mock()
@@ -119,9 +88,9 @@ def test_get_device_id_sets_bearer_header_and_picks_first() -> None:
 
     installation_id = "inst-123"
     gateway_serial = "gw-xyz"
-    expected_url = mod.IOT_DEVICES_URL_TMPL.format(installation_id=installation_id, gateway_serial=gateway_serial)
+    expected_url = get_iot_mod.IOT_DEVICES_URL_TMPL.format(installation_id=installation_id, gateway_serial=gateway_serial)
 
-    device_id = mod.get_device_id(
+    device_id = get_iot_mod.get_device_id(
         session=session,
         access_token=token,
         installation_id=installation_id,
@@ -149,28 +118,22 @@ def test_get_device_id_sets_bearer_header_and_picks_first() -> None:
     ],
 )
 def test_empty_list_raises_clear_error(which: str, url: str, call_fn: str) -> None:
-    mod = _load_get_iot_config_module()
-    auth_mod = mod._load_auth_module()
-
     token = "test-token"
     cfg = _make_cfg()
     session = Mock()
     session.get.return_value = _mock_json_response({"data": []})
 
-    fn = getattr(mod, call_fn)
+    fn = getattr(get_iot_mod, call_fn)
     with pytest.raises(auth_mod.CliError) as e:
         fn(session=session, access_token=token, cfg=cfg, log=None, auth_mod=auth_mod)
 
-    expected_url = getattr(mod, url)
+    expected_url = getattr(get_iot_mod, url)
     assert "is empty" in str(e.value)
     assert expected_url in str(e.value)
     assert which in str(e.value)
 
 
 def test_empty_devices_list_raises_clear_error() -> None:
-    mod = _load_get_iot_config_module()
-    auth_mod = mod._load_auth_module()
-
     token = "test-token"
     cfg = _make_cfg()
     session = Mock()
@@ -178,10 +141,10 @@ def test_empty_devices_list_raises_clear_error() -> None:
 
     installation_id = "inst-123"
     gateway_serial = "gw-xyz"
-    url = mod.IOT_DEVICES_URL_TMPL.format(installation_id=installation_id, gateway_serial=gateway_serial)
+    url = get_iot_mod.IOT_DEVICES_URL_TMPL.format(installation_id=installation_id, gateway_serial=gateway_serial)
 
     with pytest.raises(auth_mod.CliError) as e:
-        mod.get_device_id(
+        get_iot_mod.get_device_id(
             session=session,
             access_token=token,
             installation_id=installation_id,
@@ -204,15 +167,12 @@ def test_empty_devices_list_raises_clear_error() -> None:
     ],
 )
 def test_missing_required_key_raises_clear_error(which: str, payload, call_fn: str, expected_substring: str) -> None:
-    mod = _load_get_iot_config_module()
-    auth_mod = mod._load_auth_module()
-
     token = "test-token"
     cfg = _make_cfg()
     session = Mock()
     session.get.return_value = _mock_json_response(payload)
 
-    fn = getattr(mod, call_fn)
+    fn = getattr(get_iot_mod, call_fn)
     with pytest.raises(auth_mod.CliError) as e:
         fn(session=session, access_token=token, cfg=cfg, log=None, auth_mod=auth_mod)
 
@@ -221,16 +181,13 @@ def test_missing_required_key_raises_clear_error(which: str, payload, call_fn: s
 
 
 def test_missing_device_id_key_raises_clear_error() -> None:
-    mod = _load_get_iot_config_module()
-    auth_mod = mod._load_auth_module()
-
     token = "test-token"
     cfg = _make_cfg()
     session = Mock()
     session.get.return_value = _mock_json_response({"data": [{"nope": "x"}]})
 
     with pytest.raises(auth_mod.CliError) as e:
-        mod.get_device_id(
+        get_iot_mod.get_device_id(
             session=session,
             access_token=token,
             installation_id="inst-123",

@@ -29,16 +29,37 @@ From the `web-form-verbrauch/` directory:
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -e ./vis-connect
+
+# Option A (recommended): copy and source an env file
+cp vis-connect/.env.example vis-connect/.env
+set -a
+source vis-connect/.env
+set +a
 
 export VIESSMANN_CLIENT_ID="..."
 export VIESSMANN_EMAIL="you@example.com"
 export VIESSMANN_PASSWORD="..."
 export VIESSMANN_CALLBACK_URI="http://localhost:4200/"
 
-python vis-connect/python-auth/auth.py --pretty
+# Option B: run as a module (requires the editable install above)
+python -m vis_connect.python_auth.auth --pretty
+
+# Option C: run via the console script (also requires the editable install above)
+vis-connect-auth --pretty
 ```
 
 ### Notes
 
 - **SSL verification**: the legacy PHP script disables SSL verification; the Python CLI keeps verification **enabled by default**. If you must disable it temporarily (not recommended), use `--insecure-skip-ssl-verify`.
 - **Output**: the script prints the `/users/me` JSON to stdout, similar to the PHP script’s `echo($response)`.
+
+### Related command
+
+To fetch the IoT config (after `pip install -e ./vis-connect`):
+
+```bash
+python -m vis_connect.python_auth.get_iot_config
+# or:
+vis-connect-iot-config
+```

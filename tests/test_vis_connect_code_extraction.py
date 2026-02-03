@@ -1,5 +1,5 @@
 """
-Unit tests for authorization-code extraction in `vis-connect/python-auth/auth.py`.
+Unit tests for authorization-code extraction in `vis_connect.python_auth.auth`.
 
 No network calls are performed. We validate extraction from:
 - Redirect Location header (preferred)
@@ -9,33 +9,16 @@ No network calls are performed. We validate extraction from:
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 
 import pytest
 
 
-def _load_vis_connect_auth_module():
-    """
-    Load the CLI module by file path because `vis-connect/` is not importable.
-    """
-    repo_root = Path(__file__).resolve().parents[1]  # web-form-verbrauch/
-    auth_path = repo_root / "vis-connect" / "python-auth" / "auth.py"
-    spec = importlib.util.spec_from_file_location("vis_connect_python_auth", auth_path)
-    assert spec and spec.loader, f"Failed to create import spec for {auth_path}"
-    module = importlib.util.module_from_spec(spec)
-    # Register in sys.modules so dataclasses (with postponed annotations)
-    # can resolve cls.__module__ reliably on Python 3.12+.
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)  # type: ignore[assignment]
-    return module
-
-
 @pytest.fixture(scope="session")
 def vis_auth():
-    return _load_vis_connect_auth_module()
+    import vis_connect.python_auth.auth as vis_auth_mod
+
+    return vis_auth_mod
 
 
 @dataclass

@@ -1,5 +1,5 @@
 """
-Unit tests for PKCE helper functions in `vis-connect/python-auth/auth.py`.
+Unit tests for PKCE helper functions in `vis_connect.python_auth.auth`.
 
 These tests are intentionally offline (no network calls).
 They validate deterministic S256 computation and basic verifier invariants.
@@ -7,35 +7,14 @@ They validate deterministic S256 computation and basic verifier invariants.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
 import pytest
-
-
-def _load_vis_connect_auth_module():
-    """
-    Load the CLI module by file path.
-
-    The directory name `vis-connect/` contains a hyphen, so it is not a valid
-    Python package import path. For tests we load the module directly.
-    """
-    repo_root = Path(__file__).resolve().parents[1]  # web-form-verbrauch/
-    auth_path = repo_root / "vis-connect" / "python-auth" / "auth.py"
-    spec = importlib.util.spec_from_file_location("vis_connect_python_auth", auth_path)
-    assert spec and spec.loader, f"Failed to create import spec for {auth_path}"
-    module = importlib.util.module_from_spec(spec)
-    # Register in sys.modules so dataclasses (with postponed annotations)
-    # can resolve cls.__module__ reliably on Python 3.12+.
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)  # type: ignore[assignment]
-    return module
 
 
 @pytest.fixture(scope="session")
 def vis_auth():
-    return _load_vis_connect_auth_module()
+    import vis_connect.python_auth.auth as vis_auth_mod
+
+    return vis_auth_mod
 
 
 def test_pkce_s256_matches_rfc7636_example(vis_auth) -> None:

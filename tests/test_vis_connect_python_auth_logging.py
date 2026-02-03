@@ -1,8 +1,5 @@
-import importlib.util
 import json
 import logging
-import sys
-from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -12,16 +9,11 @@ import requests
 @pytest.fixture(scope="module")
 def auth_module():
     """
-    Load the CLI script as a module (path contains hyphens, so normal import won't work).
+    Import the auth module from the `vis_connect` package.
     """
-    auth_path = Path(__file__).resolve().parent.parent / "vis-connect/python-auth/auth.py"
-    spec = importlib.util.spec_from_file_location("vis_connect_python_auth_script", auth_path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    # Register module so dataclasses can resolve string annotations (Py 3.12+).
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    import vis_connect.python_auth.auth as auth_mod
+
+    return auth_mod
 
 
 def _make_json_response(payload: dict, *, status_code: int = 200) -> requests.Response:
