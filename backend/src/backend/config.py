@@ -5,8 +5,9 @@ Loads .env and exposes base URLs and derived endpoint URLs. All URLs can be
 overridden via environment variables for environment switching (e.g. staging/prod).
 
 Environment variables:
-  - VIESSMANN_IAM_BASE_URL  (optional, default: https://iam.viessmann-climatesolutions.com/idp/v3)
-  - VIESSMANN_API_BASE_URL  (optional, default: https://api.viessmann-climatesolutions.com)
+  - VIESSMANN_IAM_BASE_URL       (optional, default: https://iam.viessmann-climatesolutions.com/idp/v3)
+  - VIESSMANN_API_BASE_URL       (optional, default: https://api.viessmann-climatesolutions.com)
+  - VIESSMANN_TOKEN_CACHE_PATH   (optional; path to token cache file; empty = disabled)
 """
 
 from __future__ import annotations
@@ -99,6 +100,21 @@ def get_authorize_url() -> str:
 def get_token_url() -> str:
     """Return full OAuth token endpoint URL."""
     return f"{get_iam_base_url().rstrip('/')}/token"
+
+
+def get_token_cache_path() -> Optional[Path]:
+    """
+    Return path to token cache file, or None if caching is disabled.
+
+    Uses VIESSMANN_TOKEN_CACHE_PATH if set. If empty, returns None.
+    Default: ~/.viessmann/tokens.json
+    """
+    override = _get_env("VIESSMANN_TOKEN_CACHE_PATH")
+    if override is not None:
+        if not override:
+            return None
+        return Path(override).expanduser()
+    return Path.home() / ".viessmann" / "tokens.json"
 
 
 def get_users_me_url() -> str:

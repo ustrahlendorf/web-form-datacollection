@@ -75,10 +75,12 @@ def test_exchange_code_for_token_logs_sanitized_response(auth_module, caplog) ->
     caplog.set_level(logging.DEBUG)
 
     # Act
-    token = auth_module.exchange_code_for_token(session=session, cfg=cfg, code="auth-code", log=log)
+    token_response = auth_module.exchange_code_for_token(session=session, cfg=cfg, code="auth-code", log=log)
 
-    # Assert: function returns the actual token value, but logs must not contain it.
-    assert token == "ACCESS_TOKEN_SHOULD_NOT_APPEAR_IN_LOGS"
+    # Assert: function returns TokenResponse with actual token value, but logs must not contain it.
+    assert token_response.access_token == "ACCESS_TOKEN_SHOULD_NOT_APPEAR_IN_LOGS"
+    assert token_response.refresh_token == "REFRESH_TOKEN_SHOULD_NOT_APPEAR_IN_LOGS"
+    assert token_response.expires_in == 3600
     assert "ACCESS_TOKEN_SHOULD_NOT_APPEAR_IN_LOGS" not in caplog.text
     assert "REFRESH_TOKEN_SHOULD_NOT_APPEAR_IN_LOGS" not in caplog.text
 

@@ -307,6 +307,15 @@ def extract_authorization_code(*, response: requests.Response, log: Optional[log
 
 
 @dataclass(frozen=True)
+class TokenResponse:
+    """OAuth token response with access_token, optional refresh_token, and expires_in."""
+
+    access_token: str
+    refresh_token: Optional[str] = None
+    expires_in: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class Config:
     client_id: str
     email: str
@@ -473,7 +482,34 @@ def request_authorization_code(*, session: requests.Session, cfg: Config, log: l
     return code
 
 
-def exchange_code_for_token(*, session: requests.Session, cfg: Config, code: str, log: logging.LoggerAdapter) -> str:
+def _parse_token_payload(payload: dict, *, log: logging.LoggerAdapter) -> TokenResponse:
+    """Parse token endpoint JSON payload into TokenResponse. Raises CliError if invalid."""
+    access_token = payload.get("access_token")
+    if not access_token:
+        log.warning(
+            "token response missing access_token (keys=%s)",
+            sorted(payload.keys()),
+            extra={"run_id": log.extra.get("run_id")},
+        )
+        raise CliError(f"/token response missing access_token. Keys: {sorted(payload.keys())}")
+
+    refresh_token: Optional[str] = payload.get("refresh_token") or None
+    expires_in_raw = payload.get("expires_in")
+    expires_in: Optional[int] = None
+    if expires_in_raw is not None:
+        try:
+            expires_in = int(expires_in_raw)
+        except (TypeError, ValueError):
+            pass
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=expires_in,
+    )
+
+
+def exchange_code_for_token(*, session: requests.Session, cfg: Config, code: str, log: logging.LoggerAdapter) -> TokenResponse:
     params = {
         "grant_type": "authorization_code",
         "code_verifier": cfg.code_verifier,
@@ -540,15 +576,7 @@ def exchange_code_for_token(*, session: requests.Session, cfg: Config, code: str
         extra={"run_id": log.extra.get("run_id")},
     )
 
-    token = payload.get("access_token")
-    if not token:
-        log.warning(
-            "token response missing access_token (keys=%s)",
-            sorted(payload.keys()),
-            extra={"run_id": log.extra.get("run_id")},
-        )
-        raise CliError(f"/token response missing access_token. Keys: {sorted(payload.keys())}")
-
+    token_response = _parse_token_payload(payload, log=log)
     log.info(
         "access token acquired",
         extra={"run_id": log.extra.get("run_id")},
@@ -558,7 +586,92 @@ def exchange_code_for_token(*, session: requests.Session, cfg: Config, code: str
         sorted(payload.keys()),
         extra={"run_id": log.extra.get("run_id")},
     )
-    return token
+    return token_response
+
+
+def refresh_access_token(
+    *,
+    session: requests.Session,
+    cfg: Config,
+    refresh_token: str,
+    log: logging.LoggerAdapter,
+) -> TokenResponse:
+    """
+    Refresh an access token using the refresh_token grant (OAuth2 RFC 6749 Section 6).
+
+    Requires only 1 API call instead of the full authorize + token exchange flow.
+    """
+    params = {
+        "grant_type": "refresh_token",
+        "client_id": cfg.client_id,
+        "refresh_token": refresh_token,
+    }
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+    log.info(
+        "refreshing access token",
+        extra={"run_id": log.extra.get("run_id")},
+    )
+    log.debug(
+        "token refresh request details (sanitized): %s",
+        _sanitize_mapping(
+            {
+                "url": _config.get_token_url(),
+                "params": _sanitize_mapping(params),
+                "headers": _sanitize_mapping(headers),
+                "timeout_seconds": cfg.timeout_seconds,
+                "ssl_verify": cfg.ssl_verify,
+            }
+        ),
+        extra={"run_id": log.extra.get("run_id")},
+    )
+
+    start = time.perf_counter()
+    resp = session.post(
+        _config.get_token_url(),
+        params=params,
+        data=b"",
+        headers=headers,
+        timeout=cfg.timeout_seconds,
+        verify=cfg.ssl_verify,
+    )
+    elapsed_ms = int((time.perf_counter() - start) * 1000)
+    log.debug(
+        "token refresh response details: %s",
+        {
+            "status_code": resp.status_code,
+            "elapsed_ms": elapsed_ms,
+            "content_type": resp.headers.get("Content-Type") or resp.headers.get("content-type"),
+        },
+        extra={"run_id": log.extra.get("run_id")},
+    )
+
+    if resp.status_code >= 400:
+        raise CliError(
+            f"/token refresh failed: HTTP {resp.status_code}. "
+            f"Body (truncated, sanitized): {_sanitize_text((resp.text or '')[:800])!r}"
+        )
+
+    try:
+        payload = resp.json()
+    except Exception as e:
+        raise CliError(
+            f"/token refresh response was not valid JSON: {e}. "
+            f"Body: {_sanitize_text((resp.text or '')[:800])!r}"
+        ) from e
+
+    log.debug(
+        "token refresh response body (sanitized): %s",
+        _sanitize_obj(payload),
+        extra={"run_id": log.extra.get("run_id")},
+    )
+
+    token_response = _parse_token_payload(payload, log=log)
+    log.info(
+        "access token refreshed",
+        extra={"run_id": log.extra.get("run_id")},
+    )
+    return token_response
 
 
 def fetch_users_me(*, session: requests.Session, cfg: Config, access_token: str, log: logging.LoggerAdapter) -> dict:
@@ -676,8 +789,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         session = requests.Session()
         code = request_authorization_code(session=session, cfg=cfg, log=log)
-        token = exchange_code_for_token(session=session, cfg=cfg, code=code, log=log)
-        me = fetch_users_me(session=session, cfg=cfg, access_token=token, log=log)
+        token_response = exchange_code_for_token(session=session, cfg=cfg, code=code, log=log)
+        me = fetch_users_me(session=session, cfg=cfg, access_token=token_response.access_token, log=log)
 
         if args.pretty:
             print(json.dumps(me, indent=2, ensure_ascii=False, sort_keys=True))

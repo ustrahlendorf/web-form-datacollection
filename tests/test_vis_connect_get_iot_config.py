@@ -74,6 +74,7 @@ def test_get_iot_config_happy_path_picks_first_and_sets_bearer_header(monkeypatc
     monkeypatch.setenv("VIESSMANN_EMAIL", "user@example.com")
     monkeypatch.setenv("VIESSMANN_PASSWORD", "pw")
     monkeypatch.setenv("VIESSMANN_CALLBACK_URI", "http://localhost:4200/")
+    monkeypatch.setattr(mod.config_mod, "get_token_cache_path", lambda: None)
 
     fake_session = FakeSession(
         mod,
@@ -102,6 +103,7 @@ def test_get_iot_config_empty_installations_raises(monkeypatch, mod) -> None:
     monkeypatch.setenv("VIESSMANN_EMAIL", "user@example.com")
     monkeypatch.setenv("VIESSMANN_PASSWORD", "pw")
     monkeypatch.setenv("VIESSMANN_CALLBACK_URI", "http://localhost:4200/")
+    monkeypatch.setattr(mod.config_mod, "get_token_cache_path", lambda: None)
 
     fake_session = FakeSession(
         mod,
@@ -120,6 +122,7 @@ def test_get_iot_config_missing_installation_id_raises(monkeypatch, mod) -> None
     monkeypatch.setenv("VIESSMANN_EMAIL", "user@example.com")
     monkeypatch.setenv("VIESSMANN_PASSWORD", "pw")
     monkeypatch.setenv("VIESSMANN_CALLBACK_URI", "http://localhost:4200/")
+    monkeypatch.setattr(mod.config_mod, "get_token_cache_path", lambda: None)
 
     fake_session = FakeSession(
         mod,

@@ -52,6 +52,11 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         choices=["S256", "plain"],
         help='PKCE method ("S256" default; "plain" for legacy compatibility).',
     )
+    p.add_argument(
+        "--no-token-cache",
+        action="store_true",
+        help="Disable token cache (always use full OAuth flow).",
+    )
     return p.parse_args(sys.argv[1:] if argv is None else argv)
 
 
@@ -69,6 +74,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             log_level=args.log_level,
             pkce_method=args.pkce_method,
             code_verifier=args.code_verifier,
+            token_cache_disabled=bool(args.no_token_cache),
         )
         value = get_feature_value(
             args.feature,
