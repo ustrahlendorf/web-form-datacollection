@@ -123,3 +123,22 @@ def get_iot_devices_url_tmpl() -> str:
     """
     base = get_api_base_url().rstrip("/")
     return f"{base}/iot/v2/equipment/installations/{{installation_id}}/gateways/{{gateway_serial}}/devices"
+
+
+def get_iot_features_url_tmpl() -> str:
+    """
+    Return IoT features URL template with placeholders:
+    {installation_id}, {gateway_serial}, {device_id}.
+    """
+    base = get_api_base_url().rstrip("/")
+    return f"{base}/iot/v2/features/installations/{{installation_id}}/gateways/{{gateway_serial}}/devices/{{device_id}}/features"
+
+
+def get_iot_single_feature_url_tmpl() -> str:
+    """
+    Return IoT single-feature URL template with placeholders:
+    {installation_id}, {gateway_serial}, {device_id}, {feature_path}.
+    Response shape: {"data": {...}}.
+    """
+    base = get_api_base_url().rstrip("/")
+    return f"{base}/iot/v2/features/installations/{{installation_id}}/gateways/{{gateway_serial}}/devices/{{device_id}}/features/{{feature_path}}"

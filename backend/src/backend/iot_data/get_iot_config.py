@@ -68,19 +68,34 @@ def _extract_list(payload: Any, *, url: str, auth_mod) -> list[dict]:
     """
     Normalize IoT list responses to a list[dict].
 
-    Viessmann APIs often return {"data": [...]} but we also accept a bare list.
+    Viessmann APIs return either:
+    - {"data": [...]}  (array of items, e.g. installations, gateways, devices)
+    - {"data": {...}}  (single object, e.g. single-feature endpoint)
+    - [...]           (bare list)
     """
     items: Any
-    if isinstance(payload, dict) and isinstance(payload.get("data"), list):
-        items = payload["data"]
+    if isinstance(payload, dict) and "data" in payload:
+        data = payload["data"]
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            items = [data]
+        else:
+            raise auth_mod.CliError(
+                f"Unexpected 'data' type from {url}: expected list or object."
+            )
     elif isinstance(payload, list):
         items = payload
     else:
-        raise auth_mod.CliError(f"Unexpected JSON shape from {url}: expected list or dict with 'data' list.")
+        raise auth_mod.CliError(
+            f"Unexpected JSON shape from {url}: expected list or dict with 'data'."
+        )
 
     # Defensive: enforce list[dict] shape for downstream key extraction.
     if not all(isinstance(x, dict) for x in items):
-        raise auth_mod.CliError(f"Unexpected items from {url}: expected list of objects.")
+        raise auth_mod.CliError(
+            f"Unexpected items from {url}: expected list of objects."
+        )
     return items
 
 
