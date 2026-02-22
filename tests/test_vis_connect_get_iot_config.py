@@ -1,5 +1,5 @@
 """
-Offline unit tests for `vis_connect.python_auth.get_iot_config`.
+Offline unit tests for `backend.iot_data.get_iot_config`.
 
 We do not perform network calls:
 - OAuth calls (/authorize, /token) are satisfied by a fake Session.post().
@@ -14,7 +14,7 @@ import pytest
 import requests
 
 
-import vis_connect.python_auth.auth as auth_mod
+import backend.api_auth.auth as auth_mod
 
 
 def _make_json_response(payload, *, status_code: int = 200, url: str = "https://example.invalid") -> requests.Response:
@@ -64,7 +64,7 @@ class FakeSession:
 
 @pytest.fixture()
 def mod():
-    import vis_connect.python_auth.get_iot_config as get_iot_mod
+    import backend.iot_data.get_iot_config as get_iot_mod
 
     return get_iot_mod
 

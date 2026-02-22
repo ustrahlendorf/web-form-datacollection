@@ -27,8 +27,8 @@ def _load_dotenv(log: Optional[logging.LoggerAdapter] = None) -> None:
 
     Search order:
     1. Current working directory (.env)
-    2. The vis-connect package root — i.e. four levels up from this file
-       (vis-connect/src/vis_connect/python_auth/ → vis-connect/)
+    2. The backend package root — i.e. two levels up from this file
+       (backend/src/backend/config.py → backend/)
 
     Shell / CI environment variables already set take priority: we always
     call load_dotenv() with override=False so existing values are never
@@ -44,9 +44,9 @@ def _load_dotenv(log: Optional[logging.LoggerAdapter] = None) -> None:
 
     # Candidate 1: standard location – current working directory
     cwd_env = Path.cwd() / ".env"
-    # Candidate 2: vis-connect project root (4 levels up from this source file)
-    #   config.py → python_auth/ → vis_connect/ → src/ → vis-connect/
-    package_root_env = Path(__file__).resolve().parents[3] / ".env"
+    # Candidate 2: backend project root (2 levels up from this source file)
+    #   config.py → backend/ → src/ → backend/
+    package_root_env = Path(__file__).resolve().parents[2] / ".env"
 
     env_file: Optional[Path] = None
     if cwd_env.is_file():

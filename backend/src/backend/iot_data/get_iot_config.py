@@ -2,8 +2,8 @@
 """
 Fetch Viessmann IoT configuration (installation id, gateway serial, device id).
 
-This module reuses the existing OAuth implementation from `auth.py` (same
-package) and then calls the IoT equipment endpoints with:
+This module reuses the existing OAuth implementation from `api_auth.auth` and then
+calls the IoT equipment endpoints with:
 
     Authorization: Bearer <access_token>
 
@@ -26,14 +26,13 @@ from typing import Any, Optional
 
 import requests
 
-try:
-    # Normal, package-friendly import (preferred).
-    from . import auth as auth_mod
-    from . import config as config_mod
-except ImportError:  # pragma: no cover
-    # Support running this file directly (e.g. `python get_iot_config.py` from this folder).
-    import auth as auth_mod  # type: ignore[no-redef]
-    import config as config_mod  # type: ignore[no-redef]
+from .. import config as config_mod
+from ..api_auth import auth as auth_mod
+
+# Module-level URL constants for testability.
+IOT_INSTALLATIONS_URL = config_mod.get_iot_installations_url()
+IOT_GATEWAYS_URL = config_mod.get_iot_gateways_url()
+IOT_DEVICES_URL_TMPL = config_mod.get_iot_devices_url_tmpl()
 
 
 @dataclass(frozen=True)
@@ -52,7 +51,7 @@ def _build_auth_args(
     code_verifier: Optional[str] = None,
 ) -> argparse.Namespace:
     """
-    Build an argparse.Namespace compatible with `auth.load_config()`.
+    Build an argparse.Namespace compatible with `api_auth.auth.load_config()`.
     """
     return argparse.Namespace(
         timeout_seconds=str(timeout_seconds),
@@ -107,7 +106,7 @@ def api_get_json(*, session: requests.Session, url: str, access_token: str, cfg:
     Shared IoT GET helper.
 
     - Adds Authorization: Bearer
-    - Enforces timeout + TLS verification from `auth.Config`
+    - Enforces timeout + TLS verification from `api_auth.auth.Config`
     - Parses JSON and raises `CliError` on failures
     """
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -171,7 +170,7 @@ def get_device_id(
 
 def get_access_token(*, session: requests.Session, cfg: Any, log, auth_mod) -> str:
     """
-    Obtain an access token using the OAuth flow implemented in `auth.py`.
+    Obtain an access token using the OAuth flow implemented in `api_auth.auth`.
     """
     code = auth_mod.request_authorization_code(session=session, cfg=cfg, log=log)
     return auth_mod.exchange_code_for_token(session=session, cfg=cfg, code=code, log=log)
@@ -188,7 +187,7 @@ def get_iot_config(
     """
     Public API: return token + IoT identifiers (installation id, gateway serial, device id).
 
-    Configuration for OAuth credentials comes from the same env vars as `auth.py`:
+    Configuration for OAuth credentials comes from the same env vars as `api_auth.auth`:
     - VIESSMANN_CLIENT_ID (required)
     - VIESSMANN_EMAIL     (required)
     - VIESSMANN_PASSWORD  (required)
@@ -318,4 +317,3 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

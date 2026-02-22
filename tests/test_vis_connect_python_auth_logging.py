@@ -9,9 +9,9 @@ import requests
 @pytest.fixture(scope="module")
 def auth_module():
     """
-    Import the auth module from the `vis_connect` package.
+    Import the auth module from the `backend` package.
     """
-    import vis_connect.python_auth.auth as auth_mod
+    import backend.api_auth.auth as auth_mod
 
     return auth_mod
 
@@ -71,7 +71,7 @@ def test_exchange_code_for_token_logs_sanitized_response(auth_module, caplog) ->
         code_verifier="code-verifier",
     )
 
-    log = logging.LoggerAdapter(logging.getLogger("vis_connect.python_auth.test"), {})
+    log = logging.LoggerAdapter(logging.getLogger("backend.api_auth.test"), {})
     caplog.set_level(logging.DEBUG)
 
     # Act
