@@ -53,6 +53,50 @@ def extract_raw_properties(feature: dict[str, Any]) -> dict[str, Any]:
     return feature.get("properties") or {}
 
 
+def extract_burner_statistics(feature: dict[str, Any]) -> dict[str, Any]:
+    """
+    Extract operating hours (Betriebsstunden) and starts from burner statistics.
+
+    Viessmann API returns properties like:
+    - operatingHours: {value: N, unit: "hours"} or similar
+    - starts: {value: N} or similar
+
+    Returns dict with keys: betriebsstunden (int), starts (int).
+    """
+    props = feature.get("properties") or {}
+    result: dict[str, Any] = {"betriebsstunden": None, "starts": None}
+
+    # operatingHours (Betriebsstunden)
+    oh = props.get("operatingHours")
+    if oh is not None:
+        val = oh.get("value") if isinstance(oh, dict) else oh
+        result["betriebsstunden"] = _coerce_int(val)
+
+    # starts
+    s = props.get("starts")
+    if s is not None:
+        val = s.get("value") if isinstance(s, dict) else s
+        result["starts"] = _coerce_int(val)
+
+    return result
+
+
+def _coerce_int(value: Any) -> Optional[int]:
+    """Coerce value to int if numeric, else None."""
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value == int(value) else int(value)
+    if isinstance(value, str):
+        try:
+            return int(float(value))
+        except ValueError:
+            return None
+    return None
+
+
 def _coerce_float(value: Any) -> Optional[float]:
     """Coerce value to float if numeric, else None."""
     if value is None:
@@ -97,6 +141,9 @@ def _get_extractor(feature_path: str) -> Callable[[dict[str, Any]], Any]:
     # Consumption features: gas, power, heat production
     if "consumption" in feature_path or "heat.production" in feature_path:
         return extract_consumption
+    # Burner statistics: operating hours (Betriebsstunden), starts
+    if "burners" in feature_path and "statistics" in feature_path:
+        return extract_burner_statistics
     return extract_raw_properties
 
 
@@ -158,6 +205,7 @@ def get_feature_value(
 
 
 __all__ = [
+    "extract_burner_statistics",
     "extract_consumption",
     "extract_feature_value",
     "extract_raw_properties",

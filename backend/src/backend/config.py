@@ -107,6 +107,7 @@ def get_token_cache_path() -> Optional[Path]:
     Return path to token cache file, or None if caching is disabled.
 
     Uses VIESSMANN_TOKEN_CACHE_PATH if set. If empty, returns None.
+    In Lambda (AWS_LAMBDA_FUNCTION_NAME set): uses /tmp/viessmann/tokens.json.
     Default: ~/.viessmann/tokens.json
     """
     override = _get_env("VIESSMANN_TOKEN_CACHE_PATH")
@@ -114,6 +115,9 @@ def get_token_cache_path() -> Optional[Path]:
         if not override:
             return None
         return Path(override).expanduser()
+    # Lambda: use /tmp (writable; persists across invocations in same container)
+    if _get_env("AWS_LAMBDA_FUNCTION_NAME"):
+        return Path("/tmp") / "viessmann" / "tokens.json"
     return Path.home() / ".viessmann" / "tokens.json"
 
 

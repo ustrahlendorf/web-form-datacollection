@@ -16,6 +16,7 @@
                     <a href="#form" class="nav-link active" data-page="form">Init</a>
                     <a href="#analyze" class="nav-link" data-page="analyze">Analyze</a>
                     <a href="#history" class="nav-link" data-page="history">History</a>
+                    <a href="#live" class="nav-link" data-page="live">Live</a>
                     <button id="logout-btn" class="nav-link logout-btn">Logout</button>
                 </div>
             </div>
@@ -85,7 +86,7 @@
                                     </div>
 
                                     <div class="form-group">
-                                        <label for="verbrauch_qm">Consumption (kWh/m²)</label>
+                                        <label for="verbrauch_qm">Consumption (m³)</label>
                                         <input 
                                             type="text" 
                                             id="verbrauch_qm" 
@@ -121,7 +122,10 @@
                                 </div>
                             </div>
 
-                            <button type="submit" class="btn btn-primary">Submit</button>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Submit</button>
+                                <button type="button" id="live-inject-btn" class="btn btn-secondary">Live</button>
+                            </div>
                         </form>
 
                         <!-- Success/Error Messages -->
@@ -157,6 +161,17 @@
                             <p class="empty-state">Reserved for future use.</p>
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <!-- Live Page -->
+            <section id="live-page" class="page">
+                <div class="container">
+                    <h2>Heating Live Data</h2>
+                    <div id="live-content" class="live-grid">
+                        <p class="empty-state">Click to load live heating data from the heating system.</p>
+                    </div>
+                    <button id="live-refresh-btn" class="btn btn-primary" style="margin-top: 1rem;">Refresh</button>
                 </div>
             </section>
 

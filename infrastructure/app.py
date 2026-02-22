@@ -105,6 +105,8 @@ def create_app() -> App:
         description="Data Collection Web Application - Frontend (dev)",
     )
 
+    viessmann_credentials_secret_arn = os.environ.get("VIESSMANN_CREDENTIALS_SECRET_ARN")
+
     api_stack = APIStack(
         app,
         f"DataCollectionAPI-{environment_name}",
@@ -112,6 +114,7 @@ def create_app() -> App:
         cognito_user_pool_id=cognito_stack.user_pool.user_pool_id,
         cognito_user_pool_client_id=cognito_stack.user_pool_client.user_pool_client_id,
         cloudfront_domain=frontend_stack.distribution.domain_name,
+        viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
         env=env_config,
         description="Data Collection Web Application - API (dev)",
     )

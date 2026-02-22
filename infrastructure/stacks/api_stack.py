@@ -1,6 +1,7 @@
 """API Gateway and Lambda execution role stack."""
 
 from aws_cdk import (
+    BundlingOptions,
     Stack,
     aws_apigatewayv2_alpha as apigw,
     aws_apigatewayv2_authorizers_alpha as apigw_auth,
@@ -28,6 +29,7 @@ class APIStack(Stack):
         cognito_user_pool_id: str,
         cognito_user_pool_client_id: str,
         cloudfront_domain: str | None = None,
+        viessmann_credentials_secret_arn: str | None = None,
         **kwargs
     ) -> None:
         """
@@ -40,6 +42,8 @@ class APIStack(Stack):
             cognito_user_pool_id: The Cognito User Pool ID for JWT authorization
             cognito_user_pool_client_id: The Cognito User Pool App Client ID (audience) for JWT authorization
             cloudfront_domain: CloudFront distribution domain name for CORS (e.g. dxxxx.cloudfront.net)
+            viessmann_credentials_secret_arn: ARN of Secrets Manager secret with VIESSMANN_CLIENT_ID,
+                VIESSMANN_EMAIL, VIESSMANN_PASSWORD. If set, enables GET /heating/live endpoint.
             **kwargs: Additional arguments to pass to Stack
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -118,6 +122,16 @@ class APIStack(Stack):
             )
         )
 
+        # Add Secrets Manager permission for heating live Lambda (when Viessmann secret is configured)
+        if viessmann_credentials_secret_arn:
+            lambda_execution_role.add_to_policy(
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=["secretsmanager:GetSecretValue"],
+                    resources=[viessmann_credentials_secret_arn],
+                )
+            )
+
         # Read active DynamoDB table name from SSM Parameter Store pointer (owned by DynamoDBStack).
         submissions_table_name = ssm.StringParameter.value_for_string_parameter(
             self, "/HeatingDataCollection/Submissions/Active/TableName"
@@ -133,9 +147,23 @@ class APIStack(Stack):
         recent_handler = self._create_recent_handler(
             lambda_execution_role, submissions_table_name
         )
+        heating_live_handler = (
+            self._create_heating_live_handler(
+                lambda_execution_role, viessmann_credentials_secret_arn
+            )
+            if viessmann_credentials_secret_arn
+            else None
+        )
 
         # Wire Lambda functions to API Gateway routes with JWT authorization
-        self._wire_routes(http_api, jwt_authorizer, submit_handler, history_handler, recent_handler)
+        self._wire_routes(
+            http_api,
+            jwt_authorizer,
+            submit_handler,
+            history_handler,
+            recent_handler,
+            heating_live_handler,
+        )
 
         # Store references for use by other stacks
         self.http_api = http_api
@@ -299,6 +327,7 @@ class APIStack(Stack):
         submit_handler: lambda_.Function,
         history_handler: lambda_.Function,
         recent_handler: lambda_.Function,
+        heating_live_handler: lambda_.Function | None = None,
     ) -> None:
         """
         Wire Lambda functions to API Gateway routes with JWT authorization.
@@ -309,6 +338,7 @@ class APIStack(Stack):
             submit_handler: Lambda function for POST /submit
             history_handler: Lambda function for GET /history
             recent_handler: Lambda function for GET /recent
+            heating_live_handler: Optional Lambda for GET /heating/live
         """
         # POST /submit route
         http_api.add_routes(
@@ -342,6 +372,74 @@ class APIStack(Stack):
             ),
             authorizer=jwt_authorizer,
         )
+
+        # GET /heating/live route (optional; requires Viessmann credentials secret)
+        if heating_live_handler is not None:
+            http_api.add_routes(
+                path="/heating/live",
+                methods=[apigw.HttpMethod.GET],
+                integration=apigw_integrations.HttpLambdaIntegration(
+                    "HeatingLiveIntegration",
+                    heating_live_handler,
+                ),
+                authorizer=jwt_authorizer,
+            )
+
+    def _create_heating_live_handler(
+        self,
+        lambda_execution_role: iam.Role,
+        viessmann_credentials_secret_arn: str,
+    ) -> lambda_.Function:
+        """
+        Create Lambda function for GET /heating/live endpoint.
+
+        Fetches heating values from Viessmann IoT API. Requires backend package
+        and PYTHONPATH for backend.iot_data. Credentials from Secrets Manager.
+        """
+        asset_path = os.path.join(os.path.dirname(__file__), "..", "..")
+        # Lambda extracts asset to /var/task; backend package is at backend/src/backend/
+        pythonpath = "backend/src"
+
+        heating_live_fn = lambda_.Function(
+            self,
+            "HeatingLiveHandler",
+            runtime=lambda_.Runtime.PYTHON_3_11,
+            handler="src.handlers.heating_live_handler.lambda_handler",
+            code=lambda_.Code.from_asset(
+                asset_path,
+                exclude=[
+                    "cdk.out",
+                    ".git",
+                    ".venv",
+                    "node_modules",
+                    ".pytest_cache",
+                    ".hypothesis",
+                    ".jsii-package-cache",
+                ],
+                bundling=BundlingOptions(
+                    image=lambda_.Runtime.PYTHON_3_11.bundling_image,
+                    command=[
+                        "bash",
+                        "-c",
+                        "pip install -r /asset-input/requirements-heating.txt -t /asset-output "
+                        "&& cp -r /asset-input/src /asset-input/backend /asset-output/",
+                    ],
+                ),
+            ),
+            role=lambda_execution_role,
+            environment={
+                "VIESSMANN_CREDENTIALS_SECRET_ARN": viessmann_credentials_secret_arn,
+                "PYTHONPATH": pythonpath,
+                # Lambda filesystem is read-only except /tmp; token cache must use writable path.
+                "VIESSMANN_TOKEN_CACHE_PATH": "/tmp/viessmann/tokens.json",
+            },
+            timeout=Duration.seconds(60),
+            memory_size=256,
+            description="Lambda handler for heating live data endpoint",
+            log_retention=logs.RetentionDays.ONE_WEEK,
+        )
+
+        return heating_live_fn
 
     def _get_user_pool(self, user_pool_id: str):
         """

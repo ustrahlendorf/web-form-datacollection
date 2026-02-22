@@ -52,6 +52,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     setupEventListeners();
+
+    // Navigate to page from initial hash (e.g. bookmark #live)
+    const hash = (window.location.hash || '').replace(/^#/, '');
+    if (hash && ['form', 'analyze', 'history', 'live'].includes(hash)) {
+        navigateToPage(hash);
+    }
 });
 
 function setupEventListeners() {
@@ -80,6 +86,18 @@ function setupEventListeners() {
     const submissionForm = document.getElementById('submission-form');
     if (submissionForm) {
         submissionForm.addEventListener('submit', handleFormSubmit);
+    }
+
+    // Live page refresh
+    const liveRefreshBtn = document.getElementById('live-refresh-btn');
+    if (liveRefreshBtn) {
+        liveRefreshBtn.addEventListener('click', () => loadLive());
+    }
+
+    // Live inject button (Submit Data page)
+    const liveInjectBtn = document.getElementById('live-inject-btn');
+    if (liveInjectBtn) {
+        liveInjectBtn.addEventListener('click', () => injectLiveDataIntoForm());
     }
 }
 
@@ -117,6 +135,8 @@ function navigateToPage(page) {
         loadAnalyze();
     } else if (page === 'form') {
         initializeFormPage();
+    } else if (page === 'live') {
+        loadLive();
     }
 }
 
@@ -416,7 +436,7 @@ function displayRecentSubmissions(submissions) {
                 </div>
                 <div class="recent-item-field">
                     <span class="recent-item-label">Consumption:</span>
-                    <span class="recent-item-value">${submission.verbrauch_qm} kWh/m² <span class="delta">${formatDelta(getDeltaValue(submission, 'delta_verbrauch_qm', 'verbrauch_qm_delta'), { kind: 'decimal', decimals: 2 })}</span></span>
+                    <span class="recent-item-value">${submission.verbrauch_qm} m³ <span class="delta">${formatDelta(getDeltaValue(submission, 'delta_verbrauch_qm', 'verbrauch_qm_delta'), { kind: 'decimal', decimals: 2 })}</span></span>
                 </div>
                 <div class="recent-item-field">
                     <span class="recent-item-label">Supply Temp:</span>
@@ -476,8 +496,8 @@ function displayHistory(submissions) {
                     <th>Δ Operating Hours</th>
                     <th>Starts</th>
                     <th>Δ Starts</th>
-                    <th>Consumption (kWh/m²)</th>
-                    <th>Δ Consumption</th>
+                    <th>Consumption (m³)</th>
+                    <th>Δ Consumption (m³)</th>
                     <th>Supply Temp (°C)</th>
                     <th>Outside Temp (°C)</th>
                     <th>Submitted</th>
@@ -824,6 +844,151 @@ function renderAnalyzeTotals(stats) {
             </div>
         </div>
     `;
+}
+
+// Live Page Functions
+function getLiveContentContainer() {
+    return document.getElementById('live-content');
+}
+
+function renderLiveLoading() {
+    const container = getLiveContentContainer();
+    if (!container) return;
+    container.innerHTML = '<p class="empty-state">Loading live heating data...</p>';
+}
+
+function renderLiveError(message) {
+    const container = getLiveContentContainer();
+    if (!container) return;
+    const safeMsg = (typeof message === 'string' && message.trim() !== '') ? message.trim() : 'Failed to load heating data';
+    container.innerHTML = `<p class="empty-state">${safeMsg}</p>`;
+}
+
+function renderLiveData(data) {
+    const container = getLiveContentContainer();
+    if (!container) return;
+
+    const formatVal = (v) => (v === null || v === undefined ? '—' : String(v));
+    const fetchedAt = data.fetched_at
+        ? formatTimestamp(data.fetched_at)
+        : '—';
+
+    container.innerHTML = `
+        <div class="analyze-card">
+            <div class="analyze-card-title">Live Heating Values</div>
+            <div class="analyze-metrics">
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Gas Consumption (m³/day)</span>
+                    <span class="analyze-metric-value">${formatVal(data.gas_consumption_m3)}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Operating Hours</span>
+                    <span class="analyze-metric-value">${formatVal(data.betriebsstunden)}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Starts</span>
+                    <span class="analyze-metric-value">${formatVal(data.starts)}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Supply Temp (°C)</span>
+                    <span class="analyze-metric-value">${formatVal(data.supply_temp)}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Outside Temp (°C)</span>
+                    <span class="analyze-metric-value">${formatVal(data.outside_temp)}</span>
+                </div>
+            </div>
+            <div style="margin-top: 1rem; color: #7f8c8d; font-size: 0.95rem;">
+                Fetched at: ${fetchedAt}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Fetches live heating data from the API.
+ * Shared by loadLive (Live tab) and injectLiveDataIntoForm (Init tab Live button).
+ *
+ * @returns {Promise<{gas_consumption_m3, betriebsstunden, starts, supply_temp, outside_temp, fetched_at}>}
+ * @throws {Error} On auth failure, non-OK response, or network error
+ */
+async function fetchLiveHeatingData() {
+    if (typeof authenticatedFetch !== 'function') {
+        throw new Error('Not authenticated yet.');
+    }
+
+    const response = await authenticatedFetch(`${CONFIG.API_ENDPOINT}/heating/live`);
+    if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        const msg = errBody.error || `Request failed: ${response.status}`;
+        throw new Error(msg);
+    }
+
+    return response.json();
+}
+
+async function loadLive() {
+    renderLiveLoading();
+
+    try {
+        const data = await fetchLiveHeatingData();
+        renderLiveData(data);
+    } catch (error) {
+        console.error('Error loading live heating data:', error);
+        renderLiveError(error.message || 'Failed to load heating data');
+    }
+}
+
+/**
+ * Fetches live heating data and injects it into the Submit Data form fields.
+ * Excludes Date (datum) and Time (uhrzeit).
+ */
+async function injectLiveDataIntoForm() {
+    const liveBtn = document.getElementById('live-inject-btn');
+    const originalText = liveBtn ? liveBtn.textContent : 'Live';
+
+    try {
+        if (liveBtn) {
+            liveBtn.disabled = true;
+            liveBtn.textContent = 'Loading…';
+        }
+        clearFormMessage();
+
+        const data = await fetchLiveHeatingData();
+
+        // Inject into form fields (excluding datum and uhrzeit)
+        const betriebsstundenEl = document.getElementById('betriebsstunden');
+        const startsEl = document.getElementById('starts');
+        const verbrauchEl = document.getElementById('verbrauch_qm');
+        const vorlaufEl = document.getElementById('vorlauf_temp');
+        const aussentempEl = document.getElementById('aussentemp');
+
+        if (betriebsstundenEl && data.betriebsstunden != null) {
+            betriebsstundenEl.value = String(data.betriebsstunden);
+        }
+        if (startsEl && data.starts != null) {
+            startsEl.value = String(data.starts);
+        }
+        if (verbrauchEl && data.gas_consumption_m3 != null) {
+            verbrauchEl.value = Number(data.gas_consumption_m3).toFixed(2);
+        }
+        if (vorlaufEl && data.supply_temp != null) {
+            vorlaufEl.value = Number(data.supply_temp).toFixed(1);
+        }
+        if (aussentempEl && data.outside_temp != null) {
+            aussentempEl.value = Number(data.outside_temp).toFixed(1);
+        }
+
+        showFormMessage('Live data injected successfully.', 'success');
+    } catch (error) {
+        console.error('Error injecting live data:', error);
+        showFormMessage(error.message || 'Failed to load live data.', 'error');
+    } finally {
+        if (liveBtn) {
+            liveBtn.disabled = false;
+            liveBtn.textContent = originalText;
+        }
+    }
 }
 
 async function loadAnalyze() {

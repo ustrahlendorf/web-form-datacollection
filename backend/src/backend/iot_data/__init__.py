@@ -12,11 +12,13 @@ from .feature_extractors import (
     get_feature_value,
 )
 from .get_iot_config import IotConfig
+from .heating_values import get_heating_values
 
 __all__: list[str] = [
     "IotConfig",
     "extract_feature_value",
     "get_device_features",
     "get_feature_data",
+    "get_heating_values",
     "get_feature_value",
 ]

@@ -280,6 +280,26 @@ By default, tokens are cached at `~/.viessmann/tokens.json` (or `VIESSMANN_TOKEN
 - Token cache files are written with restrictive permissions (0o600).
 - Error messages are sanitized to avoid leaking tokens or passwords.
 
+## heating live endpoint (Lambda)
+
+The `GET /heating/live` API endpoint fetches live heating values (gas consumption in m³/day, betriebsstunden, starts, supply temp, outside temp) from the Viessmann IoT API. It uses the `backend.iot_data.heating_values` module.
+
+**Setup:**
+
+1. Create a secret in AWS Secrets Manager with keys:
+   - `VIESSMANN_CLIENT_ID`
+   - `VIESSMANN_EMAIL`
+   - `VIESSMANN_PASSWORD`
+
+2. Set `VIESSMANN_CREDENTIALS_SECRET_ARN` when deploying the API stack (e.g. `cdk deploy` or `task deploy-api`):
+   ```bash
+   export VIESSMANN_CREDENTIALS_SECRET_ARN=arn:aws:secretsmanager:...
+   ```
+
+3. The heating live Lambda uses `/tmp/viessmann/tokens.json` for token caching (Lambda writable path).
+
+**Feature paths used:** `heating.gas.consumption.heating`, `heating.burners.0.statistics`, `heating.circuits.0.sensors.temperature.supply`, `heating.sensors.temperature.outside`.
+
 ## tests
 
 Backend tests live in `web-form-verbrauch/tests/` alongside the main app tests:

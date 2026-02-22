@@ -98,6 +98,54 @@ def test_extract_raw_properties_returns_properties() -> None:
     assert ext_mod.extract_raw_properties(feature) == {"serial": "ABC123"}
 
 
+# --- extract_burner_statistics ---
+
+
+def test_extract_burner_statistics_from_nested_properties() -> None:
+    feature = {
+        "feature": "heating.burners.0.statistics",
+        "properties": {
+            "operatingHours": {"value": 1234, "unit": "hours"},
+            "starts": {"value": 56},
+        },
+    }
+    result = ext_mod.extract_burner_statistics(feature)
+    assert result["betriebsstunden"] == 1234
+    assert result["starts"] == 56
+
+
+def test_extract_burner_statistics_from_scalar_properties() -> None:
+    feature = {
+        "feature": "heating.burners.0.statistics",
+        "properties": {
+            "operatingHours": 100,
+            "starts": 10,
+        },
+    }
+    result = ext_mod.extract_burner_statistics(feature)
+    assert result["betriebsstunden"] == 100
+    assert result["starts"] == 10
+
+
+def test_extract_burner_statistics_returns_none_when_empty() -> None:
+    feature = {"feature": "heating.burners.0.statistics", "properties": {}}
+    result = ext_mod.extract_burner_statistics(feature)
+    assert result["betriebsstunden"] is None
+    assert result["starts"] is None
+
+
+def test_extract_feature_value_uses_burner_extractor_for_statistics_path() -> None:
+    feature = {
+        "feature": "heating.burners.0.statistics",
+        "properties": {
+            "operatingHours": {"value": 500},
+            "starts": {"value": 25},
+        },
+    }
+    result = ext_mod.extract_feature_value("heating.burners.0.statistics", feature)
+    assert result == {"betriebsstunden": 500, "starts": 25}
+
+
 # --- extract_feature_value ---
 
 
