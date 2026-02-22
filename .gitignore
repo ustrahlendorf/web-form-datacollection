@@ -125,6 +125,7 @@ dmypy.json
 # AWS CDK
 cdk.out/
 .cdk.staging/
+.jsii-package-cache/
 *.d.ts
 *.js
 !jest.config.js
