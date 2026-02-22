@@ -2,16 +2,19 @@
 
 ## how to run tests
 
-From `web-form-verbrauch/`:
+From the repo root (`web-form-verbrauch/`):
 
 ```bash
-pytest
-```
+# Run all tests (backend + frontend)
+task test
 
-From `web-form-verbrauch/frontend/`:
+# Backend only (pytest)
+python3 -m pytest
+# or: task test-backend
 
-```bash
-npm test
+# Frontend only
+cd frontend && npm test
+# or: task test-frontend
 ```
 
 ## what the tests cover (at a glance)

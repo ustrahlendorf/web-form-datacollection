@@ -215,6 +215,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 delta_starts = 0
                 delta_verbrauch_qm = Decimal("0")
 
+            vorlauf_temp = None
+            if body.get("vorlauf_temp") is not None and body.get("vorlauf_temp") != "":
+                raw = body["vorlauf_temp"]
+                vorlauf_temp = raw if isinstance(raw, Decimal) else Decimal(str(raw))
+            aussentemp = None
+            if body.get("aussentemp") is not None and body.get("aussentemp") != "":
+                raw = body["aussentemp"]
+                aussentemp = raw if isinstance(raw, Decimal) else Decimal(str(raw))
+
             submission = create_submission(
                 user_id=user_id,
                 datum=body["datum"],
@@ -225,6 +234,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 delta_betriebsstunden=delta_betriebsstunden,
                 delta_starts=delta_starts,
                 delta_verbrauch_qm=delta_verbrauch_qm,
+                vorlauf_temp=vorlauf_temp,
+                aussentemp=aussentemp,
             )
 
             table.put_item(Item=submission.to_dict())

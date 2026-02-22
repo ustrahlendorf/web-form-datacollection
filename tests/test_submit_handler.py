@@ -95,6 +95,42 @@ def test_submission_storage_round_trip(
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
 @patch("src.handlers.submit_handler.dynamodb")
+def test_submit_handler_stores_optional_temperatures(mock_dynamodb):
+    """
+    For a submission with vorlauf_temp and aussentemp, the handler SHALL store them in DynamoDB.
+    """
+    mock_table = MagicMock()
+    mock_dynamodb.Table.return_value = mock_table
+    mock_table.query.return_value = {"Items": [], "Count": 0}
+
+    event = {
+        "requestContext": {
+            "authorizer": {
+                "claims": {"sub": "user-123"},
+            }
+        },
+        "body": json.dumps({
+            "datum": "15.12.2025",
+            "uhrzeit": "09:30",
+            "betriebsstunden": 100,
+            "starts": 5,
+            "verbrauch_qm": 10.5,
+            "vorlauf_temp": 45.5,
+            "aussentemp": -2.3,
+        }),
+    }
+
+    response = lambda_handler(event, None)
+
+    assert response["statusCode"] == 200
+    mock_table.put_item.assert_called_once()
+    stored_item = mock_table.put_item.call_args[1]["Item"]
+    assert stored_item["vorlauf_temp"] == Decimal("45.5")
+    assert stored_item["aussentemp"] == Decimal("-2.3")
+
+
+@patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
+@patch("src.handlers.submit_handler.dynamodb")
 def test_submit_handler_computes_deltas_when_previous_exists(mock_dynamodb):
     """
     For a submission where a previous submission exists, the handler SHALL compute deltas (new - previous).

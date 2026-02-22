@@ -197,6 +197,33 @@ def validate_float_range(
     return True, ""
 
 
+def validate_temperature(value: Union[float, str], field_name: str) -> Tuple[bool, str]:
+    """
+    Validate temperature in Celsius, range -99.9 to 99.9 inclusive.
+
+    Args:
+        value: The value to validate
+        field_name: Name of the field (for error messages)
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    try:
+        if isinstance(value, str):
+            value = trim_whitespace(value)
+            value = normalize_decimal(value)
+            float_value = float(value)
+        else:
+            float_value = float(value)
+    except (ValueError, TypeError):
+        return False, f"{field_name} must be a number"
+
+    if float_value < -99.9 or float_value > 99.9:
+        return False, f"{field_name} must be between -99.9 and 99.9 °C"
+
+    return True, ""
+
+
 def validate_submission(submission_data: Dict[str, Any]) -> ValidationResult:
     """
     Validate complete submission data.
@@ -250,5 +277,19 @@ def validate_submission(submission_data: Dict[str, Any]) -> ValidationResult:
         )
         if not is_valid:
             errors.append(ValidationError("verbrauch_qm", error_msg))
+
+    # Validate vorlauf_temp (supply temperature, optional)
+    vorlauf = submission_data.get("vorlauf_temp")
+    if vorlauf is not None and not (isinstance(vorlauf, str) and trim_whitespace(vorlauf) == ""):
+        is_valid, error_msg = validate_temperature(vorlauf, "vorlauf_temp")
+        if not is_valid:
+            errors.append(ValidationError("vorlauf_temp", error_msg))
+
+    # Validate aussentemp (outside temperature, optional)
+    aussentemp = submission_data.get("aussentemp")
+    if aussentemp is not None and not (isinstance(aussentemp, str) and trim_whitespace(aussentemp) == ""):
+        is_valid, error_msg = validate_temperature(aussentemp, "aussentemp")
+        if not is_valid:
+            errors.append(ValidationError("aussentemp", error_msg))
 
     return ValidationResult(is_valid=len(errors) == 0, errors=errors)

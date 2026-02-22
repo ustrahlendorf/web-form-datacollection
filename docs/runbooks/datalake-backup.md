@@ -33,11 +33,20 @@ You can also look up the CloudFormation export:
 
 ### Manual monthly export (recommended)
 
-Run from the repo folder `web-form-verbrauch/`:
+Run from the repo root `web-form-verbrauch/`:
 
 ```bash
+# Using env var (preferred)
 export ACTIVE_SUBMISSIONS_TABLE_NAME=submissions-2025
 python scripts/export_dynamodb_to_s3.py \
+  --bucket data-collection-datalake-dev-123456789012-eu-central-1 \
+  --region eu-central-1 \
+  --year 2025 \
+  --month 1
+
+# Or using --table explicitly
+python scripts/export_dynamodb_to_s3.py \
+  --table submissions-2025 \
   --bucket data-collection-datalake-dev-123456789012-eu-central-1 \
   --region eu-central-1 \
   --year 2025 \

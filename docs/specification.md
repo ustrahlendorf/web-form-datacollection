@@ -80,8 +80,15 @@ Response 200:
 }
 ```
 
+### GET /recent
+Returns recent submissions for the current user (used on the form page).
+
+Query params:
+- limit (optional)
+- next_token (optional)
+
 ### GET /history
-Returns submissions for current user.
+Returns submissions for current user (paginated history view).
 
 Query params:
 - limit
@@ -102,6 +109,7 @@ Primary key:
 Attributes:
 - submission_id
 - datum
+- datum_iso (YYYY-MM-DD, derived from datum; used for filtering/analytics)
 - uhrzeit
 - betriebsstunden
 - starts

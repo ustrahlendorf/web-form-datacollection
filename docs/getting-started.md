@@ -10,7 +10,7 @@ This is the **canonical** deployment + configuration guide for the app.
 
 ## recommended: deploy infrastructure via Taskfile (repo root)
 
-From the repo root (`AWS-kiro/`):
+From the repo root (`web-form-verbrauch/`):
 
 ```bash
 task doctor
@@ -26,6 +26,7 @@ task deploy-frontend
 
 Notes:
 - The Taskfile loads `taskfile.env` automatically (including `SSM_NAMESPACE_PREFIX=/HeatingDataCollection`).
+- For `deploy-dynamodb`, `deploy-api`, and `deploy-frontend`, set `ACTIVE_SUBMISSIONS_TABLE_NAME` and `PASSIVE_SUBMISSIONS_TABLE_NAME` in `taskfile.env` (e.g. `submissions-2025` / `submissions-2026`). `deploy-init` uses placeholders when these are unset.
 - Frontend asset upload is still performed from `web-form-verbrauch/frontend/` (next section).
 
 ## deploy frontend assets (S3 + CloudFront)

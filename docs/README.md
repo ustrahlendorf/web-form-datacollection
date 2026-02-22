@@ -4,7 +4,7 @@ This folder contains the **canonical documentation** for `web-form-verbrauch/`.
 
 ## quick start (recommended path)
 
-If you are deploying from the repo root (`AWS-kiro/`), prefer the Taskfile workflow:
+If you are deploying from the repo root (`web-form-verbrauch/`), prefer the Taskfile workflow:
 
 - `task doctor`
 - `task deploy-init` (one-time “SSM contract” parameters)
@@ -29,7 +29,6 @@ For the full, canonical guide, see `getting-started.md`.
 
 ### architecture & requirements
 
-- `architecture.md` — system architecture, flows, component details
 - `specification.md` — functional specification / requirements (release 1)
 
 ### runbooks
@@ -41,6 +40,11 @@ For the full, canonical guide, see `getting-started.md`.
 
 - `reference/testing.md` — how to run tests + where coverage comes from
 - `reference/security.md` — security controls (high-level) + where they are enforced/tested
+
+### backend (Vis-Connect)
+
+- `backend/README.md` — overview of the Vis-Connect backend package
+- `backend/vis-connect.md` — Viessmann IoT API: OAuth, config, feature fetching, CLI tools
 
 ### legacy
 

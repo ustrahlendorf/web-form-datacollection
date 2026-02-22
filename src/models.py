@@ -30,6 +30,8 @@ class Submission:
         delta_betriebsstunden: Delta to previous submission's operating hours (int; can be negative)
         delta_starts: Delta to previous submission's starts (int; can be negative)
         delta_verbrauch_qm: Delta to previous submission's consumption (Decimal; can be negative)
+        vorlauf_temp: Optional supply temperature in Celsius (-99.9 to 99.9)
+        aussentemp: Optional outside temperature in Celsius (-99.9 to 99.9)
     """
 
     submission_id: str
@@ -44,6 +46,8 @@ class Submission:
     delta_betriebsstunden: int = 0
     delta_starts: int = 0
     delta_verbrauch_qm: Decimal = Decimal("0")
+    vorlauf_temp: Optional[Decimal] = None
+    aussentemp: Optional[Decimal] = None
 
     def to_dict(self) -> dict:
         """
@@ -52,7 +56,7 @@ class Submission:
         Returns:
             Dictionary with all submission fields
         """
-        return {
+        result = {
             "submission_id": self.submission_id,
             "user_id": self.user_id,
             "timestamp_utc": self.timestamp_utc,
@@ -66,6 +70,11 @@ class Submission:
             "delta_starts": self.delta_starts,
             "delta_verbrauch_qm": self.delta_verbrauch_qm,
         }
+        if self.vorlauf_temp is not None:
+            result["vorlauf_temp"] = self.vorlauf_temp
+        if self.aussentemp is not None:
+            result["aussentemp"] = self.aussentemp
+        return result
 
 
 def generate_submission_id() -> str:
@@ -112,6 +121,8 @@ def create_submission(
     delta_betriebsstunden: int = 0,
     delta_starts: int = 0,
     delta_verbrauch_qm: Union[Decimal, int, float, str] = Decimal("0"),
+    vorlauf_temp: Optional[Union[Decimal, int, float, str]] = None,
+    aussentemp: Optional[Union[Decimal, int, float, str]] = None,
     submission_id: Optional[str] = None,
     timestamp_utc: Optional[str] = None,
 ) -> Submission:
@@ -128,6 +139,8 @@ def create_submission(
         delta_betriebsstunden: Delta to previous submission's operating hours (stored as int)
         delta_starts: Delta to previous submission's starts (stored as int)
         delta_verbrauch_qm: Delta to previous submission's consumption (stored as Decimal)
+        vorlauf_temp: Optional supply temperature in Celsius (-99.9 to 99.9)
+        aussentemp: Optional outside temperature in Celsius (-99.9 to 99.9)
         submission_id: Optional pre-generated UUID (auto-generated if not provided)
         timestamp_utc: Optional pre-generated timestamp (auto-generated if not provided)
 
@@ -140,6 +153,13 @@ def create_submission(
     delta_verbrauch_qm_decimal = (
         delta_verbrauch_qm if isinstance(delta_verbrauch_qm, Decimal) else Decimal(str(delta_verbrauch_qm))
     )
+
+    vorlauf_temp_decimal = None
+    if vorlauf_temp is not None:
+        vorlauf_temp_decimal = vorlauf_temp if isinstance(vorlauf_temp, Decimal) else Decimal(str(vorlauf_temp))
+    aussentemp_decimal = None
+    if aussentemp is not None:
+        aussentemp_decimal = aussentemp if isinstance(aussentemp, Decimal) else Decimal(str(aussentemp))
 
     return Submission(
         submission_id=submission_id or generate_submission_id(),
@@ -154,4 +174,6 @@ def create_submission(
         delta_betriebsstunden=delta_betriebsstunden,
         delta_starts=delta_starts,
         delta_verbrauch_qm=delta_verbrauch_qm_decimal,
+        vorlauf_temp=vorlauf_temp_decimal,
+        aussentemp=aussentemp_decimal,
     )

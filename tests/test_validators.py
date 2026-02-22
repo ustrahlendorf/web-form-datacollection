@@ -12,6 +12,7 @@ from src.validators import (
     validate_time,
     validate_integer,
     validate_float_range,
+    validate_temperature,
     validate_submission,
     trim_whitespace,
     normalize_decimal,
@@ -181,6 +182,82 @@ def test_float_range_validation_rejects_out_of_range(value):
 
     assert is_valid is False, f"Out-of-range consumption value {value} was accepted"
     assert error_msg, "Error message should be provided for out-of-range value"
+
+
+# ============================================================================
+# Temperature Validation (-99.9 to 99.9 °C)
+# ============================================================================
+
+
+@given(value=st.floats(min_value=-99.9, max_value=99.9, allow_nan=False, allow_infinity=False))
+def test_validate_temperature_accepts_valid_range(value):
+    """
+    For any temperature in range -99.9 to 99.9, validate_temperature SHALL accept it.
+    """
+    is_valid, error_msg = validate_temperature(value, "vorlauf_temp")
+    assert is_valid is True, f"Valid temperature {value} was rejected with error: {error_msg}"
+
+
+@given(value=st.one_of(
+    st.floats(min_value=-1000, max_value=-100, allow_nan=False, allow_infinity=False),
+    st.floats(min_value=100, max_value=1000, allow_nan=False, allow_infinity=False),
+))
+def test_validate_temperature_rejects_out_of_range(value):
+    """
+    For any temperature outside -99.9 to 99.9, validate_temperature SHALL reject it.
+    """
+    is_valid, error_msg = validate_temperature(value, "aussentemp")
+    assert is_valid is False, f"Out-of-range temperature {value} was accepted"
+    assert error_msg, "Error message should be provided for out-of-range temperature"
+
+
+def test_submission_validation_accepts_valid_data_with_optional_temperatures():
+    """
+    For valid submission data with optional vorlauf_temp and aussentemp, validate_submission SHALL accept it.
+    """
+    submission = {
+        "datum": "15.12.2025",
+        "uhrzeit": "09:30",
+        "betriebsstunden": 100,
+        "starts": 5,
+        "verbrauch_qm": 10.5,
+        "vorlauf_temp": 45.5,
+        "aussentemp": -2.3,
+    }
+    result = validate_submission(submission)
+    assert result.is_valid is True, f"Valid submission with temps was rejected: {result.errors}"
+
+
+def test_submission_validation_accepts_valid_data_without_optional_temperatures():
+    """
+    For valid submission data without optional temperatures, validate_submission SHALL accept it.
+    """
+    submission = {
+        "datum": "15.12.2025",
+        "uhrzeit": "09:30",
+        "betriebsstunden": 100,
+        "starts": 5,
+        "verbrauch_qm": 10.5,
+    }
+    result = validate_submission(submission)
+    assert result.is_valid is True, f"Valid submission without temps was rejected: {result.errors}"
+
+
+def test_submission_validation_rejects_invalid_vorlauf_temp():
+    """
+    For submission with invalid vorlauf_temp (out of range), validate_submission SHALL reject it.
+    """
+    submission = {
+        "datum": "15.12.2025",
+        "uhrzeit": "09:30",
+        "betriebsstunden": 100,
+        "starts": 5,
+        "verbrauch_qm": 10.5,
+        "vorlauf_temp": 150.0,
+    }
+    result = validate_submission(submission)
+    assert result.is_valid is False, "Submission with invalid vorlauf_temp should be rejected"
+    assert any(e.field == "vorlauf_temp" for e in result.errors)
 
 
 # ============================================================================

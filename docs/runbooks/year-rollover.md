@@ -16,7 +16,7 @@ InitStack creates the stable SSM “contract” parameters under the namespace p
 Deploy it once before your first roll-over:
 
 ```bash
-# from repo root
+# from web-form-verbrauch/ (repo root)
 task deploy-init
 
 # optional: verify InitStack parameters exist
@@ -94,16 +94,21 @@ export PASSIVE_SUBMISSIONS_TABLE_NAME=submissions-2026
 
 #### T0 (Jan 1, shortly after midnight): switch
 
-- **Step C — Swap active/passive via env vars**
+- **Step C — Swap active/passive**
+
+  Update `taskfile.env` (or export in your shell) with the new table names:
 
 ```bash
-export ACTIVE_SUBMISSIONS_TABLE_NAME=submissions-2026
-export PASSIVE_SUBMISSIONS_TABLE_NAME=submissions-2025
+ACTIVE_SUBMISSIONS_TABLE_NAME=submissions-2026
+PASSIVE_SUBMISSIONS_TABLE_NAME=submissions-2025
 ```
 
-- **Step D — Deploy in order**
-  - Deploy `DynamoDBStack` first (updates the SSM pointers)
-  - Deploy `APIStack` next (repoints Lambdas and IAM to the new active table)
+  If using the Taskfile, it loads `taskfile.env` automatically. Otherwise, `export` these before running CDK.
+
+- **Step D — Deploy in order** (from `web-form-verbrauch/`)
+
+  - Deploy `DynamoDBStack` first (updates the SSM pointers): `task deploy-dynamodb`
+  - Deploy `APIStack` next (repoints Lambdas and IAM to the new active table): `task deploy-api`
 
 - **Step E — Smoke test**
   - Submit one record and verify:
@@ -167,8 +172,12 @@ Ops scripts **do not default to a hardcoded year**. They require a table via:
 Example:
 
 ```bash
+# Using env var (preferred)
 export ACTIVE_SUBMISSIONS_TABLE_NAME=submissions-2026
 python scripts/export_dynamodb_to_s3.py --bucket <YOUR_DATALAKE_BUCKET> --region eu-central-1 --year 2026 --month 1
+
+# Or using --table explicitly
+python scripts/export_dynamodb_to_s3.py --table submissions-2026 --bucket <YOUR_DATALAKE_BUCKET> --region eu-central-1 --year 2026 --month 1
 ```
 
 

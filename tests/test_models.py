@@ -202,3 +202,43 @@ def test_create_submission_respects_custom_id_and_timestamp(user_id, custom_id, 
 
     assert submission.submission_id == custom_id, "Should use provided submission_id"
     assert submission.timestamp_utc == custom_timestamp, "Should use provided timestamp_utc"
+
+
+def test_create_submission_with_optional_temperatures():
+    """
+    For create_submission with vorlauf_temp and aussentemp, the Submission SHALL include them.
+    """
+    submission = create_submission(
+        user_id="user-123",
+        datum="15.12.2025",
+        uhrzeit="09:30",
+        betriebsstunden=100,
+        starts=5,
+        verbrauch_qm=10.5,
+        vorlauf_temp=45.5,
+        aussentemp=-2.3,
+    )
+    assert submission.vorlauf_temp == Decimal("45.5")
+    assert submission.aussentemp == Decimal("-2.3")
+    d = submission.to_dict()
+    assert d["vorlauf_temp"] == Decimal("45.5")
+    assert d["aussentemp"] == Decimal("-2.3")
+
+
+def test_create_submission_without_temperatures_omits_from_dict():
+    """
+    For create_submission without vorlauf_temp and aussentemp, to_dict SHALL not include them.
+    """
+    submission = create_submission(
+        user_id="user-123",
+        datum="15.12.2025",
+        uhrzeit="09:30",
+        betriebsstunden=100,
+        starts=5,
+        verbrauch_qm=10.5,
+    )
+    assert submission.vorlauf_temp is None
+    assert submission.aussentemp is None
+    d = submission.to_dict()
+    assert "vorlauf_temp" not in d
+    assert "aussentemp" not in d

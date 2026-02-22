@@ -183,7 +183,7 @@ class APIStack(Stack):
             handler="src.handlers.submit_handler.lambda_handler",
             code=lambda_.Code.from_asset(
                 os.path.join(os.path.dirname(__file__), "..", ".."),
-                exclude=["cdk.out", ".git", ".venv", "node_modules", ".pytest_cache", ".hypothesis"],
+                exclude=["cdk.out", ".git", ".venv", "node_modules", ".pytest_cache", ".hypothesis", ".jsii-package-cache"],
             ),
             role=lambda_execution_role,
             environment={
@@ -227,7 +227,7 @@ class APIStack(Stack):
             handler="src.handlers.history_handler.lambda_handler",
             code=lambda_.Code.from_asset(
                 os.path.join(os.path.dirname(__file__), "..", ".."),
-                exclude=["cdk.out", ".git", ".venv", "node_modules", ".pytest_cache", ".hypothesis"],
+                exclude=["cdk.out", ".git", ".venv", "node_modules", ".pytest_cache", ".hypothesis", ".jsii-package-cache"],
             ),
             role=lambda_execution_role,
             environment={
@@ -271,7 +271,7 @@ class APIStack(Stack):
             handler="src.handlers.recent_handler.lambda_handler",
             code=lambda_.Code.from_asset(
                 os.path.join(os.path.dirname(__file__), "..", ".."),
-                exclude=["cdk.out", ".git", ".venv", "node_modules", ".pytest_cache", ".hypothesis"],
+                exclude=["cdk.out", ".git", ".venv", "node_modules", ".pytest_cache", ".hypothesis", ".jsii-package-cache"],
             ),
             role=lambda_execution_role,
             environment={

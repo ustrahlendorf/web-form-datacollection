@@ -166,6 +166,14 @@ async function prefillFromLatestSubmission() {
             // Display as stored (dot decimal) per requirement.
             consumptionEl.value = String(latest.verbrauch_qm);
         }
+        const vorlaufEl = document.getElementById('vorlauf_temp');
+        const aussentempEl = document.getElementById('aussentemp');
+        if (vorlaufEl && vorlaufEl.value === '' && latest.vorlauf_temp !== undefined && latest.vorlauf_temp !== null) {
+            vorlaufEl.value = Number(latest.vorlauf_temp).toFixed(1);
+        }
+        if (aussentempEl && aussentempEl.value === '' && latest.aussentemp !== undefined && latest.aussentemp !== null) {
+            aussentempEl.value = Number(latest.aussentemp).toFixed(1);
+        }
     } catch (error) {
         console.warn('Failed to prefill from latest submission:', error);
     }
@@ -190,6 +198,8 @@ async function initializeFormPage() {
     document.getElementById('betriebsstunden').value = '0';
     document.getElementById('starts').value = '0';
     document.getElementById('verbrauch_qm').value = '0';
+    document.getElementById('vorlauf_temp').value = '';
+    document.getElementById('aussentemp').value = '';
     
     // Clear any previous messages
     clearFormMessage();
@@ -208,12 +218,16 @@ function handleFormSubmit(e) {
     clearFormErrors();
     
     // Get form data
+    const vorlaufVal = document.getElementById('vorlauf_temp').value.trim();
+    const aussentempVal = document.getElementById('aussentemp').value.trim();
     const formData = {
         datum: document.getElementById('datum').value.trim(),
         uhrzeit: document.getElementById('uhrzeit').value.trim(),
         betriebsstunden: parseInt(document.getElementById('betriebsstunden').value),
         starts: parseInt(document.getElementById('starts').value),
         verbrauch_qm: parseFloat(document.getElementById('verbrauch_qm').value.replace(',', '.')),
+        vorlauf_temp: vorlaufVal ? parseFloat(vorlaufVal.replace(',', '.')) : null,
+        aussentemp: aussentempVal ? parseFloat(aussentempVal.replace(',', '.')) : null,
     };
     
     // Client-side validation
@@ -253,6 +267,16 @@ function validateFormData(data) {
     // Validate verbrauch_qm
     if (isNaN(data.verbrauch_qm) || data.verbrauch_qm <= 0 || data.verbrauch_qm >= 20.0) {
         errors.push({ field: 'verbrauch_qm', message: 'Must be between 0 and 20.0' });
+    }
+
+    // Validate vorlauf_temp (optional, -99.9 to 99.9 when provided)
+    if (data.vorlauf_temp != null && (isNaN(data.vorlauf_temp) || data.vorlauf_temp < -99.9 || data.vorlauf_temp > 99.9)) {
+        errors.push({ field: 'vorlauf_temp', message: 'Must be between -99.9 and 99.9 °C' });
+    }
+
+    // Validate aussentemp (optional, -99.9 to 99.9 when provided)
+    if (data.aussentemp != null && (isNaN(data.aussentemp) || data.aussentemp < -99.9 || data.aussentemp > 99.9)) {
+        errors.push({ field: 'aussentemp', message: 'Must be between -99.9 and 99.9 °C' });
     }
     
     return errors;
@@ -394,6 +418,14 @@ function displayRecentSubmissions(submissions) {
                     <span class="recent-item-label">Consumption:</span>
                     <span class="recent-item-value">${submission.verbrauch_qm} kWh/m² <span class="delta">${formatDelta(getDeltaValue(submission, 'delta_verbrauch_qm', 'verbrauch_qm_delta'), { kind: 'decimal', decimals: 2 })}</span></span>
                 </div>
+                <div class="recent-item-field">
+                    <span class="recent-item-label">Supply Temp:</span>
+                    <span class="recent-item-value">${submission.vorlauf_temp != null ? Number(submission.vorlauf_temp).toFixed(1) + ' °C' : '—'}</span>
+                </div>
+                <div class="recent-item-field">
+                    <span class="recent-item-label">Outside Temp:</span>
+                    <span class="recent-item-value">${submission.aussentemp != null ? Number(submission.aussentemp).toFixed(1) + ' °C' : '—'}</span>
+                </div>
             </div>
         </div>
     `).join('');
@@ -446,6 +478,8 @@ function displayHistory(submissions) {
                     <th>Δ Starts</th>
                     <th>Consumption (kWh/m²)</th>
                     <th>Δ Consumption</th>
+                    <th>Supply Temp (°C)</th>
+                    <th>Outside Temp (°C)</th>
                     <th>Submitted</th>
                 </tr>
             </thead>
@@ -460,6 +494,8 @@ function displayHistory(submissions) {
                         <td>${formatDelta(getDeltaValue(submission, 'delta_starts', 'starts_delta'), { kind: 'int' })}</td>
                         <td>${submission.verbrauch_qm}</td>
                         <td>${formatDelta(getDeltaValue(submission, 'delta_verbrauch_qm', 'verbrauch_qm_delta'), { kind: 'decimal', decimals: 2 })}</td>
+                        <td>${submission.vorlauf_temp != null ? Number(submission.vorlauf_temp).toFixed(1) : '—'}</td>
+                        <td>${submission.aussentemp != null ? Number(submission.aussentemp).toFixed(1) : '—'}</td>
                         <td>${formatTimestamp(submission.timestamp_utc)}</td>
                     </tr>
                 `).join('')}
