@@ -29,16 +29,11 @@ import requests
 try:
     # Normal, package-friendly import (preferred).
     from . import auth as auth_mod
+    from . import config as config_mod
 except ImportError:  # pragma: no cover
     # Support running this file directly (e.g. `python get_iot_config.py` from this folder).
     import auth as auth_mod  # type: ignore[no-redef]
-
-IOT_INSTALLATIONS_URL = "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations"
-IOT_GATEWAYS_URL = "https://api.viessmann-climatesolutions.com/iot/v2/equipment/gateways"
-IOT_DEVICES_URL_TMPL = (
-    "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations/{installation_id}/"
-    "gateways/{gateway_serial}/devices"
-)
+    import config as config_mod  # type: ignore[no-redef]
 
 
 @dataclass(frozen=True)
@@ -140,17 +135,19 @@ def api_get_json(*, session: requests.Session, url: str, access_token: str, cfg:
 
 
 def get_installation_id(*, session: requests.Session, access_token: str, cfg: Any, log, auth_mod) -> str:
-    payload = api_get_json(session=session, url=IOT_INSTALLATIONS_URL, access_token=access_token, cfg=cfg, log=log, auth_mod=auth_mod)
-    items = _extract_list(payload, url=IOT_INSTALLATIONS_URL, auth_mod=auth_mod)
-    first = _require_first(items, url=IOT_INSTALLATIONS_URL, what="installations", auth_mod=auth_mod)
-    return _require_key(first, "id", url=IOT_INSTALLATIONS_URL, what="installations", auth_mod=auth_mod)
+    url = config_mod.get_iot_installations_url()
+    payload = api_get_json(session=session, url=url, access_token=access_token, cfg=cfg, log=log, auth_mod=auth_mod)
+    items = _extract_list(payload, url=url, auth_mod=auth_mod)
+    first = _require_first(items, url=url, what="installations", auth_mod=auth_mod)
+    return _require_key(first, "id", url=url, what="installations", auth_mod=auth_mod)
 
 
 def get_gateway_serial(*, session: requests.Session, access_token: str, cfg: Any, log, auth_mod) -> str:
-    payload = api_get_json(session=session, url=IOT_GATEWAYS_URL, access_token=access_token, cfg=cfg, log=log, auth_mod=auth_mod)
-    items = _extract_list(payload, url=IOT_GATEWAYS_URL, auth_mod=auth_mod)
-    first = _require_first(items, url=IOT_GATEWAYS_URL, what="gateways", auth_mod=auth_mod)
-    return _require_key(first, "serial", url=IOT_GATEWAYS_URL, what="gateways", auth_mod=auth_mod)
+    url = config_mod.get_iot_gateways_url()
+    payload = api_get_json(session=session, url=url, access_token=access_token, cfg=cfg, log=log, auth_mod=auth_mod)
+    items = _extract_list(payload, url=url, auth_mod=auth_mod)
+    first = _require_first(items, url=url, what="gateways", auth_mod=auth_mod)
+    return _require_key(first, "serial", url=url, what="gateways", auth_mod=auth_mod)
 
 
 def get_device_id(
@@ -163,7 +160,9 @@ def get_device_id(
     log,
     auth_mod,
 ) -> str:
-    url = IOT_DEVICES_URL_TMPL.format(installation_id=installation_id, gateway_serial=gateway_serial)
+    url = config_mod.get_iot_devices_url_tmpl().format(
+        installation_id=installation_id, gateway_serial=gateway_serial
+    )
     payload = api_get_json(session=session, url=url, access_token=access_token, cfg=cfg, log=log, auth_mod=auth_mod)
     items = _extract_list(payload, url=url, auth_mod=auth_mod)
     first = _require_first(items, url=url, what="devices", auth_mod=auth_mod)

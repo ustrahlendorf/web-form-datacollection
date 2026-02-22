@@ -49,10 +49,7 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
-
-AUTHORIZE_URL = "https://iam.viessmann-climatesolutions.com/idp/v3/authorize"
-TOKEN_URL = "https://iam.viessmann-climatesolutions.com/idp/v3/token"
-USERS_ME_URL = "https://api.viessmann-climatesolutions.com/users/v1/users/me"
+from . import config as _config
 
 
 class CliError(RuntimeError):
@@ -327,6 +324,7 @@ def _get_env(name: str) -> Optional[str]:
 
 
 def load_config(args: argparse.Namespace, *, log: logging.LoggerAdapter) -> Config:
+    _config._load_dotenv(log=log)
     client_id = _get_env("VIESSMANN_CLIENT_ID")
     email = _get_env("VIESSMANN_EMAIL")
     password = _get_env("VIESSMANN_PASSWORD")
@@ -414,7 +412,7 @@ def request_authorization_code(*, session: requests.Session, cfg: Config, log: l
         "authorize request details (sanitized): %s",
         _sanitize_mapping(
             {
-                "url": AUTHORIZE_URL,
+                "url": _config.get_authorize_url(),
                 "params": _sanitize_mapping(params),
                 "headers": _sanitize_mapping(headers),
                 "auth_username": "<redacted>",  # email
@@ -429,7 +427,7 @@ def request_authorization_code(*, session: requests.Session, cfg: Config, log: l
 
     start = time.perf_counter()
     resp = session.post(
-        AUTHORIZE_URL,
+        _config.get_authorize_url(),
         params=params,
         data=b"",
         headers=headers,
@@ -489,7 +487,7 @@ def exchange_code_for_token(*, session: requests.Session, cfg: Config, code: str
         "token request details (sanitized): %s",
         _sanitize_mapping(
             {
-                "url": TOKEN_URL,
+                "url": _config.get_token_url(),
                 "params": _sanitize_mapping(params),
                 "headers": _sanitize_mapping(headers),
                 "timeout_seconds": cfg.timeout_seconds,
@@ -501,7 +499,7 @@ def exchange_code_for_token(*, session: requests.Session, cfg: Config, code: str
 
     start = time.perf_counter()
     resp = session.post(
-        TOKEN_URL,
+        _config.get_token_url(),
         params=params,
         data=b"",
         headers=headers,
@@ -571,7 +569,7 @@ def fetch_users_me(*, session: requests.Session, cfg: Config, access_token: str,
         "users/me request details (sanitized): %s",
         _sanitize_mapping(
             {
-                "url": USERS_ME_URL,
+                "url": _config.get_users_me_url(),
                 "params": _sanitize_mapping(params),
                 "headers": _sanitize_mapping(headers),
                 "timeout_seconds": cfg.timeout_seconds,
@@ -583,7 +581,7 @@ def fetch_users_me(*, session: requests.Session, cfg: Config, access_token: str,
 
     start = time.perf_counter()
     resp = session.get(
-        USERS_ME_URL,
+        _config.get_users_me_url(),
         params=params,
         headers=headers,
         timeout=cfg.timeout_seconds,
