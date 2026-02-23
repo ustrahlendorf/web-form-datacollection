@@ -63,4 +63,37 @@ class InitStack(Stack):
             description="Runbook version for annual rollover procedure (static contract owned by InitStack).",
         )
 
+        # Auto-retrieval parameters (Viessmann API → DynamoDB, scheduled daily)
+        self.auto_retrieval_schedule_param = ssm.StringParameter(
+            self,
+            "AutoRetrievalScheduleCron",
+            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/ScheduleCron",
+            string_value="0 6 * * ? *",
+            description="EventBridge cron expression for daily retrieval (default: 06:00 UTC).",
+        )
+
+        self.auto_retrieval_max_retries_param = ssm.StringParameter(
+            self,
+            "AutoRetrievalMaxRetries",
+            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/MaxRetries",
+            string_value="5",
+            description="Max retry attempts on Viessmann API connection failure.",
+        )
+
+        self.auto_retrieval_retry_delay_param = ssm.StringParameter(
+            self,
+            "AutoRetrievalRetryDelaySeconds",
+            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/RetryDelaySeconds",
+            string_value="300",
+            description="Seconds to wait between retry attempts.",
+        )
+
+        self.auto_retrieval_user_id_param = ssm.StringParameter(
+            self,
+            "AutoRetrievalUserId",
+            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/UserId",
+            string_value="SET_ME",
+            description="Cognito user_id (sub) for the installation owner. Update via AWS Console or CLI before enabling auto-retrieval.",
+        )
+
 

@@ -15,6 +15,7 @@ from infrastructure.stacks.datalake_stack import DataLakeStack
 from infrastructure.stacks.dynamodb_stack import DynamoDBStack
 from infrastructure.stacks.frontend_stack import FrontendStack
 from infrastructure.stacks.init_stack import InitStack
+from infrastructure.stacks.scheduler_stack import SchedulerStack
 
 
 def create_app() -> App:
@@ -118,6 +119,18 @@ def create_app() -> App:
         env=env_config,
         description="Data Collection Web Application - API (dev)",
     )
+
+    if viessmann_credentials_secret_arn:
+        scheduler_stack = SchedulerStack(
+            app,
+            f"DataCollectionScheduler-{environment_name}",
+            environment_name=environment_name,
+            viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
+            env=env_config,
+            description="Data Collection - Auto-retrieval Scheduler (dev)",
+        )
+        scheduler_stack.add_dependency(init_stack)
+        scheduler_stack.add_dependency(dynamodb_stack)
 
     # Ensure deployment ordering across stacks that use exports/imports.
     # InitStack owns the stable SSM "contract" parameters and must exist first so other stacks

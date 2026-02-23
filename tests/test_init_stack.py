@@ -31,7 +31,7 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
 
     template = Template.from_stack(stack)
 
-    template.resource_count_is("AWS::SSM::Parameter", 3)
+    template.resource_count_is("AWS::SSM::Parameter", 7)
 
     template.has_resource_properties(
         "AWS::SSM::Parameter",
@@ -57,6 +57,42 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
             "Name": "/HeatingDataCollection/Operations/Rollover/RunbookVersion",
             "Type": "String",
             "Value": "2026-01",
+        },
+    )
+
+    template.has_resource_properties(
+        "AWS::SSM::Parameter",
+        {
+            "Name": "/HeatingDataCollection/AutoRetrieval/ScheduleCron",
+            "Type": "String",
+            "Value": "0 6 * * ? *",
+        },
+    )
+
+    template.has_resource_properties(
+        "AWS::SSM::Parameter",
+        {
+            "Name": "/HeatingDataCollection/AutoRetrieval/MaxRetries",
+            "Type": "String",
+            "Value": "5",
+        },
+    )
+
+    template.has_resource_properties(
+        "AWS::SSM::Parameter",
+        {
+            "Name": "/HeatingDataCollection/AutoRetrieval/RetryDelaySeconds",
+            "Type": "String",
+            "Value": "300",
+        },
+    )
+
+    template.has_resource_properties(
+        "AWS::SSM::Parameter",
+        {
+            "Name": "/HeatingDataCollection/AutoRetrieval/UserId",
+            "Type": "String",
+            "Value": "SET_ME",
         },
     )
 

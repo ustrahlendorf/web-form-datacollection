@@ -168,6 +168,16 @@ tasks:
     cmds:
       - cdk deploy "DataCollectionFrontend-dev"
 
+  deploy-scheduler:
+    desc: "Deploy Scheduler stack (dev) - auto-retrieval of Viessmann data"
+    deps: [doctor]
+    dir: "{{.APP_DIR}}"
+    env:
+      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
+      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
+    cmds:
+      - cdk deploy "DataCollectionScheduler-dev"
+
   ssm:init:show:
     desc: "Show InitStack SSM parameters (expects InitStack deployed)"
     deps: [doctor-aws, doctor-init]
@@ -184,6 +194,10 @@ tasks:
         get_param "${pfx}/Config/SchemaVersion"
         get_param "${pfx}/FeatureFlags/EnablePassiveReads"
         get_param "${pfx}/Operations/Rollover/RunbookVersion"
+        get_param "${pfx}/AutoRetrieval/ScheduleCron"
+        get_param "${pfx}/AutoRetrieval/MaxRetries"
+        get_param "${pfx}/AutoRetrieval/RetryDelaySeconds"
+        get_param "${pfx}/AutoRetrieval/UserId"
 
   env:print:
     desc: "Print shell exports for ACTIVE_/PASSIVE_ table names (use with eval)"

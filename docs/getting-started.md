@@ -47,6 +47,11 @@ bash deploy.sh dev
   - recent works (GET `/recent`)
   - history works (GET `/history`, pagination)
 
+## auto-retrieval (Viessmann API → DynamoDB)
+
+To enable scheduled daily retrieval of heating data from the Viessmann API:
+- `runbooks/auto-retrieval-deployment.md`
+
 ## year roll-over (two DynamoDB tables)
 
 If you are switching active ↔ passive tables via SSM pointers, follow:
