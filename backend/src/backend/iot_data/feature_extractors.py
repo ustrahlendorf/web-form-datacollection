@@ -58,7 +58,7 @@ def extract_burner_statistics(feature: dict[str, Any]) -> dict[str, Any]:
     Extract operating hours (Betriebsstunden) and starts from burner statistics.
 
     Viessmann API returns properties like:
-    - operatingHours: {value: N, unit: "hours"} or similar
+    - hours: {value: N, unit: "hour"}
     - starts: {value: N} or similar
 
     Returns dict with keys: betriebsstunden (int), starts (int).
@@ -66,8 +66,8 @@ def extract_burner_statistics(feature: dict[str, Any]) -> dict[str, Any]:
     props = feature.get("properties") or {}
     result: dict[str, Any] = {"betriebsstunden": None, "starts": None}
 
-    # operatingHours (Betriebsstunden)
-    oh = props.get("operatingHours")
+    # hours (Betriebsstunden)
+    oh = props.get("hours")
     if oh is not None:
         val = oh.get("value") if isinstance(oh, dict) else oh
         result["betriebsstunden"] = _coerce_int(val)

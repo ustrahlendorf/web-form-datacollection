@@ -101,24 +101,26 @@ def test_extract_raw_properties_returns_properties() -> None:
 # --- extract_burner_statistics ---
 
 
-def test_extract_burner_statistics_from_nested_properties() -> None:
+def test_extract_burner_statistics_from_hours_property() -> None:
+    """Viessmann API returns hours and starts in nested format."""
     feature = {
         "feature": "heating.burners.0.statistics",
         "properties": {
-            "operatingHours": {"value": 1234, "unit": "hours"},
-            "starts": {"value": 56},
+            "hours": {"type": "number", "value": 28496, "unit": "hour"},
+            "starts": {"type": "number", "value": 13258, "unit": ""},
         },
     }
     result = ext_mod.extract_burner_statistics(feature)
-    assert result["betriebsstunden"] == 1234
-    assert result["starts"] == 56
+    assert result["betriebsstunden"] == 28496
+    assert result["starts"] == 13258
 
 
-def test_extract_burner_statistics_from_scalar_properties() -> None:
+def test_extract_burner_statistics_from_scalar_hours() -> None:
+    """Hours and starts as scalar values."""
     feature = {
         "feature": "heating.burners.0.statistics",
         "properties": {
-            "operatingHours": 100,
+            "hours": 100,
             "starts": 10,
         },
     }
@@ -138,7 +140,7 @@ def test_extract_feature_value_uses_burner_extractor_for_statistics_path() -> No
     feature = {
         "feature": "heating.burners.0.statistics",
         "properties": {
-            "operatingHours": {"value": 500},
+            "hours": {"value": 500},
             "starts": {"value": 25},
         },
     }
