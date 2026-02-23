@@ -282,7 +282,7 @@ By default, tokens are cached at `~/.viessmann/tokens.json` (or `VIESSMANN_TOKEN
 
 ## heating live endpoint (Lambda)
 
-The `GET /heating/live` API endpoint fetches live heating values (gas consumption in m³/day, betriebsstunden, starts, supply temp, outside temp) from the Viessmann IoT API. It uses the `backend.iot_data.heating_values` module.
+The `GET /heating/live` API endpoint fetches live heating values from the Viessmann IoT API. It uses the `backend.iot_data.heating_values` module. Response includes: `gas_consumption_m3_today` (m³ today so far), `gas_consumption_m3_yesterday` (m³ yesterday), betriebsstunden, starts, supply temp, outside temp.
 
 **Setup:**
 

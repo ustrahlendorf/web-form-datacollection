@@ -24,25 +24,32 @@ HEATING_FEATURE_PATHS = [
 ]
 
 
-def _extract_gas_consumption_m3(consumption_props: Any) -> Optional[float]:
+def _extract_gas_consumption_m3_pair(consumption_props: Any) -> tuple[Optional[float], Optional[float]]:
     """
-    Extract gas consumption (m³) from heating.gas.consumption.heating properties.
+    Extract (today, yesterday) gas consumption (m³) from heating.gas.consumption.heating properties.
 
-    Viessmann returns day/week/month/year arrays. The first value of day.value
-    is today's consumption in cubic meters (m³).
+    Viessmann returns day/week/month/year arrays. day.value[0] is today so far,
+    day.value[1] is yesterday. Returns (None, None) if invalid or empty.
     """
     if consumption_props is None or not isinstance(consumption_props, dict):
-        return None
+        return (None, None)
     day_obj = consumption_props.get("day")
     if not isinstance(day_obj, dict):
-        return None
+        return (None, None)
     val_arr = day_obj.get("value")
     if not isinstance(val_arr, list) or len(val_arr) == 0:
-        return None
+        return (None, None)
+    today_val = None
+    yesterday_val = None
     try:
-        return float(val_arr[0])
+        today_val = float(val_arr[0]) if len(val_arr) >= 1 else None
     except (TypeError, ValueError):
-        return None
+        pass
+    try:
+        yesterday_val = float(val_arr[1]) if len(val_arr) >= 2 else None
+    except (TypeError, ValueError):
+        pass
+    return (today_val, yesterday_val)
 
 
 def get_heating_values(
@@ -56,7 +63,8 @@ def get_heating_values(
 
     Returns:
         {
-            "gas_consumption_m3": float | None,  # first value of day array (m³)
+            "gas_consumption_m3_today": float | None,  # day.value[0] (m³ today so far)
+            "gas_consumption_m3_yesterday": float | None,  # day.value[1] (m³ yesterday)
             "betriebsstunden": int | None,
             "starts": int | None,
             "supply_temp": float | None,
@@ -77,7 +85,7 @@ def get_heating_values(
         timeout_seconds=timeout_seconds,
         ssl_verify=ssl_verify,
     )
-    gas_consumption_m3 = _extract_gas_consumption_m3(consumption_props)
+    gas_today, gas_yesterday = _extract_gas_consumption_m3_pair(consumption_props)
 
     burner_stats = get_feature_value(
         "heating.burners.0.statistics",
@@ -113,7 +121,8 @@ def get_heating_values(
         outside_temp = None
 
     return {
-        "gas_consumption_m3": float(gas_consumption_m3) if gas_consumption_m3 is not None else None,
+        "gas_consumption_m3_today": float(gas_today) if gas_today is not None else None,
+        "gas_consumption_m3_yesterday": float(gas_yesterday) if gas_yesterday is not None else None,
         "betriebsstunden": int(betriebsstunden) if betriebsstunden is not None else None,
         "starts": int(starts) if starts is not None else None,
         "supply_temp": float(supply_temp) if supply_temp is not None else None,

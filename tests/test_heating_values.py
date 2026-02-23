@@ -28,7 +28,7 @@ def _gas_consumption_props(day_first: float) -> dict:
 
 
 def test_get_heating_values_extracts_gas_consumption_m3_from_day_value() -> None:
-    """Gas consumption is first value of day.value array (m³)."""
+    """Gas consumption today and yesterday from day.value array (m³)."""
     iot_config = _make_iot_config()
     features = [
         {"feature": "heating.gas.consumption.heating", "isEnabled": True, "properties": _gas_consumption_props(5.5)},
@@ -52,7 +52,8 @@ def test_get_heating_values_extracts_gas_consumption_m3_from_day_value() -> None
         with patch.object(hv_mod, "get_feature_value", side_effect=mock_get_feature_value):
             result = hv_mod.get_heating_values(iot_config)
 
-    assert result["gas_consumption_m3"] == 5.5
+    assert result["gas_consumption_m3_today"] == 5.5
+    assert result["gas_consumption_m3_yesterday"] == 8.3
     assert result["betriebsstunden"] == 100
     assert result["starts"] == 25
     assert result["supply_temp"] == 45.2
@@ -61,7 +62,7 @@ def test_get_heating_values_extracts_gas_consumption_m3_from_day_value() -> None
 
 
 def test_get_heating_values_returns_none_when_day_value_empty() -> None:
-    """When day.value is empty, gas_consumption_m3 is None."""
+    """When day.value is empty, gas_consumption_m3_today and gas_consumption_m3_yesterday are None."""
     iot_config = _make_iot_config()
     features = [
         {"feature": "heating.gas.consumption.heating", "isEnabled": True, "properties": {"day": {"value": []}}},
@@ -82,15 +83,22 @@ def test_get_heating_values_returns_none_when_day_value_empty() -> None:
 
             result = hv_mod.get_heating_values(iot_config)
 
-    assert result["gas_consumption_m3"] is None
+    assert result["gas_consumption_m3_today"] is None
+    assert result["gas_consumption_m3_yesterday"] is None
 
 
-def test_extract_gas_consumption_m3_returns_none_when_no_day_key() -> None:
-    """When properties lack 'day' key, returns None."""
-    assert hv_mod._extract_gas_consumption_m3({"week": {"value": [1, 2, 3]}}) is None
+def test_extract_gas_consumption_m3_pair_returns_none_when_no_day_key() -> None:
+    """When properties lack 'day' key, returns (None, None)."""
+    assert hv_mod._extract_gas_consumption_m3_pair({"week": {"value": [1, 2, 3]}}) == (None, None)
 
 
-def test_extract_gas_consumption_m3_returns_first_value() -> None:
-    """Extracts first value of day.value array."""
+def test_extract_gas_consumption_m3_pair_returns_today_and_yesterday() -> None:
+    """Extracts today and yesterday from day.value array."""
     props = {"day": {"type": "array", "value": [5.5, 8.3, 9], "unit": "cubicMeter"}}
-    assert hv_mod._extract_gas_consumption_m3(props) == 5.5
+    assert hv_mod._extract_gas_consumption_m3_pair(props) == (5.5, 8.3)
+
+
+def test_extract_gas_consumption_m3_pair_single_element_returns_yesterday_none() -> None:
+    """When day.value has only one element, yesterday is None."""
+    props = {"day": {"type": "array", "value": [5.5], "unit": "cubicMeter"}}
+    assert hv_mod._extract_gas_consumption_m3_pair(props) == (5.5, None)

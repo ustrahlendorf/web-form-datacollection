@@ -1,8 +1,8 @@
 """
 Lambda handler for heating live data endpoint.
 
-Handles GET /heating/live requests. Fetches gas consumption (m³/day), betriebsstunden, starts,
-supply temperature, and outside temperature from the Viessmann IoT API via the
+Handles GET /heating/live requests. Fetches gas consumption (m³ today so far, m³ yesterday),
+betriebsstunden, starts, supply temperature, and outside temperature from the Viessmann IoT API via the
 backend.iot_data.heating_values module. Credentials are read from AWS Secrets Manager.
 """
 

@@ -443,7 +443,7 @@ function displayRecentSubmissions(submissions) {
                     <span class="recent-item-value">${submission.vorlauf_temp != null ? Number(submission.vorlauf_temp).toFixed(1) + ' °C' : '—'}</span>
                 </div>
                 <div class="recent-item-field">
-                    <span class="recent-item-label">Outside Temp:</span>
+                    <span class="recent-item-label">Outside-Temp. Sensor:</span>
                     <span class="recent-item-value">${submission.aussentemp != null ? Number(submission.aussentemp).toFixed(1) + ' °C' : '—'}</span>
                 </div>
             </div>
@@ -499,7 +499,7 @@ function displayHistory(submissions) {
                     <th>Consumption (m³)</th>
                     <th>Δ Consumption (m³)</th>
                     <th>Supply Temp (°C)</th>
-                    <th>Outside Temp (°C)</th>
+                    <th>Outside-Temp. Sensor (°C)</th>
                     <th>Submitted</th>
                 </tr>
             </thead>
@@ -878,8 +878,12 @@ function renderLiveData(data) {
             <div class="analyze-card-title">Live Heating Values</div>
             <div class="analyze-metrics">
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Gas Consumption (m³/day)</span>
-                    <span class="analyze-metric-value">${formatVal(data.gas_consumption_m3)}</span>
+                    <span class="analyze-metric-label">Gas Consumption (m³ today so far)</span>
+                    <span class="analyze-metric-value">${formatVal(data.gas_consumption_m3_today)}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Gas Consumption (m³ yesterday)</span>
+                    <span class="analyze-metric-value">${formatVal(data.gas_consumption_m3_yesterday)}</span>
                 </div>
                 <div class="analyze-metric">
                     <span class="analyze-metric-label">Operating Hours</span>
@@ -894,7 +898,7 @@ function renderLiveData(data) {
                     <span class="analyze-metric-value">${formatVal(data.supply_temp)}</span>
                 </div>
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Outside Temp (°C)</span>
+                    <span class="analyze-metric-label">Outside-Temp. Sensor (°C)</span>
                     <span class="analyze-metric-value">${formatVal(data.outside_temp)}</span>
                 </div>
             </div>
@@ -909,7 +913,7 @@ function renderLiveData(data) {
  * Fetches live heating data from the API.
  * Shared by loadLive (Live tab) and injectLiveDataIntoForm (Init tab Live button).
  *
- * @returns {Promise<{gas_consumption_m3, betriebsstunden, starts, supply_temp, outside_temp, fetched_at}>}
+ * @returns {Promise<{gas_consumption_m3_today, gas_consumption_m3_yesterday, betriebsstunden, starts, supply_temp, outside_temp, fetched_at}>}
  * @throws {Error} On auth failure, non-OK response, or network error
  */
 async function fetchLiveHeatingData() {
@@ -969,8 +973,8 @@ async function injectLiveDataIntoForm() {
         if (startsEl && data.starts != null) {
             startsEl.value = String(data.starts);
         }
-        if (verbrauchEl && data.gas_consumption_m3 != null) {
-            verbrauchEl.value = Number(data.gas_consumption_m3).toFixed(2);
+        if (verbrauchEl && data.gas_consumption_m3_yesterday != null) {
+            verbrauchEl.value = Number(data.gas_consumption_m3_yesterday).toFixed(2);
         }
         if (vorlaufEl && data.supply_temp != null) {
             vorlaufEl.value = Number(data.supply_temp).toFixed(1);

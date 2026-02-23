@@ -43,11 +43,12 @@ def test_format_error_response() -> None:
 
 
 def test_format_success_response() -> None:
-    data = {"gas_consumption_m3": 5.5, "betriebsstunden": 1234}
+    data = {"gas_consumption_m3_today": 5.5, "gas_consumption_m3_yesterday": 8.3, "betriebsstunden": 1234}
     resp = mod.format_success_response(data)
     assert resp["statusCode"] == 200
     body = json.loads(resp["body"])
-    assert body["gas_consumption_m3"] == 5.5
+    assert body["gas_consumption_m3_today"] == 5.5
+    assert body["gas_consumption_m3_yesterday"] == 8.3
     assert body["betriebsstunden"] == 1234
 
 
