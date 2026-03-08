@@ -1,0 +1,1 @@
+{"statusCode": 200, "body": "{\"dry_run\": true, \"mapped\": {\"datum\": \"07.03.2026\", \"uhrzeit\": \"20:42\", \"betriebsstunden\": 28734, \"starts\": 13385, \"verbrauch_qm\": 5.6, \"vorlauf_temp\": 35.0, \"aussentemp\": 10.8}}"}

@@ -103,6 +103,7 @@ This creates:
    ```bash
    aws lambda invoke \
      --function-name DataCollectionScheduler-dev-AutoRetrievalHandler... \
+     --cli-binary-format raw-in-base64-out \
      --payload '{"dry_run": true}' \
      --region eu-central-1 \
      output.json && cat output.json
@@ -117,6 +118,7 @@ This creates:
 ```bash
 aws lambda invoke \
   --function-name DataCollectionScheduler-dev-AutoRetrievalHandler... \
+  --cli-binary-format raw-in-base64-out \
   --region eu-central-1 \
   output.json && cat output.json
 ```
