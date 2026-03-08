@@ -58,6 +58,7 @@ Default values are set by InitStack. To change them, update the SSM parameters:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `/HeatingDataCollection/AutoRetrieval/ScheduleCron` | `0 6 * * ? *` | EventBridge cron (06:00 UTC daily) |
+| `/HeatingDataCollection/AutoRetrieval/TestScheduleCron` | `0/15 * * * ? *` | EventBridge cron for test scheduler (every 15 min, starting at 22:30 CET / 21:30 UTC) |
 | `/HeatingDataCollection/AutoRetrieval/MaxRetries` | `5` | Max retry attempts on API failure |
 | `/HeatingDataCollection/AutoRetrieval/RetryDelaySeconds` | `300` | Seconds between retries |
 
@@ -72,7 +73,7 @@ aws ssm put-parameter \
   --region eu-central-1
 ```
 
-**Note:** Changing `ScheduleCron` in SSM requires redeploying the Scheduler stack for the EventBridge Rule to pick up the new value (the rule is created at deploy time from the SSM value).
+**Note:** Changing `ScheduleCron` or `TestScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values).
 
 ## Step 4: Deploy Scheduler Stack
 
@@ -102,13 +103,14 @@ Before relying on the production scheduler, you can validate the full flow safel
 
 2. **Full test with test table:** Run the Scheduler Test Stack for end-to-end verification:
    ```bash
-   task deploy-scheduler-test    # Creates test table + test Lambda
-   task invoke-auto-retrieval-test   # Runs retrieval → writes to test table only
+   task deploy-init              # Deploy first to create TestScheduleCron parameter
+   task deploy-scheduler-test    # Creates test table + test Lambda + EventBridge Rule
+   task invoke-auto-retrieval-test   # Optional: manual invoke for immediate verification
    # Verify: aws dynamodb scan --table-name submissions-auto-retrieval-test-dev
-   task destroy-scheduler-test   # Removes test table and Lambda
+   task destroy-scheduler-test   # Removes test table, Lambda, and EventBridge Rule
    ```
 
-The test stack uses a separate DynamoDB table and SNS topic, so production data and alerts are never affected.
+The test stack uses a separate DynamoDB table and SNS topic, so production data and alerts are never affected. The test scheduler runs on a configurable cron (default: every 15 minutes, starting at 22:30 CET / 21:30 UTC) and allows multiple entries per day for validation, unlike production which stores only one entry per date.
 
 ## Step 6: Verify
 

@@ -170,12 +170,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if values.get("betriebsstunden") is None and values.get("starts") is None:
                 raise ValueError("Viessmann API returned no betriebsstunden or starts")
 
+            skip_dup_str = os.environ.get("AUTO_RETRIEVAL_SKIP_DUPLICATE", "true").lower()
+            skip_if_duplicate = skip_dup_str in ("true", "1", "yes")
+
             table = _get_dynamodb_table()
             stored, submission_id = store_viessmann_submission(
                 user_id=user_id,
                 values=values,
                 table=table,
-                skip_if_duplicate=True,
+                skip_if_duplicate=skip_if_duplicate,
             )
 
             if stored:

@@ -1,7 +1,7 @@
 """Scheduler test stack for safe end-to-end auto-retrieval testing.
 
 Creates an isolated test DynamoDB table and Lambda (same handler as production)
-pointing to the test table. No EventBridge Rule — invoke manually only.
+pointing to the test table. EventBridge Rule triggers multiple runs per day for validation.
 Uses a separate SNS topic for failure alerts to avoid spurious production notifications.
 """
 
@@ -9,10 +9,13 @@ from aws_cdk import (
     BundlingOptions,
     Stack,
     aws_dynamodb as dynamodb,
+    aws_events as events,
+    aws_events_targets as targets,
     aws_iam as iam,
     aws_lambda as lambda_,
     aws_logs as logs,
     aws_sns as sns,
+    aws_ssm as ssm,
     CfnOutput,
     Duration,
     RemovalPolicy,
@@ -45,6 +48,11 @@ class SchedulerTestStack(Stack):
         """
         super().__init__(scope, construct_id, **kwargs)
         self.environment_name = environment_name
+
+        # Read test schedule from SSM (parameter created by InitStack)
+        test_schedule_cron = ssm.StringParameter.value_for_string_parameter(
+            self, "/HeatingDataCollection/AutoRetrieval/TestScheduleCron"
+        )
 
         # Test DynamoDB table — same schema as production (user_id, timestamp_utc)
         test_table = dynamodb.Table(
@@ -161,6 +169,7 @@ class SchedulerTestStack(Stack):
                 "VIESSMANN_CREDENTIALS_SECRET_ARN": viessmann_credentials_secret_arn,
                 "AUTO_RETRIEVAL_FAILURE_TOPIC_ARN": test_failure_topic.topic_arn,
                 "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
+                "AUTO_RETRIEVAL_SKIP_DUPLICATE": "false",
                 "PYTHONPATH": pythonpath,
                 "VIESSMANN_TOKEN_CACHE_PATH": "/tmp/viessmann/tokens.json",
             },
@@ -169,6 +178,16 @@ class SchedulerTestStack(Stack):
             description="Test Lambda for Viessmann auto-retrieval (writes to test table only)",
             log_retention=logs.RetentionDays.ONE_WEEK,
         )
+
+        # EventBridge Rule — triggers test Lambda on schedule (multiple runs per day)
+        rule = events.Rule(
+            self,
+            "AutoRetrievalTestSchedule",
+            rule_name=f"heating-auto-retrieval-test-{environment_name}",
+            description="Triggers test Viessmann retrieval (every 15 min, starting at 22:30 CET)",
+            schedule=events.Schedule.expression(f"cron({test_schedule_cron})"),
+        )
+        rule.add_target(targets.LambdaFunction(auto_retrieval_test_fn))
 
         # Outputs
         CfnOutput(
