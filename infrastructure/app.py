@@ -16,6 +16,7 @@ from infrastructure.stacks.dynamodb_stack import DynamoDBStack
 from infrastructure.stacks.frontend_stack import FrontendStack
 from infrastructure.stacks.init_stack import InitStack
 from infrastructure.stacks.scheduler_stack import SchedulerStack
+from infrastructure.stacks.scheduler_test_stack import SchedulerTestStack
 
 
 def create_app() -> App:
@@ -131,6 +132,17 @@ def create_app() -> App:
         )
         scheduler_stack.add_dependency(init_stack)
         scheduler_stack.add_dependency(dynamodb_stack)
+
+        # Scheduler test stack — always in CDK app, deploy on demand for end-to-end testing
+        scheduler_test_stack = SchedulerTestStack(
+            app,
+            f"DataCollectionSchedulerTest-{environment_name}",
+            environment_name=environment_name,
+            viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
+            env=env_config,
+            description="Data Collection - Auto-retrieval Test (dev)",
+        )
+        scheduler_test_stack.add_dependency(init_stack)
 
     # Ensure deployment ordering across stacks that use exports/imports.
     # InitStack owns the stable SSM "contract" parameters and must exist first so other stacks

@@ -94,6 +94,22 @@ This creates:
    - Endpoint: your-email@example.com
 4. Confirm the subscription (check your inbox)
 
+## Testing Before Production
+
+Before relying on the production scheduler, you can validate the full flow safely:
+
+1. **Dry-run (no DynamoDB):** Invoke the production Lambda with `{"dry_run": true}` to verify Viessmann connectivity (if dry-run mode is implemented).
+
+2. **Full test with test table:** Run the Scheduler Test Stack for end-to-end verification:
+   ```bash
+   task deploy-scheduler-test    # Creates test table + test Lambda
+   task invoke-auto-retrieval-test   # Runs retrieval → writes to test table only
+   # Verify: aws dynamodb scan --table-name submissions-auto-retrieval-test-dev
+   task destroy-scheduler-test   # Removes test table and Lambda
+   ```
+
+The test stack uses a separate DynamoDB table and SNS topic, so production data and alerts are never affected.
+
 ## Step 6: Verify
 
 **Manual trigger (optional):**
