@@ -9,6 +9,7 @@ Publishes to SNS on final failure.
 import json
 import os
 import time
+from decimal import Decimal
 from typing import Any, Dict
 
 # Lazily initialized clients
@@ -158,7 +159,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     from backend.iot_data.get_iot_config import get_iot_config
     from backend.iot_data.heating_values import get_heating_values
 
-    from src.viessmann_submit import store_viessmann_submission
+    from src.viessmann_submit import map_viessmann_to_submission, store_viessmann_submission
+
+    dry_run = event.get("dry_run") is True
 
     last_error = None
     for attempt in range(1, max_retries + 1):
@@ -169,6 +172,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # Validate we have minimum required data
             if values.get("betriebsstunden") is None and values.get("starts") is None:
                 raise ValueError("Viessmann API returned no betriebsstunden or starts")
+
+            if dry_run:
+                mapped = map_viessmann_to_submission(values)
+                # Convert Decimals for JSON serialization
+                mapped_serializable = {
+                    k: float(v) if isinstance(v, Decimal) else v
+                    for k, v in mapped.items()
+                }
+                return {
+                    "statusCode": 200,
+                    "body": json.dumps({"dry_run": True, "mapped": mapped_serializable}),
+                }
 
             table = _get_dynamodb_table()
             stored, submission_id = store_viessmann_submission(

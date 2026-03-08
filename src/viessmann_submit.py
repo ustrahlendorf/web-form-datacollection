@@ -83,6 +83,18 @@ def _viessmann_to_submission_values(
     }
 
 
+def map_viessmann_to_submission(
+    values: dict[str, Any],
+    retrieval_time: Optional[datetime] = None,
+) -> dict[str, Any]:
+    """
+    Map Viessmann API response to submission field values (no DynamoDB write).
+
+    Use for dry-run or validation. Same mapping as store_viessmann_submission.
+    """
+    return _viessmann_to_submission_values(values, retrieval_time)
+
+
 def _datum_to_iso(datum: str) -> str:
     """Convert dd.mm.yyyy to YYYY-MM-DD."""
     d = datetime.strptime(datum.strip(), "%d.%m.%Y").date()

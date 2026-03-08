@@ -96,7 +96,23 @@ This creates:
 
 ## Step 6: Verify
 
-**Manual trigger (optional):**
+### Testing Before Production
+
+1. **Dry-run (no DynamoDB):** Invoke the Lambda with `{"dry_run": true}` to verify Viessmann connectivity without writing to DynamoDB:
+
+   ```bash
+   aws lambda invoke \
+     --function-name DataCollectionScheduler-dev-AutoRetrievalHandler... \
+     --payload '{"dry_run": true}' \
+     --region eu-central-1 \
+     output.json && cat output.json
+   ```
+
+   On success, the response contains `{"dry_run": true, "mapped": {...}}` with the submission data that would have been stored.
+
+2. **Full test with test table:** Run `task deploy-scheduler-test`, `task invoke-auto-retrieval-test`, verify data in the test table, then `task destroy-scheduler-test`. (Requires Solution A: Scheduler Test Stack.)
+
+### Manual trigger (optional)
 
 ```bash
 aws lambda invoke \

@@ -9,6 +9,7 @@ import pytest
 from src.viessmann_submit import (
     _viessmann_to_submission_values,
     _datum_to_iso,
+    map_viessmann_to_submission,
     store_viessmann_submission,
 )
 
@@ -60,6 +61,21 @@ def test_viessmann_to_submission_values_fallback_to_today() -> None:
     }
     mapped = _viessmann_to_submission_values(values)
     assert mapped["verbrauch_qm"] == Decimal("1.0")
+
+
+def test_map_viessmann_to_submission() -> None:
+    """map_viessmann_to_submission returns same result as internal mapping (for dry-run)."""
+    values = {
+        "gas_consumption_m3_yesterday": 2.0,
+        "betriebsstunden": 100,
+        "starts": 5,
+        "supply_temp": 40.0,
+        "outside_temp": 5.0,
+    }
+    retrieval = datetime(2025, 2, 23, 6, 0, 0, tzinfo=timezone.utc)
+    mapped = map_viessmann_to_submission(values, retrieval_time=retrieval)
+    expected = _viessmann_to_submission_values(values, retrieval_time=retrieval)
+    assert mapped == expected
 
 
 def test_datum_to_iso() -> None:
