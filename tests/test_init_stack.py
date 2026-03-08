@@ -31,7 +31,7 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
 
     template = Template.from_stack(stack)
 
-    template.resource_count_is("AWS::SSM::Parameter", 7)
+    template.resource_count_is("AWS::SSM::Parameter", 9)
 
     template.has_resource_properties(
         "AWS::SSM::Parameter",
@@ -84,6 +84,15 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
             "Name": "/HeatingDataCollection/AutoRetrieval/RetryDelaySeconds",
             "Type": "String",
             "Value": "300",
+        },
+    )
+
+    template.has_resource_properties(
+        "AWS::SSM::Parameter",
+        {
+            "Name": "/HeatingDataCollection/AutoRetrieval/TestActiveWindows",
+            "Type": "String",
+            "Value": '[{"start":"00:00","stop":"24:00"}]',
         },
     )
 

@@ -59,6 +59,7 @@ Default values are set by InitStack. To change them, update the SSM parameters:
 |-----------|---------|-------------|
 | `/HeatingDataCollection/AutoRetrieval/ScheduleCron` | `0 6 * * ? *` | EventBridge cron (06:00 UTC daily) |
 | `/HeatingDataCollection/AutoRetrieval/TestScheduleCron` | `0/15 * * * ? *` | EventBridge cron for test scheduler (every 15 min, starting at 22:30 CET / 21:30 UTC) |
+| `/HeatingDataCollection/AutoRetrieval/TestActiveWindows` | `[{"start":"00:00","stop":"24:00"}]` | Active time windows for test scheduler (JSON array). Lambda exits early if invoked outside any window. Times in **UTC** (HH:MM). Max 5 windows. **No redeploy needed** when changing. |
 | `/HeatingDataCollection/AutoRetrieval/MaxRetries` | `5` | Max retry attempts on API failure |
 | `/HeatingDataCollection/AutoRetrieval/RetryDelaySeconds` | `300` | Seconds between retries |
 
@@ -73,7 +74,18 @@ aws ssm put-parameter \
   --region eu-central-1
 ```
 
-**Note:** Changing `ScheduleCron` or `TestScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values).
+**Note:** Changing `ScheduleCron` or `TestScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values). Changing `TestActiveWindows` does **not** require redeploy — the test Lambda reads it at runtime.
+
+**Example: Restrict test scheduler to 08:00–12:00 and 14:00–18:00 UTC**
+
+```bash
+aws ssm put-parameter \
+  --name "/HeatingDataCollection/AutoRetrieval/TestActiveWindows" \
+  --value '[{"start":"08:00","stop":"12:00"},{"start":"14:00","stop":"18:00"}]' \
+  --type String \
+  --overwrite \
+  --region eu-central-1
+```
 
 ## Step 4: Deploy Scheduler Stack
 

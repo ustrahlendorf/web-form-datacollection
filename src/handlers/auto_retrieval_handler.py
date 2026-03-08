@@ -4,12 +4,17 @@ Lambda handler for scheduled automatic Viessmann data retrieval.
 Triggered by EventBridge Rule (cron). Fetches heating values from Viessmann API,
 stores in DynamoDB. Retries on connection failure (configurable via SSM).
 Publishes to SNS on final failure.
+
+When ACTIVE_WINDOWS_PARAM is set (test scheduler), Lambda checks current UTC time
+against configured windows and exits early if outside any window.
 """
 
 import json
 import os
+import re
 import time
-from typing import Any, Dict
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Tuple
 
 # Lazily initialized clients
 _secrets_client = None
@@ -72,6 +77,87 @@ def _load_viessmann_credentials() -> Dict[str, str]:
         if not data.get(key):
             raise ValueError(f"Secret missing required key: {key}")
     return data
+
+
+# HH:MM pattern for time validation
+_TIME_PATTERN = re.compile(r"^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$")
+
+
+def _parse_time_to_minutes(s: str) -> int | None:
+    """Parse HH:MM string to minutes since midnight. Returns None if invalid. Accepts 24:00 as end-of-day."""
+    s = s.strip()
+    if s == "24:00":
+        return 24 * 60
+    m = _TIME_PATTERN.match(s)
+    if not m:
+        return None
+    h, mi = int(m.group(1)), int(m.group(2))
+    return h * 60 + mi
+
+
+def _parse_active_windows(json_str: str) -> List[Tuple[int, int]] | None:
+    """
+    Parse and validate TestActiveWindows JSON. Returns list of (start_min, stop_min) or None if invalid.
+    - Max 5 windows
+    - start < stop
+    - stop is exclusive (e.g. 08:00-12:00 includes 08:00 up to but not including 12:00)
+    """
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, list) or len(data) > 5:
+        return None
+    result = []
+    for w in data:
+        if not isinstance(w, dict):
+            return None
+        start_s = w.get("start")
+        stop_s = w.get("stop")
+        if not isinstance(start_s, str) or not isinstance(stop_s, str):
+            return None
+        start_min = _parse_time_to_minutes(start_s)
+        stop_min = _parse_time_to_minutes(stop_s)
+        if start_min is None or stop_min is None or start_min >= stop_min:
+            return None
+        result.append((start_min, stop_min))
+    return result if result else None
+
+
+def _is_within_active_window(windows: List[Tuple[int, int]], now: datetime) -> bool:
+    """Check if current UTC time falls within any of the active windows."""
+    minutes = now.hour * 60 + now.minute
+    for start_min, stop_min in windows:
+        if start_min <= minutes < stop_min:
+            return True
+    return False
+
+
+def _check_active_window_and_maybe_skip() -> bool:
+    """
+    If ACTIVE_WINDOWS_PARAM is set, read SSM, parse windows, and return True if we should skip
+    (current time outside any window). Returns False if we should proceed.
+    """
+    param_name = os.environ.get("ACTIVE_WINDOWS_PARAM")
+    if not param_name:
+        return False
+    ssm_prefix = os.environ.get("AUTO_RETRIEVAL_SSM_PREFIX", "/HeatingDataCollection/AutoRetrieval")
+    path = f"{ssm_prefix}/{param_name}"
+    try:
+        client = _get_ssm_client()
+        resp = client.get_parameter(Name=path, WithDecryption=False)
+        value = (resp.get("Parameter") or {}).get("Value") or ""
+    except Exception as e:
+        print(f"SSM get_parameter {path} failed: {e}, proceeding with retrieval")
+        return False
+    windows = _parse_active_windows(value)
+    if windows is None:
+        print(f"Invalid TestActiveWindows format: {value}, proceeding with retrieval")
+        return False
+    now = datetime.now(timezone.utc)
+    if _is_within_active_window(windows, now):
+        return False
+    return True
 
 
 def _get_ssm_param(name: str, default: str = "") -> str:
@@ -138,7 +224,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     Loads config from SSM, fetches from Viessmann API with retries,
     stores in DynamoDB. On final failure, publishes to SNS.
+
+    When ACTIVE_WINDOWS_PARAM is set (test scheduler), exits early if current
+    UTC time is outside any configured active window.
     """
+    if _check_active_window_and_maybe_skip():
+        return {"statusCode": 200, "body": json.dumps({"skipped": "outside_active_window"})}
+
     config = _load_config()
     user_id = config["user_id"]
     max_retries = config["max_retries"]

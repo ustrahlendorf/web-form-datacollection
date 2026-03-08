@@ -170,6 +170,7 @@ class SchedulerTestStack(Stack):
                 "AUTO_RETRIEVAL_FAILURE_TOPIC_ARN": test_failure_topic.topic_arn,
                 "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
                 "AUTO_RETRIEVAL_SKIP_DUPLICATE": "false",
+                "ACTIVE_WINDOWS_PARAM": "TestActiveWindows",
                 "PYTHONPATH": pythonpath,
                 "VIESSMANN_TOKEN_CACHE_PATH": "/tmp/viessmann/tokens.json",
             },
