@@ -237,9 +237,22 @@ tasks:
         get_param "${pfx}/FeatureFlags/EnablePassiveReads"
         get_param "${pfx}/Operations/Rollover/RunbookVersion"
         get_param "${pfx}/AutoRetrieval/ScheduleCron"
+        get_param "${pfx}/AutoRetrieval/TestScheduleCron"
+        get_param "${pfx}/AutoRetrieval/TestActiveWindows"
         get_param "${pfx}/AutoRetrieval/MaxRetries"
         get_param "${pfx}/AutoRetrieval/RetryDelaySeconds"
         get_param "${pfx}/AutoRetrieval/UserId"
+
+  ssm:init:show-compact:
+    desc: "Show InitStack SSM parameters (name=value, compressed)"
+    deps: [doctor-aws, doctor-init]
+    cmds:
+      - |
+        set -e
+        aws --region "${AWS_REGION}" ssm get-parameters-by-path \
+          --path "${SSM_NAMESPACE_PREFIX}" --recursive --with-decryption \
+          --query "Parameters[*].[Name,Value]" --output text \
+        | while IFS=$'\t' read -r name value; do echo "${name}"; echo "--> ${value}"; done
 
   env:print:
     desc: "Print shell exports for ACTIVE_/PASSIVE_ table names (use with eval)"
