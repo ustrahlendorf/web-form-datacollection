@@ -58,7 +58,9 @@ Default values are set by InitStack. To change them, update the SSM parameters:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `/HeatingDataCollection/AutoRetrieval/ScheduleCron` | `0 6 * * ? *` | EventBridge cron (06:00 UTC daily) |
-| `/HeatingDataCollection/AutoRetrieval/TestScheduleCron` | `0/15 * * * ? *` | EventBridge cron for test scheduler (every 15 min, starting at 22:30 CET / 21:30 UTC) |
+| `/HeatingDataCollection/AutoRetrieval/FrequentScheduleCron` | `0/15 * * * ? *` | EventBridge cron for frequent scheduler (every 15 min) |
+| `/HeatingDataCollection/AutoRetrieval/FrequentActiveWindows` | `[{"start":"00:00","stop":"24:00"}]` | Active time windows for frequent scheduler (JSON array). Lambda exits early if invoked outside any window. Times in **UTC** (HH:MM). Max 5 windows. **No redeploy needed** when changing. |
+| `/HeatingDataCollection/AutoRetrieval/TestScheduleCron` | `0/15 * * * ? *` | EventBridge cron for test scheduler (every 15 min) |
 | `/HeatingDataCollection/AutoRetrieval/TestActiveWindows` | `[{"start":"00:00","stop":"24:00"}]` | Active time windows for test scheduler (JSON array). Lambda exits early if invoked outside any window. Times in **UTC** (HH:MM). Max 5 windows. **No redeploy needed** when changing. |
 | `/HeatingDataCollection/AutoRetrieval/MaxRetries` | `5` | Max retry attempts on API failure |
 | `/HeatingDataCollection/AutoRetrieval/RetryDelaySeconds` | `300` | Seconds between retries |
@@ -74,13 +76,13 @@ aws ssm put-parameter \
   --region eu-central-1
 ```
 
-**Note:** Changing `ScheduleCron` or `TestScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values). Changing `TestActiveWindows` does **not** require redeploy — the test Lambda reads it at runtime.
+**Note:** Changing `ScheduleCron`, `FrequentScheduleCron`, or `TestScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values). Changing `FrequentActiveWindows` or `TestActiveWindows` does **not** require redeploy — the Lambda reads them at runtime.
 
-**Example: Restrict test scheduler to 08:00–12:00 and 14:00–18:00 UTC**
+**Example: Restrict frequent scheduler to 08:00–12:00 and 14:00–18:00 UTC**
 
 ```bash
 aws ssm put-parameter \
-  --name "/HeatingDataCollection/AutoRetrieval/TestActiveWindows" \
+  --name "/HeatingDataCollection/AutoRetrieval/FrequentActiveWindows" \
   --value '[{"start":"08:00","stop":"12:00"},{"start":"14:00","stop":"18:00"}]' \
   --type String \
   --overwrite \
@@ -101,11 +103,39 @@ This creates:
 ## Step 5: Subscribe to SNS for Failure Alerts
 
 1. Go to AWS SNS → Topics
-2. Find `heating-auto-retrieval-failure-dev`
+2. Find `heating-auto-retrieval-failure-dev` (daily scheduler) or `heating-auto-retrieval-frequent-failure-dev` (frequent scheduler)
 3. Create subscription:
    - Protocol: Email
    - Endpoint: your-email@example.com
 4. Confirm the subscription (check your inbox)
+
+## Frequent Scheduler (Multiple Runs Per Day)
+
+The **frequent** scheduler runs multiple times per day within configurable active windows, using a dedicated DynamoDB table and SNS topic:
+
+```bash
+task deploy-init                 # Deploy first to create FrequentScheduleCron parameter
+task deploy-scheduler-frequent   # Creates frequent table + Lambda + EventBridge Rule
+task invoke-auto-retrieval-frequent  # Optional: manual invoke for immediate verification
+# Verify: aws dynamodb scan --table-name submissions-auto-retrieval-frequent-dev
+task destroy-scheduler-frequent  # Removes frequent table, Lambda, and EventBridge Rule
+```
+
+### Phase 5: Deploy and Validate (Command Order)
+
+Run these commands in order. Do **not** skip the InitStack deploy if `FrequentScheduleCron` or `FrequentActiveWindows` SSM parameters do not yet exist.
+
+| Step | Command | Purpose |
+|------|---------|---------|
+| 1 | `task deploy-init` | Deploy InitStack (if new param names require migration — creates `FrequentScheduleCron`, `FrequentActiveWindows`) |
+| 2 | `task deploy-scheduler-frequent` | Deploy frequent scheduler stack (Lambda, EventBridge, SNS, DynamoDB) |
+| 3a | `aws cloudformation describe-stacks --stack-name DataCollectionSchedulerFrequent-dev --region eu-central-1` | Verify stack deployed |
+| 3b | `aws lambda get-function --function-name $(aws cloudformation describe-stacks --stack-name DataCollectionSchedulerFrequent-dev --query "Stacks[0].Outputs[?OutputKey=='FrequentLambdaFunctionName'].OutputValue" --output text --region eu-central-1) --region eu-central-1` | Verify Lambda |
+| 3c | `aws events describe-rule --name heating-auto-retrieval-frequent-dev --region eu-central-1` | Verify EventBridge rule |
+| 3d | `aws sns list-topics --region eu-central-1 --query "Topics[?contains(TopicArn, 'heating-auto-retrieval-frequent-failure')]"` | Verify SNS topic exists |
+| 3e | `aws dynamodb describe-table --table-name submissions-auto-retrieval-frequent-dev --region eu-central-1` | Verify DynamoDB table |
+| 4 | `task invoke-auto-retrieval-frequent` | Manual invoke for end-to-end verification |
+| 5 | `aws dynamodb scan --table-name submissions-auto-retrieval-frequent-dev --region eu-central-1` | (Optional) Verify data written after invoke |
 
 ## Testing Before Production
 
@@ -122,7 +152,7 @@ Before relying on the production scheduler, you can validate the full flow safel
    task destroy-scheduler-test   # Removes test table, Lambda, and EventBridge Rule
    ```
 
-The test stack uses a separate DynamoDB table and SNS topic, so production data and alerts are never affected. The test scheduler runs on a configurable cron (default: every 15 minutes, starting at 22:30 CET / 21:30 UTC) and allows multiple entries per day for validation, unlike production which stores only one entry per date.
+The test stack uses a separate DynamoDB table and SNS topic, so production data and alerts are never affected. The test scheduler runs on a configurable cron (default: every 15 minutes) and allows multiple entries per day for validation, unlike the daily production scheduler which stores only one entry per date.
 
 ## Step 6: Verify
 

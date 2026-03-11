@@ -16,6 +16,7 @@ from infrastructure.stacks.dynamodb_stack import DynamoDBStack
 from infrastructure.stacks.frontend_stack import FrontendStack
 from infrastructure.stacks.init_stack import InitStack
 from infrastructure.stacks.scheduler_stack import SchedulerStack
+from infrastructure.stacks.scheduler_frequent_stack import SchedulerFrequentStack
 from infrastructure.stacks.scheduler_test_stack import SchedulerTestStack
 
 
@@ -132,6 +133,17 @@ def create_app() -> App:
         )
         scheduler_stack.add_dependency(init_stack)
         scheduler_stack.add_dependency(dynamodb_stack)
+
+        # Scheduler frequent stack — production auto-retrieval with multiple runs per day
+        scheduler_frequent_stack = SchedulerFrequentStack(
+            app,
+            f"DataCollectionSchedulerFrequent-{environment_name}",
+            environment_name=environment_name,
+            viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
+            env=env_config,
+            description="Data Collection - Auto-retrieval Frequent (dev)",
+        )
+        scheduler_frequent_stack.add_dependency(init_stack)
 
         # Scheduler test stack — always in CDK app, deploy on demand for end-to-end testing
         scheduler_test_stack = SchedulerTestStack(

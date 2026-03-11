@@ -1,0 +1,212 @@
+"""Scheduler frequent stack for production auto-retrieval with multiple runs per day.
+
+Creates a DynamoDB table and Lambda for frequent auto-retrieval within active windows.
+EventBridge Rule triggers multiple runs per day. Uses a dedicated SNS topic for failure alerts.
+"""
+
+from aws_cdk import (
+    BundlingOptions,
+    Stack,
+    aws_dynamodb as dynamodb,
+    aws_events as events,
+    aws_events_targets as targets,
+    aws_iam as iam,
+    aws_lambda as lambda_,
+    aws_logs as logs,
+    aws_sns as sns,
+    aws_ssm as ssm,
+    CfnOutput,
+    Duration,
+    RemovalPolicy,
+)
+from constructs import Construct
+import os
+
+
+class SchedulerFrequentStack(Stack):
+    """Stack for frequent auto-retrieval Lambda with DynamoDB table and SNS topic."""
+
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        environment_name: str,
+        viessmann_credentials_secret_arn: str,
+        **kwargs,
+    ) -> None:
+        """
+        Initialize the Scheduler frequent stack.
+
+        Args:
+            scope: The parent construct
+            construct_id: The logical ID of the stack
+            environment_name: The environment name (dev, prod, etc.)
+            viessmann_credentials_secret_arn: ARN of Secrets Manager secret with
+                VIESSMANN_CLIENT_ID, VIESSMANN_EMAIL, VIESSMANN_PASSWORD
+            **kwargs: Additional arguments to pass to Stack
+        """
+        super().__init__(scope, construct_id, **kwargs)
+        self.environment_name = environment_name
+
+        # Read frequent schedule from SSM (parameter created by InitStack)
+        frequent_schedule_cron = ssm.StringParameter.value_for_string_parameter(
+            self, "/HeatingDataCollection/AutoRetrieval/FrequentScheduleCron"
+        )
+
+        # DynamoDB table — same schema as production (user_id, timestamp_utc)
+        frequent_table = dynamodb.Table(
+            self,
+            "SubmissionsAutoRetrievalFrequentTable",
+            table_name=f"submissions-auto-retrieval-frequent-{environment_name}",
+            partition_key=dynamodb.Attribute(
+                name="user_id",
+                type=dynamodb.AttributeType.STRING,
+            ),
+            sort_key=dynamodb.Attribute(
+                name="timestamp_utc",
+                type=dynamodb.AttributeType.STRING,
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption=dynamodb.TableEncryption.AWS_MANAGED,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        # SNS topic for failure alerts
+        frequent_failure_topic = sns.Topic(
+            self,
+            "AutoRetrievalFrequentFailureTopic",
+            display_name="Auto-retrieval frequent failure alerts",
+            topic_name=f"heating-auto-retrieval-frequent-failure-{environment_name}",
+        )
+
+        # Lambda execution role — access to frequent table and SNS
+        lambda_role = iam.Role(
+            self,
+            "AutoRetrievalFrequentLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            role_name=f"heating-auto-retrieval-frequent-role-{environment_name}",
+        )
+
+        lambda_role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "service-role/AWSLambdaBasicExecutionRole"
+            )
+        )
+
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["secretsmanager:GetSecretValue"],
+                resources=[viessmann_credentials_secret_arn],
+            )
+        )
+
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["ssm:GetParameter"],
+                resources=[
+                    f"arn:aws:ssm:{self.region}:{self.account}:parameter/HeatingDataCollection/AutoRetrieval/*"
+                ],
+            )
+        )
+
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan",
+                ],
+                resources=[frequent_table.table_arn],
+            )
+        )
+
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["sns:Publish"],
+                resources=[frequent_failure_topic.topic_arn],
+            )
+        )
+
+        # Lambda function — same handler/code as production
+        asset_path = os.path.join(os.path.dirname(__file__), "..", "..")
+        pythonpath = "backend/src"
+
+        auto_retrieval_frequent_fn = lambda_.Function(
+            self,
+            "AutoRetrievalFrequentHandler",
+            runtime=lambda_.Runtime.PYTHON_3_11,
+            handler="src.handlers.auto_retrieval_handler.lambda_handler",
+            code=lambda_.Code.from_asset(
+                asset_path,
+                exclude=[
+                    "cdk.out",
+                    ".git",
+                    ".venv",
+                    "node_modules",
+                    ".pytest_cache",
+                    ".hypothesis",
+                    ".jsii-package-cache",
+                ],
+                bundling=BundlingOptions(
+                    image=lambda_.Runtime.PYTHON_3_11.bundling_image,
+                    command=[
+                        "bash",
+                        "-c",
+                        "pip install -r /asset-input/requirements-heating.txt -t /asset-output "
+                        "&& cp -r /asset-input/src /asset-input/backend /asset-output/",
+                    ],
+                ),
+            ),
+            role=lambda_role,
+            environment={
+                "SUBMISSIONS_TABLE": frequent_table.table_name,
+                "VIESSMANN_CREDENTIALS_SECRET_ARN": viessmann_credentials_secret_arn,
+                "AUTO_RETRIEVAL_FAILURE_TOPIC_ARN": frequent_failure_topic.topic_arn,
+                "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
+                "AUTO_RETRIEVAL_SKIP_DUPLICATE": "false",
+                "ACTIVE_WINDOWS_PARAM": "FrequentActiveWindows",
+                "PYTHONPATH": pythonpath,
+                "VIESSMANN_TOKEN_CACHE_PATH": "/tmp/viessmann/tokens.json",
+            },
+            timeout=Duration.minutes(15),
+            memory_size=256,
+            description="Frequent Lambda for Viessmann auto-retrieval (multiple runs per day)",
+            log_retention=logs.RetentionDays.ONE_WEEK,
+        )
+
+        # EventBridge Rule — triggers Lambda on schedule (multiple runs per day)
+        rule = events.Rule(
+            self,
+            "AutoRetrievalFrequentSchedule",
+            rule_name=f"heating-auto-retrieval-frequent-{environment_name}",
+            description="Triggers frequent Viessmann retrieval (every 15 min within active windows)",
+            schedule=events.Schedule.expression(f"cron({frequent_schedule_cron})"),
+        )
+        rule.add_target(targets.LambdaFunction(auto_retrieval_frequent_fn))
+
+        # Outputs
+        CfnOutput(
+            self,
+            "FrequentTableName",
+            value=frequent_table.table_name,
+            description="DynamoDB table for frequent auto-retrieval",
+        )
+
+        CfnOutput(
+            self,
+            "FrequentLambdaFunctionName",
+            value=auto_retrieval_frequent_fn.function_name,
+            description="Frequent Lambda function name — invoke manually for testing",
+        )
+
+        CfnOutput(
+            self,
+            "FrequentFailureTopicArn",
+            value=frequent_failure_topic.topic_arn,
+            description="SNS topic for frequent failure alerts",
+        )

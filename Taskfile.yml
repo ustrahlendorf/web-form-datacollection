@@ -178,6 +178,16 @@ tasks:
     cmds:
       - cdk deploy "DataCollectionScheduler-dev"
 
+  deploy-scheduler-frequent:
+    desc: "Deploy Scheduler frequent stack (dev) - production auto-retrieval with multiple runs per day"
+    deps: [doctor]
+    dir: "{{.APP_DIR}}"
+    env:
+      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
+      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
+    cmds:
+      - cdk deploy "DataCollectionSchedulerFrequent-dev"
+
   deploy-scheduler-test:
     desc: "Deploy Scheduler test stack (dev) - isolated test table + Lambda for auto-retrieval"
     deps: [doctor]
@@ -187,6 +197,28 @@ tasks:
       JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
     cmds:
       - cdk deploy "DataCollectionSchedulerTest-dev"
+
+  invoke-auto-retrieval-frequent:
+    desc: "Invoke frequent auto-retrieval Lambda (writes to frequent table only)"
+    deps: [doctor-aws]
+    dir: "{{.APP_DIR}}"
+    env:
+      AWS_REGION: "{{.AWS_REGION}}"
+    cmds:
+      - |
+        set -e
+        FN=$(aws cloudformation describe-stacks \
+          --stack-name DataCollectionSchedulerFrequent-dev \
+          --query "Stacks[0].Outputs[?OutputKey=='FrequentLambdaFunctionName'].OutputValue" \
+          --output text 2>/dev/null) || true
+        if [ -z "$FN" ] || [ "$FN" = "None" ]; then
+          echo "ERROR: DataCollectionSchedulerFrequent-dev stack not deployed or missing output." >&2
+          echo "Run: task deploy-scheduler-frequent" >&2
+          exit 2
+        fi
+        aws lambda invoke --function-name "$FN" --payload '{}' /tmp/auto-retrieval-frequent-output.json
+        cat /tmp/auto-retrieval-frequent-output.json
+        echo ""
 
   invoke-auto-retrieval-test:
     desc: "Invoke test auto-retrieval Lambda (writes to test table only)"
@@ -209,6 +241,16 @@ tasks:
         aws lambda invoke --function-name "$FN" --payload '{}' /tmp/auto-retrieval-test-output.json
         cat /tmp/auto-retrieval-test-output.json
         echo ""
+
+  destroy-scheduler-frequent:
+    desc: "Destroy Scheduler frequent stack (removes frequent table and Lambda)"
+    deps: [doctor-aws]
+    dir: "{{.APP_DIR}}"
+    env:
+      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
+      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
+    cmds:
+      - cdk destroy "DataCollectionSchedulerFrequent-dev" --force
 
   destroy-scheduler-test:
     desc: "Destroy Scheduler test stack (removes test table and Lambda)"
@@ -237,8 +279,8 @@ tasks:
         get_param "${pfx}/FeatureFlags/EnablePassiveReads"
         get_param "${pfx}/Operations/Rollover/RunbookVersion"
         get_param "${pfx}/AutoRetrieval/ScheduleCron"
-        get_param "${pfx}/AutoRetrieval/TestScheduleCron"
-        get_param "${pfx}/AutoRetrieval/TestActiveWindows"
+        get_param "${pfx}/AutoRetrieval/FrequentScheduleCron"
+        get_param "${pfx}/AutoRetrieval/FrequentActiveWindows"
         get_param "${pfx}/AutoRetrieval/MaxRetries"
         get_param "${pfx}/AutoRetrieval/RetryDelaySeconds"
         get_param "${pfx}/AutoRetrieval/UserId"

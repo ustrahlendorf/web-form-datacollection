@@ -91,6 +91,25 @@ class InitStack(Stack):
             ),
         )
 
+        self.auto_retrieval_frequent_schedule_param = ssm.StringParameter(
+            self,
+            "AutoRetrievalFrequentScheduleCron",
+            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/FrequentScheduleCron",
+            string_value="0/15 * * * ? *",
+            description="EventBridge cron for frequent scheduler (every 15 minutes within active windows).",
+        )
+
+        self.auto_retrieval_frequent_active_windows_param = ssm.StringParameter(
+            self,
+            "AutoRetrievalFrequentActiveWindows",
+            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/FrequentActiveWindows",
+            string_value='[{"start":"00:00","stop":"24:00"}]',
+            description=(
+                "Active time windows for frequent scheduler (JSON array of {start,stop} in UTC HH:MM). "
+                "Lambda exits early if invoked outside any window. Default: 24/7. Max 5 windows."
+            ),
+        )
+
         self.auto_retrieval_max_retries_param = ssm.StringParameter(
             self,
             "AutoRetrievalMaxRetries",
