@@ -27,9 +27,11 @@ def test_viessmann_to_submission_values_basic() -> None:
     retrieval = datetime(2025, 2, 23, 6, 0, 0, tzinfo=timezone.utc)
     mapped = _viessmann_to_submission_values(values, retrieval_time=retrieval)
 
-    # datum = yesterday (22.02.2025)
-    assert mapped["datum"] == "22.02.2025"
+    # datum = retrieval date; verbrauch_qm = gas_consumption_m3_yesterday
+    assert mapped["datum"] == "23.02.2025"
     assert mapped["uhrzeit"] == "06:00"
+    assert mapped["timestamp_utc"] == "2025-02-23T06:00:00Z"
+    assert mapped["verbrauch_qm"] == Decimal("2.3")  # from gas_consumption_m3_yesterday
     assert mapped["betriebsstunden"] == 1234
     assert mapped["starts"] == 56
     assert mapped["verbrauch_qm"] == Decimal("2.3")

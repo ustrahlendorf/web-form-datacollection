@@ -6,7 +6,7 @@ compute deltas, check for duplicates, and store. Validation is relaxed for
 auto-retrieved data (verbrauch_qm may exceed 20 m³).
 """
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -30,8 +30,10 @@ def _viessmann_to_submission_values(
     """
     Map Viessmann API response to submission field values.
 
-    Uses yesterday's date for datum since gas_consumption_m3_yesterday refers to
-    the previous day. Uhrzeit is from retrieval time.
+    Retrieval time (EventBridge trigger) is the truth for datum, datum_iso,
+    timestamp_utc, uhrzeit, betriebsstunden, starts, temps. For gas consumption
+    we use yesterday's value (gas_consumption_m3_yesterday) but store it with
+    the retrieval date.
 
     Args:
         values: Dict from get_heating_values() with keys:
@@ -40,13 +42,12 @@ def _viessmann_to_submission_values(
         retrieval_time: Optional override for datum/uhrzeit (default: now UTC)
 
     Returns:
-        Dict with datum, uhrzeit, betriebsstunden, starts, verbrauch_qm,
-        vorlauf_temp, aussentemp
+        Dict with datum, uhrzeit, timestamp_utc, betriebsstunden, starts,
+        verbrauch_qm, vorlauf_temp, aussentemp
     """
     now = retrieval_time or datetime.now(timezone.utc)
-    # gas_consumption_m3_yesterday = consumption for yesterday; datum = yesterday
-    yesterday = now - timedelta(days=1)
-    datum = _format_datum(yesterday)
+    # datum/datum_iso = retrieval date; verbrauch_qm = gas value from yesterday
+    datum = _format_datum(now)
     uhrzeit = _format_uhrzeit(now)
 
     verbrauch_raw = values.get("gas_consumption_m3_yesterday")
@@ -72,9 +73,13 @@ def _viessmann_to_submission_values(
     if values.get("outside_temp") is not None:
         aussentemp = Decimal(str(values["outside_temp"]))
 
+    # timestamp_utc = retrieval time (EventBridge trigger)
+    timestamp_utc = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+
     return {
         "datum": datum,
         "uhrzeit": uhrzeit,
+        "timestamp_utc": timestamp_utc,
         "betriebsstunden": betriebsstunden,
         "starts": starts,
         "verbrauch_qm": verbrauch_qm,
@@ -95,6 +100,7 @@ def store_viessmann_submission(
     table: Any,
     *,
     skip_if_duplicate: bool = True,
+    retrieval_time: Optional[datetime] = None,
 ) -> tuple[bool, Optional[str]]:
     """
     Store Viessmann heating values as a DynamoDB submission.
@@ -112,7 +118,7 @@ def store_viessmann_submission(
         Tuple of (stored: bool, submission_id: Optional[str]).
         stored=False when skipped as duplicate.
     """
-    mapped = _viessmann_to_submission_values(values)
+    mapped = _viessmann_to_submission_values(values, retrieval_time=retrieval_time)
     datum_iso = _datum_to_iso(mapped["datum"])
 
     if skip_if_duplicate:
@@ -180,6 +186,7 @@ def store_viessmann_submission(
         delta_verbrauch_qm=delta_verbrauch_qm,
         vorlauf_temp=mapped["vorlauf_temp"],
         aussentemp=mapped["aussentemp"],
+        timestamp_utc=mapped.get("timestamp_utc"),
     )
 
     table.put_item(Item=submission.to_dict())
