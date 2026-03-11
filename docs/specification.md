@@ -94,6 +94,9 @@ Query params:
 - limit
 - next_token
 
+### GET /heating/live (optional)
+Returns live heating data from the Viessmann IoT API. Requires Viessmann credentials in Secrets Manager. See `backend/vis-connect.md`.
+
 ## 6. Validation Rules
 - Strict date and time parsing
 - Integers >= 0
@@ -131,6 +134,8 @@ Attributes:
 - Least-privilege IAM
 - JWT authorizer
 - CORS restricted to frontend domain
+
+For detailed security controls and where they are enforced, see `reference/security.md`.
 
 ## 10. Observability
 - CloudWatch Logs

@@ -90,12 +90,11 @@ npm run serve
 ### Running Tests
 
 ```bash
-# Run unit tests
 npm test
-
-# Run property-based tests
-npm run test -- form-prepopulation.pbt.js
+# or: npm run test -- form-prepopulation.pbt.js  # property-based tests
 ```
+
+For the full test suite (backend + frontend), see `../docs/reference/testing.md`.
 
 ### Configuration
 
@@ -133,23 +132,10 @@ These are injected during the build process from the `.env` file.
 
 For detailed deployment instructions, see `../docs/getting-started.md`.
 
-### Quick Deployment
-
 ```bash
-# Setup environment
-bash setup-env.sh dev
-
-# Build and deploy
+bash setup-env.sh dev   # or prod
 bash build.sh
-bash deploy.sh dev
-```
-
-### Production Deployment
-
-```bash
-bash setup-env.sh prod
-bash build.sh
-bash deploy.sh prod
+bash deploy.sh dev      # or prod
 ```
 
 ## Troubleshooting

@@ -35,6 +35,7 @@ For the full, canonical guide, see `getting-started.md`.
 
 - `runbooks/year-rollover.md` — switch active ↔ passive DynamoDB tables via SSM pointers
 - `runbooks/datalake-backup.md` — DynamoDB → S3 “datalake” snapshots
+- `runbooks/auto-retrieval-deployment.md` — scheduled Viessmann data retrieval
 
 ### reference
 
