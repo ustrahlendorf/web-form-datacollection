@@ -90,15 +90,6 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
     template.has_resource_properties(
         "AWS::SSM::Parameter",
         {
-            "Name": "/HeatingDataCollection/AutoRetrieval/TestActiveWindows",
-            "Type": "String",
-            "Value": '[{"start":"00:00","stop":"24:00"}]',
-        },
-    )
-
-    template.has_resource_properties(
-        "AWS::SSM::Parameter",
-        {
             "Name": "/HeatingDataCollection/AutoRetrieval/UserId",
             "Type": "String",
             "Value": "SET_ME",

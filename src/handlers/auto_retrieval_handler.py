@@ -5,7 +5,7 @@ Triggered by EventBridge Rule (cron). Fetches heating values from Viessmann API,
 stores in DynamoDB. Retries on connection failure (configurable via SSM).
 Publishes to SNS on final failure.
 
-When ACTIVE_WINDOWS_PARAM is set (test scheduler), Lambda checks current UTC time
+When ACTIVE_WINDOWS_PARAM is set (frequent scheduler), Lambda checks current UTC time
 against configured windows and exits early if outside any window.
 """
 
@@ -97,7 +97,7 @@ def _parse_time_to_minutes(s: str) -> int | None:
 
 def _parse_active_windows(json_str: str) -> List[Tuple[int, int]] | None:
     """
-    Parse and validate TestActiveWindows JSON. Returns list of (start_min, stop_min) or None if invalid.
+    Parse and validate ActiveWindows JSON. Returns list of (start_min, stop_min) or None if invalid.
     - Max 5 windows
     - start < stop
     - stop is exclusive (e.g. 08:00-12:00 includes 08:00 up to but not including 12:00)
@@ -152,7 +152,7 @@ def _check_active_window_and_maybe_skip() -> bool:
         return False
     windows = _parse_active_windows(value)
     if windows is None:
-        print(f"Invalid TestActiveWindows format: {value}, proceeding with retrieval")
+        print(f"Invalid ActiveWindows format: {value}, proceeding with retrieval")
         return False
     now = datetime.now(timezone.utc)
     if _is_within_active_window(windows, now):
@@ -225,7 +225,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Loads config from SSM, fetches from Viessmann API with retries,
     stores in DynamoDB. On final failure, publishes to SNS.
 
-    When ACTIVE_WINDOWS_PARAM is set (test scheduler), exits early if current
+    When ACTIVE_WINDOWS_PARAM is set (frequent scheduler), exits early if current
     UTC time is outside any configured active window.
     """
     if _check_active_window_and_maybe_skip():

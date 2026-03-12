@@ -60,8 +60,6 @@ Default values are set by InitStack. To change them, update the SSM parameters:
 | `/HeatingDataCollection/AutoRetrieval/ScheduleCron` | `0 6 * * ? *` | EventBridge cron (06:00 UTC daily) |
 | `/HeatingDataCollection/AutoRetrieval/FrequentScheduleCron` | `0/15 * * * ? *` | EventBridge cron for frequent scheduler (every 15 min) |
 | `/HeatingDataCollection/AutoRetrieval/FrequentActiveWindows` | `[{"start":"00:00","stop":"24:00"}]` | Active time windows for frequent scheduler (JSON array). Lambda exits early if invoked outside any window. Times in **UTC** (HH:MM). Max 5 windows. **No redeploy needed** when changing. |
-| `/HeatingDataCollection/AutoRetrieval/TestScheduleCron` | `0/15 * * * ? *` | EventBridge cron for test scheduler (every 15 min) |
-| `/HeatingDataCollection/AutoRetrieval/TestActiveWindows` | `[{"start":"00:00","stop":"24:00"}]` | Active time windows for test scheduler (JSON array). Lambda exits early if invoked outside any window. Times in **UTC** (HH:MM). Max 5 windows. **No redeploy needed** when changing. |
 | `/HeatingDataCollection/AutoRetrieval/MaxRetries` | `5` | Max retry attempts on API failure |
 | `/HeatingDataCollection/AutoRetrieval/RetryDelaySeconds` | `300` | Seconds between retries |
 
@@ -76,7 +74,7 @@ aws ssm put-parameter \
   --region eu-central-1
 ```
 
-**Note:** Changing `ScheduleCron`, `FrequentScheduleCron`, or `TestScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values). Changing `FrequentActiveWindows` or `TestActiveWindows` does **not** require redeploy — the Lambda reads them at runtime.
+**Note:** Changing `ScheduleCron` or `FrequentScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values). Changing `FrequentActiveWindows` does **not** require redeploy — the Lambda reads it at runtime.
 
 **Example: Restrict frequent scheduler to 08:00–12:00 and 14:00–18:00 UTC**
 
@@ -136,23 +134,6 @@ Run these commands in order. Do **not** skip the InitStack deploy if `FrequentSc
 | 3e | `aws dynamodb describe-table --table-name submissions-auto-retrieval-frequent-dev --region eu-central-1` | Verify DynamoDB table |
 | 4 | `task invoke-auto-retrieval-frequent` | Manual invoke for end-to-end verification |
 | 5 | `aws dynamodb scan --table-name submissions-auto-retrieval-frequent-dev --region eu-central-1` | (Optional) Verify data written after invoke |
-
-## Testing Before Production
-
-Before relying on the production scheduler, you can validate the full flow safely:
-
-1. **Dry-run (no DynamoDB):** Invoke the production Lambda with `{"dry_run": true}` to verify Viessmann connectivity (if dry-run mode is implemented).
-
-2. **Full test with test table:** Run the Scheduler Test Stack for end-to-end verification:
-   ```bash
-   task deploy-init              # Deploy first to create TestScheduleCron parameter
-   task deploy-scheduler-test    # Creates test table + test Lambda + EventBridge Rule
-   task invoke-auto-retrieval-test   # Optional: manual invoke for immediate verification
-   # Verify: aws dynamodb scan --table-name submissions-auto-retrieval-test-dev
-   task destroy-scheduler-test   # Removes test table, Lambda, and EventBridge Rule
-   ```
-
-The test stack uses a separate DynamoDB table and SNS topic, so production data and alerts are never affected. The test scheduler runs on a configurable cron (default: every 15 minutes) and allows multiple entries per day for validation, unlike the daily production scheduler which stores only one entry per date.
 
 ## Step 6: Verify
 

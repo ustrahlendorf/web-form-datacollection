@@ -72,25 +72,6 @@ class InitStack(Stack):
             description="EventBridge cron expression for daily retrieval (default: 06:00 UTC).",
         )
 
-        self.auto_retrieval_test_schedule_param = ssm.StringParameter(
-            self,
-            "AutoRetrievalTestScheduleCron",
-            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/TestScheduleCron",
-            string_value="0/15 * * * ? *",
-            description="EventBridge cron for test scheduler (every 15 min, starting at 22:30 CET / 21:30 UTC).",
-        )
-
-        self.auto_retrieval_test_active_windows_param = ssm.StringParameter(
-            self,
-            "AutoRetrievalTestActiveWindows",
-            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/TestActiveWindows",
-            string_value='[{"start":"00:00","stop":"24:00"}]',
-            description=(
-                "Active time windows for test scheduler (JSON array of {start,stop} in UTC HH:MM). "
-                "Lambda exits early if invoked outside any window. Default: 24/7. Max 5 windows."
-            ),
-        )
-
         self.auto_retrieval_frequent_schedule_param = ssm.StringParameter(
             self,
             "AutoRetrievalFrequentScheduleCron",

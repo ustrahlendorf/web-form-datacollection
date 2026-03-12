@@ -188,16 +188,6 @@ tasks:
     cmds:
       - cdk deploy "DataCollectionSchedulerFrequent-dev"
 
-  deploy-scheduler-test:
-    desc: "Deploy Scheduler test stack (dev) - isolated test table + Lambda for auto-retrieval"
-    deps: [doctor]
-    dir: "{{.APP_DIR}}"
-    env:
-      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
-      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
-    cmds:
-      - cdk deploy "DataCollectionSchedulerTest-dev"
-
   invoke-auto-retrieval-frequent:
     desc: "Invoke frequent auto-retrieval Lambda (writes to frequent table only)"
     deps: [doctor-aws]
@@ -220,28 +210,6 @@ tasks:
         cat /tmp/auto-retrieval-frequent-output.json
         echo ""
 
-  invoke-auto-retrieval-test:
-    desc: "Invoke test auto-retrieval Lambda (writes to test table only)"
-    deps: [doctor-aws]
-    dir: "{{.APP_DIR}}"
-    env:
-      AWS_REGION: "{{.AWS_REGION}}"
-    cmds:
-      - |
-        set -e
-        FN=$(aws cloudformation describe-stacks \
-          --stack-name DataCollectionSchedulerTest-dev \
-          --query "Stacks[0].Outputs[?OutputKey=='TestLambdaFunctionName'].OutputValue" \
-          --output text 2>/dev/null) || true
-        if [ -z "$FN" ] || [ "$FN" = "None" ]; then
-          echo "ERROR: DataCollectionSchedulerTest-dev stack not deployed or missing output." >&2
-          echo "Run: task deploy-scheduler-test" >&2
-          exit 2
-        fi
-        aws lambda invoke --function-name "$FN" --payload '{}' /tmp/auto-retrieval-test-output.json
-        cat /tmp/auto-retrieval-test-output.json
-        echo ""
-
   destroy-scheduler-frequent:
     desc: "Destroy Scheduler frequent stack (removes frequent table and Lambda)"
     deps: [doctor-aws]
@@ -251,16 +219,6 @@ tasks:
       JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
     cmds:
       - cdk destroy "DataCollectionSchedulerFrequent-dev" --force
-
-  destroy-scheduler-test:
-    desc: "Destroy Scheduler test stack (removes test table and Lambda)"
-    deps: [doctor-aws]
-    dir: "{{.APP_DIR}}"
-    env:
-      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
-      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
-    cmds:
-      - cdk destroy "DataCollectionSchedulerTest-dev" --force
 
   ssm:init:show:
     desc: "Show InitStack SSM parameters (expects InitStack deployed)"
