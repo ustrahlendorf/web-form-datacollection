@@ -117,16 +117,16 @@ class SchedulerFrequentStack(Stack):
             )
         )
 
-        appconfig_profile_arn = (
+        appconfig_configuration_arn = (
             f"arn:aws:appconfig:{self.region}:{self.account}:application/"
             f"{appconfig_application_id}/environment/{appconfig_environment_id}"
-            f"/configurationprofile/{appconfig_profile_id}"
+            f"/configuration/{appconfig_profile_id}"
         )
         lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["appconfig:StartConfigurationSession"],
-                resources=[appconfig_profile_arn],
+                resources=[appconfig_configuration_arn],
             )
         )
         lambda_role.add_to_policy(

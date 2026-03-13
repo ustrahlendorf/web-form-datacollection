@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import re
 from typing import Any
@@ -66,13 +68,22 @@ def _validate_config(config: dict[str, Any]) -> None:
 
 
 def _parse_configuration_content(event: dict[str, Any]) -> dict[str, Any]:
-    # AppConfig Lambda validator sends content as a JSON string.
+    # AppConfig Lambda validator sends content as base64-encoded bytes.
     content = event.get("content")
     if not isinstance(content, str) or not content.strip():
         raise ValueError("Missing or empty 'content' in validator event.")
 
+    content_str = content.strip()
+    if content_str.startswith("{"):
+        decoded_content = content_str
+    else:
+        try:
+            decoded_content = base64.b64decode(content_str, validate=True).decode("utf-8")
+        except (binascii.Error, UnicodeDecodeError) as exc:
+            raise ValueError("Configuration content is not valid JSON.") from exc
+
     try:
-        config = json.loads(content)
+        config = json.loads(decoded_content)
     except json.JSONDecodeError as exc:
         raise ValueError("Configuration content is not valid JSON.") from exc
 
