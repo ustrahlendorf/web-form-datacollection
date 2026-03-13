@@ -17,6 +17,7 @@
                     <a href="#analyze" class="nav-link" data-page="analyze">Analyze</a>
                     <a href="#history" class="nav-link" data-page="history">History</a>
                     <a href="#live" class="nav-link" data-page="live">Live</a>
+                    <a href="#settings" class="nav-link" data-page="settings">Settings</a>
                     <button id="logout-btn" class="nav-link logout-btn">Logout</button>
                 </div>
             </div>
@@ -189,6 +190,94 @@
                         <button id="prev-btn" class="btn btn-secondary">Previous</button>
                         <span id="page-info"></span>
                         <button id="next-btn" class="btn btn-secondary">Next</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Page -->
+            <section id="settings-page" class="page">
+                <div class="container">
+                    <h2>Settings</h2>
+                    <div class="settings-layout">
+                        <div class="settings-section">
+                            <h3>Auto-Retrieval Configuration</h3>
+                            <p class="settings-description">
+                                Configure auto-retrieval defaults and AppConfig deployment settings.
+                            </p>
+                            <form id="settings-form" class="settings-form">
+                                <div class="form-row form-row-3">
+                                    <div class="form-group">
+                                        <label for="settings-schema-version">Schema Version</label>
+                                        <input
+                                            type="number"
+                                            id="settings-schema-version"
+                                            name="schemaVersion"
+                                            min="1"
+                                            step="1"
+                                            value="1"
+                                            readonly
+                                        >
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="settings-max-retries">Max Retries</label>
+                                        <input
+                                            type="number"
+                                            id="settings-max-retries"
+                                            name="maxRetries"
+                                            min="0"
+                                            max="20"
+                                            step="1"
+                                            required
+                                        >
+                                        <span class="error-message" id="settings-max-retries-error"></span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="settings-retry-delay-seconds">Retry Delay (seconds)</label>
+                                        <input
+                                            type="number"
+                                            id="settings-retry-delay-seconds"
+                                            name="retryDelaySeconds"
+                                            min="1"
+                                            max="3600"
+                                            step="1"
+                                            required
+                                        >
+                                        <span class="error-message" id="settings-retry-delay-seconds-error"></span>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="settings-user-id">User ID</label>
+                                    <input
+                                        type="text"
+                                        id="settings-user-id"
+                                        name="userId"
+                                        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                        required
+                                    >
+                                    <span class="error-message" id="settings-user-id-error"></span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Frequent Active Windows</label>
+                                    <div id="settings-active-windows" class="settings-active-windows"></div>
+                                    <span class="error-message" id="settings-active-windows-error"></span>
+                                    <button type="button" id="settings-add-window-btn" class="btn btn-secondary">Add Window</button>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                                    <button type="button" id="settings-reload-btn" class="btn btn-secondary">Reload</button>
+                                </div>
+                            </form>
+                            <div id="settings-message" class="message"></div>
+                        </div>
+                        <div class="settings-section settings-info">
+                            <h3>Information</h3>
+                            <p class="settings-description">
+                                Changes in this area affect auto-retrieval runtime behavior once saved and deployed.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </section>

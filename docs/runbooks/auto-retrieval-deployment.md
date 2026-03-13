@@ -103,6 +103,21 @@ Use API `PUT /config/auto-retrieval` with this baseline payload:
 If AppConfig is temporarily unavailable, Lambda can still read migration fallback values
 from SSM while `AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK=true` (default during migration).
 
+### Settings tab operation (UI path)
+
+You can also manage this payload from the web app:
+
+1. Open the app and navigate to `#settings`
+2. Click **Reload** to fetch current `GET /config/auto-retrieval` values
+3. Edit active windows, retry values, and `userId`
+4. Click **Save Settings** to call `PUT /config/auto-retrieval`
+5. Confirm the success message includes:
+   - config `versionNumber`
+   - `deploymentNumber`
+   - deployment `state` (typically `DEPLOYING` immediately after save)
+
+Important: Save success confirms deployment was **started**. It does not guarantee rollout completion.
+
 ## Step 3: Configure AutoRetrieval User ID (SSM fallback only)
 
 The auto-retrieval stores data under a single Cognito user. The primary source is AppConfig `userId`.
@@ -255,6 +270,7 @@ cdk destroy DataCollectionScheduler-dev
 | Lambda fails with "VIESSMANN_CREDENTIALS_SECRET_ARN not set" | Ensure `taskfile.env` has `VIESSMANN_CREDENTIALS_SECRET_ARN` and Scheduler stack was deployed with it |
 | No data stored | Check CloudWatch Logs; may be skipped as duplicate (same datum_iso) |
 | SNS alert received | Check logs for error details; verify Viessmann API connectivity |
+| Settings save succeeds but new behavior not visible yet | Deployment may still be in progress; wait for rollout window and verify Lambda logs on next scheduler run |
 
 ## Migration Cutover (Disable SSM Runtime Fallback)
 

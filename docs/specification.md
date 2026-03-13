@@ -97,10 +97,61 @@ Query params:
 ### GET /heating/live (optional)
 Returns live heating data from the Viessmann IoT API. Requires Viessmann credentials in Secrets Manager. See `backend/vis-connect.md`.
 
+### GET /config/auto-retrieval
+Returns the current effective AppConfig document for auto-retrieval runtime behavior.
+
+Response 200:
+```json
+{
+  "config": {
+    "schemaVersion": 1,
+    "frequentActiveWindows": [{"start": "08:00", "stop": "18:00"}],
+    "maxRetries": 3,
+    "retryDelaySeconds": 300,
+    "userId": "123e4567-e89b-12d3-a456-426614174000"
+  },
+  "versionLabel": "7"
+}
+```
+
+### PUT /config/auto-retrieval
+Validates and publishes a new hosted AppConfig version, then starts an AppConfig deployment for that version.
+
+Request:
+```json
+{
+  "schemaVersion": 1,
+  "frequentActiveWindows": [{"start": "08:00", "stop": "18:00"}],
+  "maxRetries": 3,
+  "retryDelaySeconds": 300,
+  "userId": "123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+Response 200:
+```json
+{
+  "versionNumber": 11,
+  "deploymentNumber": 3,
+  "state": "DEPLOYING"
+}
+```
+
+Operational semantics:
+- The deployment is triggered as part of the same `PUT` call after successful validation.
+- A successful `PUT` means deployment started, not necessarily completed.
+- The Settings tab surfaces deployment metadata (`versionNumber`, `deploymentNumber`, `state`) to confirm trigger details.
+
 ## 6. Validation Rules
 - Strict date and time parsing
 - Integers >= 0
 - Float range validation
+- Auto-retrieval config:
+  - `schemaVersion` must be `1`
+  - `maxRetries` must be integer `0..20`
+  - `retryDelaySeconds` must be integer `1..3600`
+  - `frequentActiveWindows` must contain `1..5` windows with `HH:MM` and `start < stop`
+  - `userId` must be a non-empty string (frontend enforces UUID format)
 
 ## 7. Data Storage (DynamoDB)
 Table: submissions-<env>

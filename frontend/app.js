@@ -19,6 +19,18 @@ const state = {
 // Initialize AuthManager
 let authManager;
 let authenticatedFetch;
+const SETTINGS_MAX_WINDOWS = 5;
+const SETTINGS_TIME_PATTERN = /^([0-1][0-9]|2[0-3]):([0-5][0-9])$/;
+// Accept canonical UUID shape regardless of specific version/variant bits.
+const SETTINGS_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const SETTINGS_DEFAULT_CONFIG = {
+    schemaVersion: 1,
+    frequentActiveWindows: [{ start: '08:00', stop: '18:00' }],
+    maxRetries: 3,
+    retryDelaySeconds: 300,
+    userId: '',
+};
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', async () => {
@@ -55,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Navigate to page from initial hash (e.g. bookmark #live)
     const hash = (window.location.hash || '').replace(/^#/, '');
-    if (hash && ['form', 'analyze', 'history', 'live'].includes(hash)) {
+    if (hash && ['form', 'analyze', 'history', 'live', 'settings'].includes(hash)) {
         navigateToPage(hash);
     }
 });
@@ -99,6 +111,58 @@ function setupEventListeners() {
     if (liveInjectBtn) {
         liveInjectBtn.addEventListener('click', () => injectLiveDataIntoForm());
     }
+
+    // Settings page form
+    const settingsForm = document.getElementById('settings-form');
+    if (settingsForm) {
+        settingsForm.addEventListener('submit', handleSettingsSubmit);
+    }
+
+    const settingsAddWindowBtn = document.getElementById('settings-add-window-btn');
+    if (settingsAddWindowBtn) {
+        settingsAddWindowBtn.addEventListener('click', addSettingsWindowRow);
+    }
+
+    const settingsReloadBtn = document.getElementById('settings-reload-btn');
+    if (settingsReloadBtn) {
+        settingsReloadBtn.addEventListener('click', () => loadSettings());
+    }
+
+    const settingsWindows = document.getElementById('settings-active-windows');
+    if (settingsWindows) {
+        settingsWindows.addEventListener('click', (event) => {
+            const removeBtn = event.target.closest('.settings-remove-window-btn');
+            if (!removeBtn) {
+                return;
+            }
+            const row = removeBtn.closest('.settings-window-row');
+            if (!row) {
+                return;
+            }
+            const rows = settingsWindows.querySelectorAll('.settings-window-row');
+            if (rows.length <= 1) {
+                const windowsError = document.getElementById('settings-active-windows-error');
+                if (windowsError) {
+                    windowsError.textContent = 'At least one active window is required.';
+                }
+                return;
+            }
+            row.remove();
+            const windowsError = document.getElementById('settings-active-windows-error');
+            if (windowsError) {
+                windowsError.textContent = '';
+            }
+            updateSettingsWindowControls();
+        });
+        settingsWindows.addEventListener('input', () => {
+            const windowsError = document.getElementById('settings-active-windows-error');
+            if (windowsError) {
+                windowsError.textContent = '';
+            }
+        });
+    }
+
+    initializeSettingsFormDefaults();
 }
 
 // Authentication Functions
@@ -137,6 +201,8 @@ function navigateToPage(page) {
         initializeFormPage();
     } else if (page === 'live') {
         loadLive();
+    } else if (page === 'settings') {
+        loadSettings();
     }
 }
 
@@ -391,6 +457,340 @@ function showFormMessage(message, type) {
     messageEl.textContent = message;
     messageEl.classList.remove('success', 'error');
     messageEl.classList.add(type);
+}
+
+// Settings Page Functions
+function initializeSettingsFormDefaults() {
+    const userId = (authManager && typeof authManager.getUserId === 'function' && authManager.getUserId())
+        ? authManager.getUserId()
+        : '';
+    const config = {
+        ...SETTINGS_DEFAULT_CONFIG,
+        userId,
+    };
+    applyConfigToSettingsForm(config);
+    clearSettingsErrors();
+    clearSettingsMessage();
+}
+
+function normalizeSettingsConfig(rawConfig, fallbackUserId = '') {
+    const source = (rawConfig && typeof rawConfig === 'object') ? rawConfig : {};
+    const schemaVersion = Number.isInteger(source.schemaVersion) ? source.schemaVersion : 1;
+    const maxRetries = Number.isInteger(source.maxRetries) ? source.maxRetries : SETTINGS_DEFAULT_CONFIG.maxRetries;
+    const retryDelaySeconds = Number.isInteger(source.retryDelaySeconds)
+        ? source.retryDelaySeconds
+        : SETTINGS_DEFAULT_CONFIG.retryDelaySeconds;
+    const userId = (typeof source.userId === 'string' && source.userId.trim() !== '')
+        ? source.userId.trim()
+        : (fallbackUserId || '');
+    const frequentActiveWindows = Array.isArray(source.frequentActiveWindows) && source.frequentActiveWindows.length > 0
+        ? source.frequentActiveWindows
+            .slice(0, SETTINGS_MAX_WINDOWS)
+            .map((window) => ({
+                start: (window && typeof window.start === 'string') ? window.start.trim() : '',
+                stop: (window && typeof window.stop === 'string') ? window.stop.trim() : '',
+            }))
+        : SETTINGS_DEFAULT_CONFIG.frequentActiveWindows.map((window) => ({ ...window }));
+
+    return {
+        schemaVersion,
+        frequentActiveWindows,
+        maxRetries,
+        retryDelaySeconds,
+        userId,
+    };
+}
+
+function parseTimeMinutes(value) {
+    const match = SETTINGS_TIME_PATTERN.exec(String(value || '').trim());
+    if (!match) {
+        return null;
+    }
+    const hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    return (hours * 60) + minutes;
+}
+
+function validateSettingsPayload(payload) {
+    const errors = [];
+    if (!payload || typeof payload !== 'object') {
+        return [{ field: 'settings-message', message: 'Settings payload is invalid.' }];
+    }
+
+    if (payload.schemaVersion !== 1) {
+        errors.push({ field: 'settings-schema-version-error', message: 'Schema version must be 1.' });
+    }
+
+    if (!Number.isInteger(payload.maxRetries) || payload.maxRetries < 0 || payload.maxRetries > 20) {
+        errors.push({ field: 'settings-max-retries-error', message: 'Max retries must be an integer between 0 and 20.' });
+    }
+
+    if (!Number.isInteger(payload.retryDelaySeconds) || payload.retryDelaySeconds < 1 || payload.retryDelaySeconds > 3600) {
+        errors.push({ field: 'settings-retry-delay-seconds-error', message: 'Retry delay must be an integer between 1 and 3600.' });
+    }
+
+    if (typeof payload.userId !== 'string' || payload.userId.trim() === '') {
+        errors.push({ field: 'settings-user-id-error', message: 'User ID is required.' });
+    } else if (!SETTINGS_UUID_PATTERN.test(payload.userId.trim())) {
+        errors.push({ field: 'settings-user-id-error', message: 'User ID must be a valid UUID.' });
+    }
+
+    if (!Array.isArray(payload.frequentActiveWindows)) {
+        errors.push({ field: 'settings-active-windows-error', message: 'Frequent active windows must be an array.' });
+        return errors;
+    }
+    if (payload.frequentActiveWindows.length < 1) {
+        errors.push({ field: 'settings-active-windows-error', message: 'At least one active window is required.' });
+    }
+    if (payload.frequentActiveWindows.length > SETTINGS_MAX_WINDOWS) {
+        errors.push({ field: 'settings-active-windows-error', message: 'No more than 5 active windows are allowed.' });
+    }
+
+    payload.frequentActiveWindows.forEach((window, index) => {
+        const start = (window && typeof window.start === 'string') ? window.start.trim() : '';
+        const stop = (window && typeof window.stop === 'string') ? window.stop.trim() : '';
+        const rowStartSelector = `#settings-active-windows .settings-window-row:nth-child(${index + 1}) .settings-window-start`;
+        const rowStopSelector = `#settings-active-windows .settings-window-row:nth-child(${index + 1}) .settings-window-stop`;
+        if (!SETTINGS_TIME_PATTERN.test(start) || !SETTINGS_TIME_PATTERN.test(stop)) {
+            errors.push({
+                field: 'settings-active-windows-error',
+                message: `Window ${index + 1}: start/stop must use HH:MM format.`,
+                selectors: [rowStartSelector, rowStopSelector],
+            });
+            return;
+        }
+        const startMinutes = parseTimeMinutes(start);
+        const stopMinutes = parseTimeMinutes(stop);
+        if (startMinutes === null || stopMinutes === null || startMinutes >= stopMinutes) {
+            errors.push({
+                field: 'settings-active-windows-error',
+                message: `Window ${index + 1}: start must be earlier than stop.`,
+                selectors: [rowStartSelector, rowStopSelector],
+            });
+        }
+    });
+
+    return errors;
+}
+
+function clearSettingsErrors() {
+    document.querySelectorAll('#settings-page .error-message').forEach((el) => {
+        el.textContent = '';
+    });
+    document.querySelectorAll('#settings-page input').forEach((el) => {
+        el.classList.remove('error');
+    });
+}
+
+function displaySettingsErrors(errors) {
+    clearSettingsErrors();
+    errors.forEach((error) => {
+        const errorEl = document.getElementById(error.field);
+        if (errorEl) {
+            errorEl.textContent = error.message;
+        }
+        if (Array.isArray(error.selectors)) {
+            error.selectors.forEach((selector) => {
+                document.querySelectorAll(selector).forEach((el) => {
+                    el.classList.add('error');
+                });
+            });
+        }
+    });
+}
+
+function clearSettingsMessage() {
+    const messageEl = document.getElementById('settings-message');
+    if (!messageEl) {
+        return;
+    }
+    messageEl.textContent = '';
+    messageEl.classList.remove('success', 'error');
+}
+
+function showSettingsMessage(message, type) {
+    const messageEl = document.getElementById('settings-message');
+    if (!messageEl) {
+        return;
+    }
+    messageEl.textContent = message;
+    messageEl.classList.remove('success', 'error');
+    messageEl.classList.add(type);
+}
+
+function updateSettingsWindowControls() {
+    const windowsContainer = document.getElementById('settings-active-windows');
+    const addBtn = document.getElementById('settings-add-window-btn');
+    if (!windowsContainer) {
+        return;
+    }
+    const rows = windowsContainer.querySelectorAll('.settings-window-row');
+    const disableAdd = rows.length >= SETTINGS_MAX_WINDOWS;
+    if (addBtn) {
+        addBtn.disabled = disableAdd;
+    }
+    rows.forEach((row) => {
+        const removeBtn = row.querySelector('.settings-remove-window-btn');
+        if (removeBtn) {
+            removeBtn.disabled = rows.length <= 1;
+        }
+    });
+}
+
+function createSettingsWindowRow(windowData = { start: '', stop: '' }) {
+    const row = document.createElement('div');
+    row.className = 'settings-window-row';
+    row.innerHTML = `
+        <input
+            type="text"
+            class="settings-window-start"
+            placeholder="HH:MM"
+            value="${String(windowData.start || '').trim()}"
+            required
+        >
+        <span class="settings-window-separator">to</span>
+        <input
+            type="text"
+            class="settings-window-stop"
+            placeholder="HH:MM"
+            value="${String(windowData.stop || '').trim()}"
+            required
+        >
+        <button type="button" class="btn btn-secondary settings-remove-window-btn">Remove</button>
+    `;
+    return row;
+}
+
+function renderSettingsWindows(windows) {
+    const windowsContainer = document.getElementById('settings-active-windows');
+    if (!windowsContainer) {
+        return;
+    }
+    windowsContainer.innerHTML = '';
+    windows.forEach((windowData) => {
+        windowsContainer.appendChild(createSettingsWindowRow(windowData));
+    });
+    updateSettingsWindowControls();
+}
+
+function addSettingsWindowRow() {
+    const windowsContainer = document.getElementById('settings-active-windows');
+    if (!windowsContainer) {
+        return;
+    }
+    const rows = windowsContainer.querySelectorAll('.settings-window-row');
+    if (rows.length >= SETTINGS_MAX_WINDOWS) {
+        const windowsError = document.getElementById('settings-active-windows-error');
+        if (windowsError) {
+            windowsError.textContent = 'No more than 5 active windows are allowed.';
+        }
+        return;
+    }
+    windowsContainer.appendChild(createSettingsWindowRow({ start: '', stop: '' }));
+    const windowsError = document.getElementById('settings-active-windows-error');
+    if (windowsError) {
+        windowsError.textContent = '';
+    }
+    updateSettingsWindowControls();
+}
+
+function applyConfigToSettingsForm(config) {
+    const normalized = normalizeSettingsConfig(
+        config,
+        (authManager && typeof authManager.getUserId === 'function') ? authManager.getUserId() : ''
+    );
+
+    const schemaVersionEl = document.getElementById('settings-schema-version');
+    const maxRetriesEl = document.getElementById('settings-max-retries');
+    const retryDelayEl = document.getElementById('settings-retry-delay-seconds');
+    const userIdEl = document.getElementById('settings-user-id');
+
+    if (schemaVersionEl) schemaVersionEl.value = String(normalized.schemaVersion);
+    if (maxRetriesEl) maxRetriesEl.value = String(normalized.maxRetries);
+    if (retryDelayEl) retryDelayEl.value = String(normalized.retryDelaySeconds);
+    if (userIdEl) userIdEl.value = normalized.userId;
+    renderSettingsWindows(normalized.frequentActiveWindows);
+}
+
+function buildSettingsPayloadFromForm() {
+    const schemaVersion = parseInt(document.getElementById('settings-schema-version').value, 10);
+    const maxRetries = parseInt(document.getElementById('settings-max-retries').value, 10);
+    const retryDelaySeconds = parseInt(document.getElementById('settings-retry-delay-seconds').value, 10);
+    const userId = (document.getElementById('settings-user-id').value || '').trim();
+    const windows = Array.from(document.querySelectorAll('#settings-active-windows .settings-window-row')).map((row) => ({
+        start: ((row.querySelector('.settings-window-start') || {}).value || '').trim(),
+        stop: ((row.querySelector('.settings-window-stop') || {}).value || '').trim(),
+    }));
+
+    return {
+        schemaVersion,
+        frequentActiveWindows: windows,
+        maxRetries,
+        retryDelaySeconds,
+        userId,
+    };
+}
+
+async function loadSettings() {
+    clearSettingsErrors();
+    clearSettingsMessage();
+    showSettingsMessage('Loading settings...', 'success');
+
+    try {
+        const response = await authenticatedFetch(`${CONFIG.API_ENDPOINT}/config/auto-retrieval`);
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to load settings');
+        }
+
+        applyConfigToSettingsForm(result.config || null);
+        const labelText = (result.versionLabel && String(result.versionLabel).trim() !== '')
+            ? ` (version ${result.versionLabel})`
+            : '';
+        showSettingsMessage(`Settings loaded successfully${labelText}.`, 'success');
+    } catch (error) {
+        console.error('Error loading settings:', error);
+        showSettingsMessage(error.message || 'Failed to load settings.', 'error');
+    }
+}
+
+async function handleSettingsSubmit(event) {
+    event.preventDefault();
+    clearSettingsErrors();
+    clearSettingsMessage();
+
+    const payload = buildSettingsPayloadFromForm();
+    const validationErrors = validateSettingsPayload(payload);
+    if (validationErrors.length > 0) {
+        displaySettingsErrors(validationErrors);
+        showSettingsMessage('Please correct validation errors before saving.', 'error');
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch(`${CONFIG.API_ENDPOINT}/config/auto-retrieval`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to save settings');
+        }
+
+        const details = [
+            `Config version ${result.versionNumber}`,
+            `deployment ${result.deploymentNumber}`,
+            `state ${result.state || 'UNKNOWN'}`,
+        ].join(', ');
+        showSettingsMessage(`Settings saved. Deployment started: ${details}.`, 'success');
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        showSettingsMessage(error.message || 'Failed to save settings.', 'error');
+    }
 }
 
 // Recent Submissions Functions
@@ -1105,6 +1505,8 @@ if (typeof module !== 'undefined' && module.exports) {
         getSubmissionUtcDay,
         computeInclusiveDays,
         computeYtdTotals,
+        normalizeSettingsConfig,
+        validateSettingsPayload,
         __setAuthenticatedFetchForTests: (fn) => {
             authenticatedFetch = fn;
         },

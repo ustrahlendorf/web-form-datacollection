@@ -101,8 +101,20 @@ def test_put_auto_retrieval_config_creates_version_and_starts_deployment(
     assert response_body["versionNumber"] == 11
     assert response_body["deploymentNumber"] == 3
     assert response_body["state"] == "DEPLOYING"
-    appconfig_client.create_hosted_configuration_version.assert_called_once()
-    appconfig_client.start_deployment.assert_called_once()
+    appconfig_client.create_hosted_configuration_version.assert_called_once_with(
+        ApplicationId="app-id",
+        ConfigurationProfileId="profile-id",
+        ContentType="application/json",
+        Content=json.dumps(new_config, separators=(",", ":")).encode("utf-8"),
+    )
+    appconfig_client.start_deployment.assert_called_once_with(
+        ApplicationId="app-id",
+        EnvironmentId="env-id",
+        DeploymentStrategyId="strategy-id",
+        ConfigurationProfileId="profile-id",
+        ConfigurationVersion="11",
+        Description="Config update via API by user user-123",
+    )
 
 
 def test_put_auto_retrieval_config_rejects_invalid_payload() -> None:
