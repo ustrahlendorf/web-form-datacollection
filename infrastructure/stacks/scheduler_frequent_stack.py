@@ -32,6 +32,9 @@ class SchedulerFrequentStack(Stack):
         construct_id: str,
         environment_name: str,
         viessmann_credentials_secret_arn: str,
+        appconfig_application_id: str,
+        appconfig_environment_id: str,
+        appconfig_profile_id: str,
         **kwargs,
     ) -> None:
         """
@@ -43,6 +46,9 @@ class SchedulerFrequentStack(Stack):
             environment_name: The environment name (dev, prod, etc.)
             viessmann_credentials_secret_arn: ARN of Secrets Manager secret with
                 VIESSMANN_CLIENT_ID, VIESSMANN_EMAIL, VIESSMANN_PASSWORD
+            appconfig_application_id: AppConfig application identifier
+            appconfig_environment_id: AppConfig environment identifier
+            appconfig_profile_id: AppConfig configuration profile identifier
             **kwargs: Additional arguments to pass to Stack
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -111,6 +117,26 @@ class SchedulerFrequentStack(Stack):
             )
         )
 
+        appconfig_profile_arn = (
+            f"arn:aws:appconfig:{self.region}:{self.account}:application/"
+            f"{appconfig_application_id}/environment/{appconfig_environment_id}"
+            f"/configurationprofile/{appconfig_profile_id}"
+        )
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["appconfig:StartConfigurationSession"],
+                resources=[appconfig_profile_arn],
+            )
+        )
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["appconfig:GetLatestConfiguration"],
+                resources=["*"],
+            )
+        )
+
         lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -168,8 +194,12 @@ class SchedulerFrequentStack(Stack):
                 "VIESSMANN_CREDENTIALS_SECRET_ARN": viessmann_credentials_secret_arn,
                 "AUTO_RETRIEVAL_FAILURE_TOPIC_ARN": frequent_failure_topic.topic_arn,
                 "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
+                "AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK": "true",
                 "AUTO_RETRIEVAL_SKIP_DUPLICATE": "false",
                 "ACTIVE_WINDOWS_PARAM": "FrequentActiveWindows",
+                "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": appconfig_application_id,
+                "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": appconfig_environment_id,
+                "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": appconfig_profile_id,
                 "PYTHONPATH": pythonpath,
                 "VIESSMANN_TOKEN_CACHE_PATH": "/tmp/viessmann/tokens.json",
             },

@@ -18,6 +18,63 @@ The auto-retrieval feature:
 - `VIESSMANN_CREDENTIALS_SECRET_ARN` set in `taskfile.env` (required for Viessmann API)
 - Cognito user registered (you need the user's `sub` claim for configuration)
 
+## AppConfig Change Test + Deploy Checklist
+
+Use this sequence for releases that include AppConfig infrastructure and the new config API functions.
+
+### 1) Run local tests before deploy
+
+From repository root:
+
+```bash
+pytest -q \
+  tests/test_appconfig_stack.py \
+  tests/test_auto_retrieval_config_handler.py \
+  tests/test_auto_retrieval_handler.py \
+  tests/test_init_stack.py
+```
+
+### 2) Deploy stacks in dependency order
+
+Deploy in this order so AppConfig resources and API write-path exist before scheduler runtime reads:
+
+```bash
+task deploy-init
+task deploy-api-with-deps
+task deploy-scheduler
+task deploy-scheduler-frequent
+```
+
+### 3) Publish/verify AppConfig runtime baseline
+
+After API deploy, publish baseline config via `PUT /config/auto-retrieval`:
+
+```json
+{
+  "schemaVersion": 1,
+  "frequentActiveWindows": [{"start": "00:00", "stop": "24:00"}],
+  "maxRetries": 5,
+  "retryDelaySeconds": 300,
+  "userId": "YOUR_COGNITO_USER_SUB"
+}
+```
+
+Then confirm with `GET /config/auto-retrieval` that values are active.
+
+### 4) Validate new functions and runtime behavior
+
+- Invoke/configure the API path (`GET` and `PUT /config/auto-retrieval`) and confirm:
+  - validation rejects invalid windows/ranges
+  - deployment is started for valid payloads
+- Invoke both scheduler Lambdas (daily + frequent) once and verify CloudWatch logs show AppConfig read success.
+- Confirm DynamoDB writes occur under the configured `userId`.
+
+### 5) Migration-safety checks
+
+- Keep `AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK=true` during first rollout.
+- If AppConfig read fails, verify Lambda falls back safely (and logs fallback usage).
+- After at least one successful full schedule cycle, plan cutover to `AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK=false`.
+
 ## Step 1: Deploy Init Stack (if not already done)
 
 The Init stack creates SSM parameters including the new AutoRetrieval parameters.
@@ -26,9 +83,30 @@ The Init stack creates SSM parameters including the new AutoRetrieval parameters
 task deploy-init
 ```
 
-## Step 2: Configure AutoRetrieval User ID
+## Step 2: Publish AppConfig Baseline (Required)
 
-The auto-retrieval stores data under a single Cognito user. You must set the user's `sub` (subject) identifier.
+Runtime auto-retrieval values are now sourced from AppConfig. Before scheduler rollout,
+publish a baseline document equivalent to prior SSM runtime values.
+
+Use API `PUT /config/auto-retrieval` with this baseline payload:
+
+```json
+{
+  "schemaVersion": 1,
+  "frequentActiveWindows": [{"start": "00:00", "stop": "24:00"}],
+  "maxRetries": 5,
+  "retryDelaySeconds": 300,
+  "userId": "YOUR_COGNITO_USER_SUB"
+}
+```
+
+If AppConfig is temporarily unavailable, Lambda can still read migration fallback values
+from SSM while `AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK=true` (default during migration).
+
+## Step 3: Configure AutoRetrieval User ID (SSM fallback only)
+
+The auto-retrieval stores data under a single Cognito user. The primary source is AppConfig `userId`.
+Set the SSM value only as fallback during migration.
 
 **Option A: AWS Console**
 
@@ -51,17 +129,18 @@ To find your Cognito user `sub`:
 - AWS Console → Cognito → User Pools → your pool → Users → select user → copy "User sub"
 - Or decode the `id_token` JWT and read the `sub` claim
 
-## Step 3: (Optional) Adjust Schedule and Retry Settings
+## Step 4: (Optional) Adjust Schedule and Runtime Settings
 
-Default values are set by InitStack. To change them, update the SSM parameters:
+Deploy-time schedule values remain in SSM. Runtime values are managed in AppConfig.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `/HeatingDataCollection/AutoRetrieval/ScheduleCron` | `0 6 * * ? *` | EventBridge cron (06:00 UTC daily) |
-| `/HeatingDataCollection/AutoRetrieval/FrequentScheduleCron` | `0/15 * * * ? *` | EventBridge cron for frequent scheduler (every 15 min) |
-| `/HeatingDataCollection/AutoRetrieval/FrequentActiveWindows` | `[{"start":"00:00","stop":"24:00"}]` | Active time windows for frequent scheduler (JSON array). Lambda exits early if invoked outside any window. Times in **UTC** (HH:MM). Max 5 windows. **No redeploy needed** when changing. |
-| `/HeatingDataCollection/AutoRetrieval/MaxRetries` | `5` | Max retry attempts on API failure |
-| `/HeatingDataCollection/AutoRetrieval/RetryDelaySeconds` | `300` | Seconds between retries |
+| `/HeatingDataCollection/AutoRetrieval/ScheduleCron` | `0 6 * * ? *` | EventBridge cron (06:00 UTC daily), deploy-time |
+| `/HeatingDataCollection/AutoRetrieval/FrequentScheduleCron` | `0/15 * * * ? *` | EventBridge cron for frequent scheduler (every 15 min), deploy-time |
+| AppConfig `frequentActiveWindows` | `[{"start":"00:00","stop":"24:00"}]` | Runtime active windows (UTC HH:MM, max 5 windows) |
+| AppConfig `maxRetries` | `5` | Runtime max retry attempts on API failure |
+| AppConfig `retryDelaySeconds` | `300` | Runtime seconds between retries |
+| AppConfig `userId` | `SET_ME` | Runtime Cognito user `sub` |
 
 Example: change schedule to 07:30 UTC:
 
@@ -74,7 +153,7 @@ aws ssm put-parameter \
   --region eu-central-1
 ```
 
-**Note:** Changing `ScheduleCron` or `FrequentScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values). Changing `FrequentActiveWindows` does **not** require redeploy — the Lambda reads it at runtime.
+**Note:** Changing `ScheduleCron` or `FrequentScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values). AppConfig runtime changes do **not** require redeploy.
 
 **Example: Restrict frequent scheduler to 08:00–12:00 and 14:00–18:00 UTC**
 
@@ -87,7 +166,7 @@ aws ssm put-parameter \
   --region eu-central-1
 ```
 
-## Step 4: Deploy Scheduler Stack
+## Step 5: Deploy Scheduler Stack
 
 ```bash
 task deploy-scheduler
@@ -98,7 +177,7 @@ This creates:
 - EventBridge Rule (cron schedule)
 - SNS topic for failure alerts
 
-## Step 5: Subscribe to SNS for Failure Alerts
+## Step 6: Subscribe to SNS for Failure Alerts
 
 1. Go to AWS SNS → Topics
 2. Find `heating-auto-retrieval-failure-dev` (daily scheduler) or `heating-auto-retrieval-frequent-failure-dev` (frequent scheduler)
@@ -135,7 +214,7 @@ Run these commands in order. Do **not** skip the InitStack deploy if `FrequentSc
 | 4 | `task invoke-auto-retrieval-frequent` | Manual invoke for end-to-end verification |
 | 5 | `aws dynamodb scan --table-name submissions-auto-retrieval-frequent-dev --region eu-central-1` | (Optional) Verify data written after invoke |
 
-## Step 6: Verify
+## Step 7: Verify
 
 **Manual trigger (optional):**
 
@@ -172,7 +251,17 @@ cdk destroy DataCollectionScheduler-dev
 
 | Symptom | Check |
 |---------|-------|
-| Lambda fails with "UserId not configured" | Set `/HeatingDataCollection/AutoRetrieval/UserId` in SSM |
+| Lambda fails with "AutoRetrieval userId not configured" | Set AppConfig `userId` first. If migration fallback is enabled, also verify `/HeatingDataCollection/AutoRetrieval/UserId` |
 | Lambda fails with "VIESSMANN_CREDENTIALS_SECRET_ARN not set" | Ensure `taskfile.env` has `VIESSMANN_CREDENTIALS_SECRET_ARN` and Scheduler stack was deployed with it |
 | No data stored | Check CloudWatch Logs; may be skipped as duplicate (same datum_iso) |
 | SNS alert received | Check logs for error details; verify Viessmann API connectivity |
+
+## Migration Cutover (Disable SSM Runtime Fallback)
+
+After AppConfig-backed runtime behavior is verified in dev:
+
+1. Keep AppConfig document up to date via `PUT /config/auto-retrieval`
+2. Redeploy scheduler stacks with `AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK=false`
+3. Verify logs show AppConfig reads and no fallback usage
+4. Validate daily + frequent scheduler behavior for at least one full schedule cycle
+5. In a later cleanup release, remove mutable runtime SSM parameters from `InitStack` ownership

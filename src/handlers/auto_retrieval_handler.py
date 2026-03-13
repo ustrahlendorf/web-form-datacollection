@@ -21,6 +21,13 @@ _secrets_client = None
 _ssm_client = None
 _sns_client = None
 _dynamodb = None
+_appconfig_data_client = None
+
+
+def _ssm_fallback_enabled() -> bool:
+    """Return whether migration fallback to runtime SSM values is enabled."""
+    raw = os.environ.get("AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK", "true").strip().lower()
+    return raw in ("1", "true", "yes", "on")
 
 
 def _get_secrets_client():
@@ -60,6 +67,16 @@ def _get_dynamodb_table():
     if not table_name:
         raise ValueError("SUBMISSIONS_TABLE environment variable not set")
     return _dynamodb.Table(table_name)
+
+
+def _get_appconfig_data_client():
+    """Get boto3 AppConfigData client (lazy init for tests)."""
+    global _appconfig_data_client
+    if _appconfig_data_client is None:
+        import boto3
+
+        _appconfig_data_client = boto3.client("appconfigdata")
+    return _appconfig_data_client
 
 
 def _load_viessmann_credentials() -> Dict[str, str]:
@@ -124,6 +141,84 @@ def _parse_active_windows(json_str: str) -> List[Tuple[int, int]] | None:
     return result if result else None
 
 
+def _get_appconfig_identifiers() -> Tuple[str, str, str]:
+    """Resolve AppConfig identifiers from environment variables."""
+    app_id = (
+        os.environ.get("AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID")
+        or os.environ.get("APPCONFIG_APPLICATION_ID")
+        or ""
+    ).strip()
+    env_id = (
+        os.environ.get("AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID")
+        or os.environ.get("APPCONFIG_ENVIRONMENT_ID")
+        or ""
+    ).strip()
+    profile_id = (
+        os.environ.get("AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID")
+        or os.environ.get("APPCONFIG_CONFIGURATION_PROFILE_ID")
+        or ""
+    ).strip()
+    return app_id, env_id, profile_id
+
+
+def _load_appconfig() -> Dict[str, Any] | None:
+    """
+    Load and validate runtime config from AppConfig hosted profile.
+
+    Returns normalized config dictionary on success, otherwise None.
+    """
+    app_id, env_id, profile_id = _get_appconfig_identifiers()
+    if not app_id or not env_id or not profile_id:
+        return None
+
+    try:
+        client = _get_appconfig_data_client()
+        session = client.start_configuration_session(
+            ApplicationIdentifier=app_id,
+            EnvironmentIdentifier=env_id,
+            ConfigurationProfileIdentifier=profile_id,
+        )
+        token = session.get("InitialConfigurationToken")
+        if not token:
+            print("AppConfig session returned no token; using fallback")
+            return None
+        response = client.get_latest_configuration(ConfigurationToken=token)
+        raw = response.get("Configuration").read()
+    except Exception as e:
+        print(f"AppConfig read failed: {e}; using fallback")
+        return None
+
+    if not raw:
+        print("AppConfig returned empty config; using fallback")
+        return None
+
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except Exception as e:
+        print(f"AppConfig payload parse failed: {e}; using fallback")
+        return None
+
+    if not isinstance(payload, dict):
+        print("AppConfig payload is not an object; using fallback")
+        return None
+
+    result: Dict[str, Any] = {}
+    if "maxRetries" in payload:
+        result["max_retries"] = payload.get("maxRetries")
+    if "retryDelaySeconds" in payload:
+        result["retry_delay_seconds"] = payload.get("retryDelaySeconds")
+    if "userId" in payload:
+        result["user_id"] = payload.get("userId")
+    if "frequentActiveWindows" in payload:
+        windows_str = json.dumps(payload.get("frequentActiveWindows"))
+        windows = _parse_active_windows(windows_str)
+        if windows is not None:
+            result["frequent_active_windows"] = windows
+        else:
+            print("AppConfig frequentActiveWindows invalid; ignoring this field")
+    return result if result else None
+
+
 def _is_within_active_window(windows: List[Tuple[int, int]], now: datetime) -> bool:
     """Check if current UTC time falls within any of the active windows."""
     minutes = now.hour * 60 + now.minute
@@ -135,12 +230,27 @@ def _is_within_active_window(windows: List[Tuple[int, int]], now: datetime) -> b
 
 def _check_active_window_and_maybe_skip() -> bool:
     """
-    If ACTIVE_WINDOWS_PARAM is set, read SSM, parse windows, and return True if we should skip
-    (current time outside any window). Returns False if we should proceed.
+    If ACTIVE_WINDOWS_PARAM is set, use AppConfig first and optionally SSM fallback.
+    Returns True when current time is outside all active windows and retrieval should be skipped.
+    Returns False if we should proceed.
     """
     param_name = os.environ.get("ACTIVE_WINDOWS_PARAM")
     if not param_name:
         return False
+    appconfig_data = _load_appconfig()
+    if appconfig_data:
+        windows = appconfig_data.get("frequent_active_windows")
+        if windows:
+            now = datetime.now(timezone.utc)
+            if _is_within_active_window(windows, now):
+                return False
+            print("Outside active window from AppConfig, skipping retrieval")
+            return True
+
+    if not _ssm_fallback_enabled():
+        print("No AppConfig active windows and SSM fallback disabled; proceeding with retrieval")
+        return False
+
     ssm_prefix = os.environ.get("AUTO_RETRIEVAL_SSM_PREFIX", "/HeatingDataCollection/AutoRetrieval")
     path = f"{ssm_prefix}/{param_name}"
     try:
@@ -162,6 +272,9 @@ def _check_active_window_and_maybe_skip() -> bool:
 
 def _get_ssm_param(name: str, default: str = "") -> str:
     """Get SSM parameter value."""
+    if not _ssm_fallback_enabled():
+        return default
+
     ssm_prefix = os.environ.get("AUTO_RETRIEVAL_SSM_PREFIX", "/HeatingDataCollection/AutoRetrieval")
     path = f"{ssm_prefix}/{name}"
     try:
@@ -174,19 +287,30 @@ def _get_ssm_param(name: str, default: str = "") -> str:
 
 
 def _load_config() -> Dict[str, Any]:
-    """Load auto-retrieval config from SSM."""
-    max_retries_str = _get_ssm_param("MaxRetries", "5")
-    retry_delay_str = _get_ssm_param("RetryDelaySeconds", "300")
-    user_id = _get_ssm_param("UserId", "SET_ME")
+    """Load auto-retrieval config with fallback order: AppConfig -> optional SSM -> defaults."""
+    appconfig_data = _load_appconfig() or {}
 
-    try:
-        max_retries = int(max_retries_str)
-    except ValueError:
+    def _safe_int(value: Any) -> int | None:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    max_retries = _safe_int(appconfig_data.get("max_retries"))
+    if max_retries is None:
+        max_retries = _safe_int(_get_ssm_param("MaxRetries", "5"))
+    if max_retries is None:
         max_retries = 5
-    try:
-        retry_delay_seconds = int(retry_delay_str)
-    except ValueError:
+
+    retry_delay_seconds = _safe_int(appconfig_data.get("retry_delay_seconds"))
+    if retry_delay_seconds is None:
+        retry_delay_seconds = _safe_int(_get_ssm_param("RetryDelaySeconds", "300"))
+    if retry_delay_seconds is None:
         retry_delay_seconds = 300
+
+    user_id = appconfig_data.get("user_id")
+    if not isinstance(user_id, str) or not user_id.strip():
+        user_id = _get_ssm_param("UserId", "SET_ME")
 
     return {
         "max_retries": max(1, max_retries),
@@ -237,7 +361,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     retry_delay_seconds = config["retry_delay_seconds"]
 
     if not user_id or user_id == "SET_ME":
-        msg = "AutoRetrieval/UserId not configured. Set /HeatingDataCollection/AutoRetrieval/UserId in SSM."
+        msg = (
+            "AutoRetrieval userId not configured. Set userId in AppConfig "
+            "or enable SSM fallback and set /HeatingDataCollection/AutoRetrieval/UserId."
+        )
         print(msg)
         _publish_failure_alert(msg, 0, max_retries)
         return {"statusCode": 500, "body": msg}

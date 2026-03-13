@@ -75,6 +75,25 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
             "Name": "/HeatingDataCollection/AutoRetrieval/MaxRetries",
             "Type": "String",
             "Value": "5",
+            "Description": "Migration-only SSM fallback for max retry attempts (runtime source is AppConfig).",
+        },
+    )
+
+    template.has_resource_properties(
+        "AWS::SSM::Parameter",
+        {
+            "Name": "/HeatingDataCollection/AutoRetrieval/FrequentScheduleCron",
+            "Type": "String",
+            "Value": "0/15 * * * ? *",
+        },
+    )
+
+    template.has_resource_properties(
+        "AWS::SSM::Parameter",
+        {
+            "Name": "/HeatingDataCollection/AutoRetrieval/FrequentActiveWindows",
+            "Type": "String",
+            "Value": '[{"start":"00:00","stop":"24:00"}]',
         },
     )
 
@@ -84,6 +103,7 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
             "Name": "/HeatingDataCollection/AutoRetrieval/RetryDelaySeconds",
             "Type": "String",
             "Value": "300",
+            "Description": "Migration-only SSM fallback for retry delay seconds (runtime source is AppConfig).",
         },
     )
 
@@ -93,6 +113,10 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
             "Name": "/HeatingDataCollection/AutoRetrieval/UserId",
             "Type": "String",
             "Value": "SET_ME",
+            "Description": (
+                "Migration-only SSM fallback for installation owner user_id (runtime source is AppConfig). "
+                "Update only during cutover troubleshooting."
+            ),
         },
     )
 

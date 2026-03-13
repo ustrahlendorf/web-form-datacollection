@@ -28,6 +28,10 @@ class APIStack(Stack):
         environment_name: str,
         cognito_user_pool_id: str,
         cognito_user_pool_client_id: str,
+        appconfig_application_id: str,
+        appconfig_environment_id: str,
+        appconfig_profile_id: str,
+        appconfig_deployment_strategy_id: str,
         cloudfront_domain: str | None = None,
         viessmann_credentials_secret_arn: str | None = None,
         **kwargs
@@ -41,6 +45,10 @@ class APIStack(Stack):
             environment_name: The environment name (dev, prod, etc.)
             cognito_user_pool_id: The Cognito User Pool ID for JWT authorization
             cognito_user_pool_client_id: The Cognito User Pool App Client ID (audience) for JWT authorization
+            appconfig_application_id: AppConfig application id for auto-retrieval config
+            appconfig_environment_id: AppConfig environment id for auto-retrieval config
+            appconfig_profile_id: AppConfig profile id for auto-retrieval config
+            appconfig_deployment_strategy_id: AppConfig deployment strategy id
             cloudfront_domain: CloudFront distribution domain name for CORS (e.g. dxxxx.cloudfront.net)
             viessmann_credentials_secret_arn: ARN of Secrets Manager secret with VIESSMANN_CLIENT_ID,
                 VIESSMANN_EMAIL, VIESSMANN_PASSWORD. If set, enables GET /heating/live endpoint.
@@ -70,6 +78,7 @@ class APIStack(Stack):
                 allow_methods=[
                     apigw.CorsHttpMethod.GET,
                     apigw.CorsHttpMethod.POST,
+                    apigw.CorsHttpMethod.PUT,
                     apigw.CorsHttpMethod.OPTIONS,
                 ],
                 allow_origins=cors_origins,
@@ -132,6 +141,20 @@ class APIStack(Stack):
                 )
             )
 
+        # AppConfig permissions for auto-retrieval config management endpoint.
+        lambda_execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "appconfig:CreateHostedConfigurationVersion",
+                    "appconfig:StartDeployment",
+                    "appconfig:StartConfigurationSession",
+                    "appconfig:GetLatestConfiguration",
+                ],
+                resources=["*"],
+            )
+        )
+
         # Read active DynamoDB table name from SSM Parameter Store pointer (owned by DynamoDBStack).
         submissions_table_name = ssm.StringParameter.value_for_string_parameter(
             self, "/HeatingDataCollection/Submissions/Active/TableName"
@@ -154,6 +177,13 @@ class APIStack(Stack):
             if viessmann_credentials_secret_arn
             else None
         )
+        auto_retrieval_config_handler = self._create_auto_retrieval_config_handler(
+            lambda_execution_role,
+            appconfig_application_id=appconfig_application_id,
+            appconfig_environment_id=appconfig_environment_id,
+            appconfig_profile_id=appconfig_profile_id,
+            appconfig_deployment_strategy_id=appconfig_deployment_strategy_id,
+        )
 
         # Wire Lambda functions to API Gateway routes with JWT authorization
         self._wire_routes(
@@ -163,6 +193,7 @@ class APIStack(Stack):
             history_handler,
             recent_handler,
             heating_live_handler,
+            auto_retrieval_config_handler,
         )
 
         # Store references for use by other stacks
@@ -328,6 +359,7 @@ class APIStack(Stack):
         history_handler: lambda_.Function,
         recent_handler: lambda_.Function,
         heating_live_handler: lambda_.Function | None = None,
+        auto_retrieval_config_handler: lambda_.Function | None = None,
     ) -> None:
         """
         Wire Lambda functions to API Gateway routes with JWT authorization.
@@ -339,6 +371,7 @@ class APIStack(Stack):
             history_handler: Lambda function for GET /history
             recent_handler: Lambda function for GET /recent
             heating_live_handler: Optional Lambda for GET /heating/live
+            auto_retrieval_config_handler: Optional Lambda for GET/PUT /config/auto-retrieval
         """
         # POST /submit route
         http_api.add_routes(
@@ -381,6 +414,18 @@ class APIStack(Stack):
                 integration=apigw_integrations.HttpLambdaIntegration(
                     "HeatingLiveIntegration",
                     heating_live_handler,
+                ),
+                authorizer=jwt_authorizer,
+            )
+
+        # GET/PUT /config/auto-retrieval route
+        if auto_retrieval_config_handler is not None:
+            http_api.add_routes(
+                path="/config/auto-retrieval",
+                methods=[apigw.HttpMethod.GET, apigw.HttpMethod.PUT],
+                integration=apigw_integrations.HttpLambdaIntegration(
+                    "AutoRetrievalConfigIntegration",
+                    auto_retrieval_config_handler,
                 ),
                 authorizer=jwt_authorizer,
             )
@@ -440,6 +485,45 @@ class APIStack(Stack):
         )
 
         return heating_live_fn
+
+    def _create_auto_retrieval_config_handler(
+        self,
+        lambda_execution_role: iam.Role,
+        appconfig_application_id: str,
+        appconfig_environment_id: str,
+        appconfig_profile_id: str,
+        appconfig_deployment_strategy_id: str,
+    ) -> lambda_.Function:
+        """Create Lambda function for GET/PUT /config/auto-retrieval endpoint."""
+        return lambda_.Function(
+            self,
+            "AutoRetrievalConfigHandler",
+            runtime=lambda_.Runtime.PYTHON_3_11,
+            handler="src.handlers.auto_retrieval_config_handler.lambda_handler",
+            code=lambda_.Code.from_asset(
+                os.path.join(os.path.dirname(__file__), "..", ".."),
+                exclude=[
+                    "cdk.out",
+                    ".git",
+                    ".venv",
+                    "node_modules",
+                    ".pytest_cache",
+                    ".hypothesis",
+                    ".jsii-package-cache",
+                ],
+            ),
+            role=lambda_execution_role,
+            environment={
+                "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": appconfig_application_id,
+                "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": appconfig_environment_id,
+                "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": appconfig_profile_id,
+                "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": appconfig_deployment_strategy_id,
+            },
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            description="Lambda handler for auto-retrieval AppConfig management endpoint",
+            log_retention=logs.RetentionDays.ONE_WEEK,
+        )
 
     def _get_user_pool(self, user_pool_id: str):
         """

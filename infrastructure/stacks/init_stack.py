@@ -80,6 +80,8 @@ class InitStack(Stack):
             description="EventBridge cron for frequent scheduler (every 15 minutes within active windows).",
         )
 
+        # Migration-only runtime fallback parameters.
+        # Runtime source of truth has moved to AppConfig; these remain temporarily for safe cutover.
         self.auto_retrieval_frequent_active_windows_param = ssm.StringParameter(
             self,
             "AutoRetrievalFrequentActiveWindows",
@@ -87,6 +89,7 @@ class InitStack(Stack):
             string_value='[{"start":"00:00","stop":"24:00"}]',
             description=(
                 "Active time windows for frequent scheduler (JSON array of {start,stop} in UTC HH:MM). "
+                "Migration-only SSM fallback while AppConfig rollout completes. "
                 "Lambda exits early if invoked outside any window. Default: 24/7. Max 5 windows."
             ),
         )
@@ -96,7 +99,7 @@ class InitStack(Stack):
             "AutoRetrievalMaxRetries",
             parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/MaxRetries",
             string_value="5",
-            description="Max retry attempts on Viessmann API connection failure.",
+            description="Migration-only SSM fallback for max retry attempts (runtime source is AppConfig).",
         )
 
         self.auto_retrieval_retry_delay_param = ssm.StringParameter(
@@ -104,7 +107,7 @@ class InitStack(Stack):
             "AutoRetrievalRetryDelaySeconds",
             parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/RetryDelaySeconds",
             string_value="300",
-            description="Seconds to wait between retry attempts.",
+            description="Migration-only SSM fallback for retry delay seconds (runtime source is AppConfig).",
         )
 
         self.auto_retrieval_user_id_param = ssm.StringParameter(
@@ -112,7 +115,10 @@ class InitStack(Stack):
             "AutoRetrievalUserId",
             parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/UserId",
             string_value="SET_ME",
-            description="Cognito user_id (sub) for the installation owner. Update via AWS Console or CLI before enabling auto-retrieval.",
+            description=(
+                "Migration-only SSM fallback for installation owner user_id (runtime source is AppConfig). "
+                "Update only during cutover troubleshooting."
+            ),
         )
 
 

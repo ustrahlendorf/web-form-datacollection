@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from aws_cdk import App, Environment, Tags
 
+from infrastructure.stacks.appconfig_stack import AppConfigStack
 from infrastructure.stacks.api_stack import APIStack
 from infrastructure.stacks.cognito_stack import CognitoStack
 from infrastructure.stacks.datalake_stack import DataLakeStack
@@ -73,6 +74,14 @@ def create_app() -> App:
         description="Data Collection Web Application - Init (dev)",
     )
 
+    appconfig_stack = AppConfigStack(
+        app,
+        f"DataCollectionAppConfig-{environment_name}",
+        environment_name=environment_name,
+        env=env_config,
+        description="Data Collection Web Application - AppConfig (dev)",
+    )
+
     cognito_stack = CognitoStack(
         app,
         f"DataCollectionCognito-{environment_name}",
@@ -115,6 +124,10 @@ def create_app() -> App:
         environment_name=environment_name,
         cognito_user_pool_id=cognito_stack.user_pool.user_pool_id,
         cognito_user_pool_client_id=cognito_stack.user_pool_client.user_pool_client_id,
+        appconfig_application_id=appconfig_stack.appconfig_application.ref,
+        appconfig_environment_id=appconfig_stack.appconfig_environment.ref,
+        appconfig_profile_id=appconfig_stack.appconfig_profile.ref,
+        appconfig_deployment_strategy_id=appconfig_stack.deployment_strategy.ref,
         cloudfront_domain=frontend_stack.distribution.domain_name,
         viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
         env=env_config,
@@ -127,11 +140,15 @@ def create_app() -> App:
             f"DataCollectionScheduler-{environment_name}",
             environment_name=environment_name,
             viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
+            appconfig_application_id=appconfig_stack.appconfig_application.ref,
+            appconfig_environment_id=appconfig_stack.appconfig_environment.ref,
+            appconfig_profile_id=appconfig_stack.appconfig_profile.ref,
             env=env_config,
             description="Data Collection - Auto-retrieval Scheduler (dev)",
         )
         scheduler_stack.add_dependency(init_stack)
         scheduler_stack.add_dependency(dynamodb_stack)
+        scheduler_stack.add_dependency(appconfig_stack)
 
         # Scheduler frequent stack — production auto-retrieval with multiple runs per day
         scheduler_frequent_stack = SchedulerFrequentStack(
@@ -139,20 +156,26 @@ def create_app() -> App:
             f"DataCollectionSchedulerFrequent-{environment_name}",
             environment_name=environment_name,
             viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
+            appconfig_application_id=appconfig_stack.appconfig_application.ref,
+            appconfig_environment_id=appconfig_stack.appconfig_environment.ref,
+            appconfig_profile_id=appconfig_stack.appconfig_profile.ref,
             env=env_config,
             description="Data Collection - Auto-retrieval Frequent (dev)",
         )
         scheduler_frequent_stack.add_dependency(init_stack)
+        scheduler_frequent_stack.add_dependency(appconfig_stack)
 
     # Ensure deployment ordering across stacks that use exports/imports.
     # InitStack owns the stable SSM "contract" parameters and must exist first so other stacks
     # can safely read/extend the namespace over time.
+    appconfig_stack.add_dependency(init_stack)
     dynamodb_stack.add_dependency(init_stack)
     api_stack.add_dependency(init_stack)
     api_stack.add_dependency(frontend_stack)
     api_stack.add_dependency(cognito_stack)
     api_stack.add_dependency(dynamodb_stack)
     api_stack.add_dependency(datalake_stack)
+    api_stack.add_dependency(appconfig_stack)
 
     return app
 
