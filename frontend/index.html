@@ -277,6 +277,39 @@
                             <p class="settings-description">
                                 Changes in this area affect auto-retrieval runtime behavior once saved and deployed.
                             </p>
+                            <div class="settings-deployment-card">
+                                <div class="settings-deployment-header">
+                                    <h4>Deployment Status</h4>
+                                    <button type="button" id="settings-status-refresh-btn" class="btn btn-secondary">Refresh</button>
+                                </div>
+                                <div class="settings-deployment-grid">
+                                    <div class="settings-deployment-item">
+                                        <span class="settings-deployment-label">State</span>
+                                        <span id="settings-deployment-state" class="settings-deployment-value">Unknown</span>
+                                    </div>
+                                    <div class="settings-deployment-item">
+                                        <span class="settings-deployment-label">Deployment Number</span>
+                                        <span id="settings-deployment-number" class="settings-deployment-value">-</span>
+                                    </div>
+                                    <div class="settings-deployment-item">
+                                        <span class="settings-deployment-label">Config Version</span>
+                                        <span id="settings-deployment-config-version" class="settings-deployment-value">-</span>
+                                    </div>
+                                    <div class="settings-deployment-item">
+                                        <span class="settings-deployment-label">Started</span>
+                                        <span id="settings-deployment-started-at" class="settings-deployment-value">-</span>
+                                    </div>
+                                    <div class="settings-deployment-item">
+                                        <span class="settings-deployment-label">Completed</span>
+                                        <span id="settings-deployment-completed-at" class="settings-deployment-value">-</span>
+                                    </div>
+                                    <div class="settings-deployment-item">
+                                        <span class="settings-deployment-label">Progress</span>
+                                        <span id="settings-deployment-progress" class="settings-deployment-value">-</span>
+                                    </div>
+                                </div>
+                                <p id="settings-deployment-note" class="settings-deployment-note">Status has not been loaded yet.</p>
+                            </div>
                         </div>
                     </div>
                 </div>

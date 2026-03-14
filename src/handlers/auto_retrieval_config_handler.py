@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 from typing import Any
 
 from src.handlers.auto_retrieval_config_validator import _validate_config
@@ -95,6 +96,59 @@ def _parse_put_body(event: dict[str, Any]) -> dict[str, Any]:
     return body
 
 
+def _parse_int_query_param(
+    event: dict[str, Any], name: str
+) -> int | None:
+    params = event.get("queryStringParameters")
+    if not isinstance(params, dict):
+        return None
+
+    raw_value = params.get(name)
+    if raw_value is None:
+        return None
+    if isinstance(raw_value, int):
+        return raw_value
+    if not isinstance(raw_value, str):
+        raise ValueError(f"Query parameter '{name}' must be an integer.")
+
+    value = raw_value.strip()
+    if value == "":
+        return None
+    if not value.isdigit():
+        raise ValueError(f"Query parameter '{name}' must be an integer.")
+    return int(value)
+
+
+def _to_iso8601(value: Any) -> str | None:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return None
+
+
+def _format_deployment_payload(deployment: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(deployment, dict):
+        return None
+    return {
+        "deploymentNumber": deployment.get("DeploymentNumber"),
+        "state": deployment.get("State"),
+        "configurationVersion": deployment.get("ConfigurationVersion"),
+        "configurationName": deployment.get("ConfigurationName"),
+        "startedAt": _to_iso8601(deployment.get("StartedAt")),
+        "completedAt": _to_iso8601(deployment.get("CompletedAt")),
+        "percentageComplete": deployment.get("PercentageComplete"),
+    }
+
+
+def _resolve_http_path(event: dict[str, Any]) -> str:
+    raw_path = event.get("rawPath")
+    if isinstance(raw_path, str) and raw_path.strip():
+        return raw_path.strip()
+    request_path = ((event.get("requestContext") or {}).get("http") or {}).get("path")
+    if isinstance(request_path, str) and request_path.strip():
+        return request_path.strip()
+    return ""
+
+
 def _get_current_config(
     app_id: str, env_id: str, profile_id: str
 ) -> tuple[dict[str, Any] | None, str | None]:
@@ -172,6 +226,37 @@ def _handle_put(event: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _handle_get_deployment_status(event: dict[str, Any]) -> dict[str, Any]:
+    app_id, env_id, _profile_id, _strategy_id = _resolve_identifiers()
+    appconfig_client = _get_appconfig_client()
+    deployment_number = _parse_int_query_param(event, "deploymentNumber")
+
+    deployment: dict[str, Any] | None
+    if deployment_number is not None:
+        response = appconfig_client.get_deployment(
+            ApplicationId=app_id,
+            EnvironmentId=env_id,
+            DeploymentNumber=deployment_number,
+        )
+        deployment = response.get("Deployment")
+    else:
+        # list_deployments does not support filtering by configuration profile.
+        response = appconfig_client.list_deployments(
+            ApplicationId=app_id,
+            EnvironmentId=env_id,
+            MaxResults=1,
+        )
+        items = response.get("Items") or []
+        deployment = items[0] if items else None
+
+    return _json_response(
+        200,
+        {
+            "deployment": _format_deployment_payload(deployment),
+        },
+    )
+
+
 def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     try:
         _extract_user_id(event)
@@ -180,7 +265,10 @@ def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
 
     try:
         method = ((event.get("requestContext") or {}).get("http") or {}).get("method")
+        path = _resolve_http_path(event)
         if method == "GET":
+            if path.endswith("/config/auto-retrieval/deployment-status"):
+                return _handle_get_deployment_status(event)
             return _handle_get(event)
         if method == "PUT":
             return _handle_put(event)

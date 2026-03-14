@@ -14,6 +14,7 @@ const state = {
     isAuthenticated: false,
     currentPage: 'form',
     historyNextToken: null,
+    settingsStatusPollTimer: null,
 };
 
 // Initialize AuthManager
@@ -31,6 +32,14 @@ const SETTINGS_DEFAULT_CONFIG = {
     retryDelaySeconds: 300,
     userId: '',
 };
+const SETTINGS_DEPLOYMENT_POLL_INTERVAL_MS = 4000;
+const SETTINGS_DEPLOYMENT_POLL_MAX_ATTEMPTS = 20;
+const SETTINGS_DEPLOYMENT_TERMINAL_STATES = new Set([
+    'COMPLETE',
+    'COMPLETED',
+    'ROLLED_BACK',
+    'REVERTED',
+]);
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', async () => {
@@ -127,6 +136,10 @@ function setupEventListeners() {
     if (settingsReloadBtn) {
         settingsReloadBtn.addEventListener('click', () => loadSettings());
     }
+    const settingsStatusRefreshBtn = document.getElementById('settings-status-refresh-btn');
+    if (settingsStatusRefreshBtn) {
+        settingsStatusRefreshBtn.addEventListener('click', () => refreshSettingsDeploymentStatus());
+    }
 
     const settingsWindows = document.getElementById('settings-active-windows');
     if (settingsWindows) {
@@ -176,6 +189,9 @@ function logout() {
 
 // Page Navigation
 function navigateToPage(page) {
+    if (page !== 'settings') {
+        clearSettingsDeploymentPolling();
+    }
     state.currentPage = page;
     
     // Update active nav link
@@ -471,6 +487,7 @@ function initializeSettingsFormDefaults() {
     applyConfigToSettingsForm(config);
     clearSettingsErrors();
     clearSettingsMessage();
+    renderSettingsDeploymentStatus(null, 'Status has not been loaded yet.');
 }
 
 function normalizeSettingsConfig(rawConfig, fallbackUserId = '') {
@@ -618,6 +635,164 @@ function showSettingsMessage(message, type) {
     messageEl.classList.add(type);
 }
 
+function clearSettingsDeploymentPolling() {
+    if (state.settingsStatusPollTimer) {
+        clearTimeout(state.settingsStatusPollTimer);
+        state.settingsStatusPollTimer = null;
+    }
+}
+
+function getSettingsDeploymentStateClass(stateValue) {
+    const normalized = String(stateValue || '').toUpperCase();
+    if (SETTINGS_DEPLOYMENT_TERMINAL_STATES.has(normalized)) {
+        return 'settings-deployment-state-success';
+    }
+    if (normalized.includes('ROLLBACK') || normalized.includes('FAILED') || normalized.includes('REVERT')) {
+        return 'settings-deployment-state-failed';
+    }
+    if (normalized === '') {
+        return '';
+    }
+    return 'settings-deployment-state-pending';
+}
+
+function formatSettingsDateTime(value) {
+    if (!value || typeof value !== 'string') {
+        return '-';
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return value;
+    }
+    return formatTimestamp(parsed.toISOString());
+}
+
+function renderSettingsDeploymentStatus(deployment, note = '') {
+    const stateEl = document.getElementById('settings-deployment-state');
+    const numberEl = document.getElementById('settings-deployment-number');
+    const versionEl = document.getElementById('settings-deployment-config-version');
+    const startedEl = document.getElementById('settings-deployment-started-at');
+    const completedEl = document.getElementById('settings-deployment-completed-at');
+    const progressEl = document.getElementById('settings-deployment-progress');
+    const noteEl = document.getElementById('settings-deployment-note');
+
+    const stateText = deployment && deployment.state ? String(deployment.state) : 'Unknown';
+    if (stateEl) {
+        stateEl.textContent = stateText;
+        stateEl.classList.remove(
+            'settings-deployment-state-success',
+            'settings-deployment-state-pending',
+            'settings-deployment-state-failed'
+        );
+        const stateClass = getSettingsDeploymentStateClass(stateText);
+        if (stateClass) {
+            stateEl.classList.add(stateClass);
+        }
+    }
+    if (numberEl) {
+        numberEl.textContent = deployment && deployment.deploymentNumber != null
+            ? String(deployment.deploymentNumber)
+            : '-';
+    }
+    if (versionEl) {
+        versionEl.textContent = deployment && deployment.configurationVersion
+            ? String(deployment.configurationVersion)
+            : '-';
+    }
+    if (startedEl) {
+        startedEl.textContent = formatSettingsDateTime(deployment && deployment.startedAt);
+    }
+    if (completedEl) {
+        completedEl.textContent = formatSettingsDateTime(deployment && deployment.completedAt);
+    }
+    if (progressEl) {
+        progressEl.textContent = deployment && Number.isFinite(Number(deployment.percentageComplete))
+            ? `${Math.round(Number(deployment.percentageComplete))}%`
+            : '-';
+    }
+    if (noteEl) {
+        noteEl.textContent = note || '';
+    }
+}
+
+function isSettingsDeploymentTerminal(stateValue) {
+    return SETTINGS_DEPLOYMENT_TERMINAL_STATES.has(String(stateValue || '').toUpperCase());
+}
+
+async function fetchSettingsDeploymentStatus(deploymentNumber = null) {
+    let url = `${CONFIG.API_ENDPOINT}/config/auto-retrieval/deployment-status`;
+    if (deploymentNumber != null && deploymentNumber !== '') {
+        url += `?deploymentNumber=${encodeURIComponent(String(deploymentNumber))}`;
+    }
+    const response = await authenticatedFetch(url);
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(result.error || 'Failed to load deployment status');
+    }
+    return result.deployment || null;
+}
+
+async function refreshSettingsDeploymentStatus(deploymentNumber = null, options = {}) {
+    const { silent = false } = options;
+    try {
+        const deployment = await fetchSettingsDeploymentStatus(deploymentNumber);
+        if (!deployment) {
+            renderSettingsDeploymentStatus(null, 'No deployment found yet.');
+            return null;
+        }
+        const stateValue = String(deployment.state || 'UNKNOWN');
+        renderSettingsDeploymentStatus(deployment, `Last update: state is ${stateValue}.`);
+        return deployment;
+    } catch (error) {
+        console.error('Error loading deployment status:', error);
+        renderSettingsDeploymentStatus(null, 'Failed to load deployment status.');
+        if (!silent) {
+            showSettingsMessage(error.message || 'Failed to load deployment status.', 'error');
+        }
+        return null;
+    }
+}
+
+function startSettingsDeploymentPolling(deploymentNumber) {
+    clearSettingsDeploymentPolling();
+    let attempts = 0;
+
+    const pollOnce = async () => {
+        attempts += 1;
+        const deployment = await refreshSettingsDeploymentStatus(deploymentNumber, { silent: true });
+        if (!deployment) {
+            if (attempts >= SETTINGS_DEPLOYMENT_POLL_MAX_ATTEMPTS) {
+                renderSettingsDeploymentStatus(null, 'Stopped polling because no deployment status was returned.');
+                clearSettingsDeploymentPolling();
+                return;
+            }
+            state.settingsStatusPollTimer = setTimeout(pollOnce, SETTINGS_DEPLOYMENT_POLL_INTERVAL_MS);
+            return;
+        }
+
+        if (isSettingsDeploymentTerminal(deployment.state)) {
+            renderSettingsDeploymentStatus(
+                deployment,
+                `Deployment reached terminal state ${deployment.state}.`
+            );
+            clearSettingsDeploymentPolling();
+            return;
+        }
+
+        if (attempts >= SETTINGS_DEPLOYMENT_POLL_MAX_ATTEMPTS) {
+            renderSettingsDeploymentStatus(
+                deployment,
+                `Polling stopped after ${SETTINGS_DEPLOYMENT_POLL_MAX_ATTEMPTS} checks. Use Refresh for latest status.`
+            );
+            clearSettingsDeploymentPolling();
+            return;
+        }
+        state.settingsStatusPollTimer = setTimeout(pollOnce, SETTINGS_DEPLOYMENT_POLL_INTERVAL_MS);
+    };
+
+    void pollOnce();
+}
+
 function updateSettingsWindowControls() {
     const windowsContainer = document.getElementById('settings-active-windows');
     const addBtn = document.getElementById('settings-add-window-btn');
@@ -732,6 +907,7 @@ function buildSettingsPayloadFromForm() {
 }
 
 async function loadSettings() {
+    clearSettingsDeploymentPolling();
     clearSettingsErrors();
     clearSettingsMessage();
     showSettingsMessage('Loading settings...', 'success');
@@ -747,6 +923,7 @@ async function loadSettings() {
         const labelText = (result.versionLabel && String(result.versionLabel).trim() !== '')
             ? ` (version ${result.versionLabel})`
             : '';
+        await refreshSettingsDeploymentStatus(null, { silent: true });
         showSettingsMessage(`Settings loaded successfully${labelText}.`, 'success');
     } catch (error) {
         console.error('Error loading settings:', error);
@@ -756,6 +933,7 @@ async function loadSettings() {
 
 async function handleSettingsSubmit(event) {
     event.preventDefault();
+    clearSettingsDeploymentPolling();
     clearSettingsErrors();
     clearSettingsMessage();
 
@@ -787,6 +965,7 @@ async function handleSettingsSubmit(event) {
             `state ${result.state || 'UNKNOWN'}`,
         ].join(', ');
         showSettingsMessage(`Settings saved. Deployment started: ${details}.`, 'success');
+        startSettingsDeploymentPolling(result.deploymentNumber);
     } catch (error) {
         console.error('Error saving settings:', error);
         showSettingsMessage(error.message || 'Failed to save settings.', 'error');

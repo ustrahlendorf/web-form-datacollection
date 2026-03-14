@@ -8,15 +8,23 @@ from unittest.mock import MagicMock, patch
 from src.handlers.auto_retrieval_config_handler import lambda_handler
 
 
-def _authorized_event(method: str, body: dict | None = None) -> dict:
+def _authorized_event(
+    method: str,
+    body: dict | None = None,
+    raw_path: str = "/config/auto-retrieval",
+    query_params: dict | None = None,
+) -> dict:
     event: dict = {
+        "rawPath": raw_path,
         "requestContext": {
-            "http": {"method": method},
+            "http": {"method": method, "path": raw_path},
             "authorizer": {"jwt": {"claims": {"sub": "user-123"}}},
         }
     }
     if body is not None:
         event["body"] = json.dumps(body)
+    if query_params is not None:
+        event["queryStringParameters"] = query_params
     return event
 
 
@@ -117,6 +125,95 @@ def test_put_auto_retrieval_config_creates_version_and_starts_deployment(
     )
 
 
+@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_client")
+def test_get_deployment_status_returns_latest_deployment(
+    mock_get_appconfig_client: MagicMock,
+) -> None:
+    appconfig_client = MagicMock()
+    appconfig_client.list_deployments.return_value = {
+        "Items": [
+            {
+                "DeploymentNumber": 7,
+                "State": "DEPLOYING",
+                "ConfigurationVersion": "11",
+                "PercentageComplete": 35.0,
+            }
+        ]
+    }
+    mock_get_appconfig_client.return_value = appconfig_client
+
+    with patch.dict(
+        "os.environ",
+        {
+            "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": "app-id",
+            "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": "env-id",
+            "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": "profile-id",
+            "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": "strategy-id",
+        },
+        clear=False,
+    ):
+        response = lambda_handler(
+            _authorized_event("GET", raw_path="/config/auto-retrieval/deployment-status"),
+            None,
+        )
+
+    assert response["statusCode"] == 200
+    response_body = json.loads(response["body"])
+    assert response_body["deployment"]["deploymentNumber"] == 7
+    assert response_body["deployment"]["state"] == "DEPLOYING"
+    assert response_body["deployment"]["configurationVersion"] == "11"
+    assert response_body["deployment"]["percentageComplete"] == 35.0
+    appconfig_client.list_deployments.assert_called_once_with(
+        ApplicationId="app-id",
+        EnvironmentId="env-id",
+        MaxResults=1,
+    )
+
+
+@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_client")
+def test_get_deployment_status_returns_specific_deployment_when_number_provided(
+    mock_get_appconfig_client: MagicMock,
+) -> None:
+    appconfig_client = MagicMock()
+    appconfig_client.get_deployment.return_value = {
+        "Deployment": {
+            "DeploymentNumber": 9,
+            "State": "COMPLETE",
+            "ConfigurationVersion": "12",
+        }
+    }
+    mock_get_appconfig_client.return_value = appconfig_client
+
+    with patch.dict(
+        "os.environ",
+        {
+            "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": "app-id",
+            "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": "env-id",
+            "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": "profile-id",
+            "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": "strategy-id",
+        },
+        clear=False,
+    ):
+        response = lambda_handler(
+            _authorized_event(
+                "GET",
+                raw_path="/config/auto-retrieval/deployment-status",
+                query_params={"deploymentNumber": "9"},
+            ),
+            None,
+        )
+
+    assert response["statusCode"] == 200
+    response_body = json.loads(response["body"])
+    assert response_body["deployment"]["deploymentNumber"] == 9
+    assert response_body["deployment"]["state"] == "COMPLETE"
+    appconfig_client.get_deployment.assert_called_once_with(
+        ApplicationId="app-id",
+        EnvironmentId="env-id",
+        DeploymentNumber=9,
+    )
+
+
 def test_put_auto_retrieval_config_rejects_invalid_payload() -> None:
     invalid_config = {
         "schemaVersion": 1,
@@ -185,6 +282,6 @@ def test_put_auto_retrieval_config_returns_500_when_env_not_set() -> None:
 
 
 def test_auto_retrieval_config_rejects_unsupported_method() -> None:
-    event = _authorized_event("POST")
+    event = _authorized_event("POST", raw_path="/config/auto-retrieval")
     response = lambda_handler(event, None)
     assert response["statusCode"] == 405

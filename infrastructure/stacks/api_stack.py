@@ -148,6 +148,8 @@ class APIStack(Stack):
                 actions=[
                     "appconfig:CreateHostedConfigurationVersion",
                     "appconfig:StartDeployment",
+                    "appconfig:ListDeployments",
+                    "appconfig:GetDeployment",
                     "appconfig:StartConfigurationSession",
                     "appconfig:GetLatestConfiguration",
                 ],
@@ -425,6 +427,15 @@ class APIStack(Stack):
                 methods=[apigw.HttpMethod.GET, apigw.HttpMethod.PUT],
                 integration=apigw_integrations.HttpLambdaIntegration(
                     "AutoRetrievalConfigIntegration",
+                    auto_retrieval_config_handler,
+                ),
+                authorizer=jwt_authorizer,
+            )
+            http_api.add_routes(
+                path="/config/auto-retrieval/deployment-status",
+                methods=[apigw.HttpMethod.GET],
+                integration=apigw_integrations.HttpLambdaIntegration(
+                    "AutoRetrievalConfigDeploymentStatusIntegration",
                     auto_retrieval_config_handler,
                 ),
                 authorizer=jwt_authorizer,
