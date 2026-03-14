@@ -161,6 +161,8 @@ class SchedulerFrequentStack(Stack):
         # Lambda function — same handler/code as production
         asset_path = os.path.join(os.path.dirname(__file__), "..", "..")
         pythonpath = "backend/src"
+        appconfig_agent_layer_arn = os.environ.get("APPCONFIG_AGENT_EXTENSION_LAYER_ARN", "").strip()
+        use_appconfig_agent = "true" if appconfig_agent_layer_arn else "false"
 
         auto_retrieval_frequent_fn = lambda_.Function(
             self,
@@ -200,9 +202,10 @@ class SchedulerFrequentStack(Stack):
                 "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": appconfig_application_id,
                 "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": appconfig_environment_id,
                 "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": appconfig_profile_id,
-                "AUTO_RETRIEVAL_USE_APPCONFIG_AGENT": "true",
+                "AUTO_RETRIEVAL_USE_APPCONFIG_AGENT": use_appconfig_agent,
                 "AUTO_RETRIEVAL_APPCONFIG_AGENT_ENDPOINT": "http://127.0.0.1:2772",
                 "AUTO_RETRIEVAL_APPCONFIG_AGENT_TIMEOUT_SECONDS": "2.0",
+                "AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE": "Europe/Berlin",
                 "PYTHONPATH": pythonpath,
                 "VIESSMANN_TOKEN_CACHE_PATH": "/tmp/viessmann/tokens.json",
             },
@@ -211,7 +214,6 @@ class SchedulerFrequentStack(Stack):
             description="Frequent Lambda for Viessmann auto-retrieval (multiple runs per day)",
             log_retention=logs.RetentionDays.ONE_WEEK,
         )
-        appconfig_agent_layer_arn = os.environ.get("APPCONFIG_AGENT_EXTENSION_LAYER_ARN", "").strip()
         if appconfig_agent_layer_arn:
             appconfig_agent_layer = lambda_.LayerVersion.from_layer_version_arn(
                 self,

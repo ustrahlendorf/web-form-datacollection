@@ -459,6 +459,54 @@ def test_check_active_window_skips_ssm_when_fallback_disabled(
     mock_ssm_client.assert_not_called()
 
 
+@patch("src.handlers.auto_retrieval_handler._load_appconfig")
+def test_check_active_window_uses_configured_timezone(mock_load_appconfig: MagicMock) -> None:
+    """Configured timezone should be used for active-window checks."""
+    mock_load_appconfig.return_value = {"frequent_active_windows": [(22 * 60, 23 * 60)]}
+
+    with patch.dict(
+        "os.environ",
+        {
+            "ACTIVE_WINDOWS_PARAM": "FrequentActiveWindows",
+            "AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE": "Europe/Berlin",
+        },
+        clear=False,
+    ):
+        with patch("src.handlers.auto_retrieval_handler.datetime") as mock_dt:
+            # Base instant is 21:30 UTC, which is 22:30 in Europe/Berlin (inside window).
+            mock_dt.now.side_effect = (
+                lambda tz: datetime(2025, 3, 8, 21, 30, 0, tzinfo=timezone.utc).astimezone(tz)
+            )
+            should_skip = _check_active_window_and_maybe_skip()
+
+    assert should_skip is False
+
+
+@patch("src.handlers.auto_retrieval_handler._load_appconfig")
+def test_check_active_window_invalid_timezone_falls_back_to_utc(
+    mock_load_appconfig: MagicMock,
+) -> None:
+    """Invalid configured timezone falls back to UTC behavior."""
+    mock_load_appconfig.return_value = {"frequent_active_windows": [(22 * 60, 23 * 60)]}
+
+    with patch.dict(
+        "os.environ",
+        {
+            "ACTIVE_WINDOWS_PARAM": "FrequentActiveWindows",
+            "AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE": "Invalid/Timezone",
+        },
+        clear=False,
+    ):
+        with patch("src.handlers.auto_retrieval_handler.datetime") as mock_dt:
+            # 21:30 UTC is outside 22:00-23:00 when fallback timezone is UTC.
+            mock_dt.now.side_effect = (
+                lambda tz: datetime(2025, 3, 8, 21, 30, 0, tzinfo=timezone.utc).astimezone(tz)
+            )
+            should_skip = _check_active_window_and_maybe_skip()
+
+    assert should_skip is True
+
+
 def test_lambda_handler_no_active_windows_param_proceeds() -> None:
     """When ACTIVE_WINDOWS_PARAM is not set, skip window check entirely."""
     import os

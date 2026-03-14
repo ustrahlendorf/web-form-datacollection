@@ -204,7 +204,7 @@ Deploy-time schedule values remain in SSM. Runtime values are managed in AppConf
 |-----------|---------|-------------|
 | `/HeatingDataCollection/AutoRetrieval/ScheduleCron` | `0 6 * * ? *` | EventBridge cron (06:00 UTC daily), deploy-time |
 | `/HeatingDataCollection/AutoRetrieval/FrequentScheduleCron` | `0/15 * * * ? *` | EventBridge cron for frequent scheduler (every 15 min), deploy-time |
-| AppConfig `frequentActiveWindows` | `[{"start":"00:00","stop":"24:00"}]` | Runtime active windows (UTC HH:MM, max 5 windows) |
+| AppConfig `frequentActiveWindows` | `[{"start":"00:00","stop":"24:00"}]` | Runtime active windows (`HH:MM`, max 5 windows) interpreted in Lambda timezone (`AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE`) |
 | AppConfig `maxRetries` | `5` | Runtime max retry attempts on API failure |
 | AppConfig `retryDelaySeconds` | `300` | Runtime seconds between retries |
 | AppConfig `userId` | `SET_ME` | Runtime Cognito user `sub` |
@@ -222,7 +222,7 @@ aws ssm put-parameter \
 
 **Note:** Changing `ScheduleCron` or `FrequentScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values). AppConfig runtime changes do **not** require redeploy.
 
-**Example: Restrict frequent scheduler to 08:00–12:00 and 14:00–18:00 UTC**
+**Example: Restrict frequent scheduler to 08:00–12:00 and 14:00–18:00 in the configured active-window timezone**
 
 ```bash
 aws ssm put-parameter \

@@ -5,8 +5,9 @@ Triggered by EventBridge Rule (cron). Fetches heating values from Viessmann API,
 stores in DynamoDB. Retries on connection failure (configurable via SSM).
 Publishes to SNS on final failure.
 
-When ACTIVE_WINDOWS_PARAM is set (frequent scheduler), Lambda checks current UTC time
-against configured windows and exits early if outside any window.
+When ACTIVE_WINDOWS_PARAM is set (frequent scheduler), Lambda checks current time
+in AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE (default UTC) against configured windows
+and exits early if outside any window.
 """
 
 import json
@@ -17,6 +18,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 # Lazily initialized clients
 _secrets_client = None
@@ -281,12 +283,32 @@ def _load_appconfig() -> Dict[str, Any] | None:
 
 
 def _is_within_active_window(windows: List[Tuple[int, int]], now: datetime) -> bool:
-    """Check if current UTC time falls within any of the active windows."""
+    """Check if current time falls within any configured active windows."""
     minutes = now.hour * 60 + now.minute
     for start_min, stop_min in windows:
         if start_min <= minutes < stop_min:
             return True
     return False
+
+
+def _get_active_windows_timezone() -> tuple[Any, str]:
+    """
+    Resolve timezone used for active-window evaluation.
+
+    Defaults to UTC. Set AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE to an IANA timezone
+    (for example Europe/Berlin) to evaluate windows in local time.
+    """
+    tz_name = os.environ.get("AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE", "UTC").strip() or "UTC"
+    if tz_name.upper() == "UTC":
+        return timezone.utc, "UTC"
+    try:
+        return ZoneInfo(tz_name), tz_name
+    except ZoneInfoNotFoundError:
+        print(
+            f"Invalid AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE='{tz_name}', "
+            "falling back to UTC"
+        )
+        return timezone.utc, "UTC"
 
 
 def _check_active_window_and_maybe_skip() -> bool:
@@ -298,14 +320,19 @@ def _check_active_window_and_maybe_skip() -> bool:
     param_name = os.environ.get("ACTIVE_WINDOWS_PARAM")
     if not param_name:
         return False
+    tzinfo, tz_name = _get_active_windows_timezone()
+
     appconfig_data = _load_appconfig()
     if appconfig_data:
         windows = appconfig_data.get("frequent_active_windows")
         if windows:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(tzinfo)
             if _is_within_active_window(windows, now):
                 return False
-            print("Outside active window from AppConfig, skipping retrieval")
+            print(
+                f"Outside active window from AppConfig in timezone {tz_name} "
+                f"at {now.strftime('%H:%M')}, skipping retrieval"
+            )
             return True
 
     if not _ssm_fallback_enabled():
@@ -325,9 +352,13 @@ def _check_active_window_and_maybe_skip() -> bool:
     if windows is None:
         print(f"Invalid ActiveWindows format: {value}, proceeding with retrieval")
         return False
-    now = datetime.now(timezone.utc)
+    now = datetime.now(tzinfo)
     if _is_within_active_window(windows, now):
         return False
+    print(
+        f"Outside active window from SSM in timezone {tz_name} "
+        f"at {now.strftime('%H:%M')}, skipping retrieval"
+    )
     return True
 
 
@@ -411,7 +442,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     stores in DynamoDB. On final failure, publishes to SNS.
 
     When ACTIVE_WINDOWS_PARAM is set (frequent scheduler), exits early if current
-    UTC time is outside any configured active window.
+    time in AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE (default UTC) is outside any
+    configured active window.
     """
     if _check_active_window_and_maybe_skip():
         return {"statusCode": 200, "body": json.dumps({"skipped": "outside_active_window"})}
