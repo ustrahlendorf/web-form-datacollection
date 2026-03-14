@@ -13,6 +13,7 @@ from src.handlers.auto_retrieval_handler import (
     _parse_active_windows,
     _is_within_active_window,
     _check_active_window_and_maybe_skip,
+    _load_appconfig_from_agent,
     _load_appconfig,
     _load_config,
     lambda_handler,
@@ -173,6 +174,78 @@ class TestAppConfigLoading:
         assert result["retry_delay_seconds"] == 180
         assert result["user_id"] == "user-123"
         assert result["frequent_active_windows"] == [(8 * 60, 12 * 60)]
+
+    @patch("src.handlers.auto_retrieval_handler.urllib_request.urlopen")
+    def test_load_appconfig_from_agent_parses_payload(self, mock_urlopen: MagicMock) -> None:
+        payload = {
+            "frequentActiveWindows": [{"start": "08:00", "stop": "12:00"}],
+            "maxRetries": 7,
+            "retryDelaySeconds": 180,
+            "userId": "user-123",
+        }
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(payload).encode("utf-8")
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        with patch.dict(
+            "os.environ",
+            {
+                "AUTO_RETRIEVAL_USE_APPCONFIG_AGENT": "true",
+                "AUTO_RETRIEVAL_APPCONFIG_AGENT_ENDPOINT": "http://127.0.0.1:2772",
+                "AUTO_RETRIEVAL_APPCONFIG_AGENT_TIMEOUT_SECONDS": "2.0",
+            },
+            clear=False,
+        ):
+            result = _load_appconfig_from_agent("app-id", "env-id", "profile-id")
+
+        assert result is not None
+        assert result["max_retries"] == 7
+        assert result["retry_delay_seconds"] == 180
+        assert result["user_id"] == "user-123"
+        assert result["frequent_active_windows"] == [(8 * 60, 12 * 60)]
+        mock_urlopen.assert_called_once()
+
+    @patch("src.handlers.auto_retrieval_handler._load_appconfig_from_agent")
+    @patch("src.handlers.auto_retrieval_handler._get_appconfig_data_client")
+    def test_load_appconfig_falls_back_to_sdk_when_agent_unavailable(
+        self,
+        mock_appconfig_client: MagicMock,
+        mock_load_appconfig_from_agent: MagicMock,
+    ) -> None:
+        mock_load_appconfig_from_agent.return_value = None
+
+        client = MagicMock()
+        client.start_configuration_session.return_value = {
+            "InitialConfigurationToken": "test-token"
+        }
+        payload = {
+            "frequentActiveWindows": [{"start": "08:00", "stop": "12:00"}],
+            "maxRetries": 7,
+            "retryDelaySeconds": 180,
+            "userId": "user-123",
+        }
+        client.get_latest_configuration.return_value = {
+            "Configuration": MagicMock(read=MagicMock(return_value=json.dumps(payload).encode("utf-8")))
+        }
+        mock_appconfig_client.return_value = client
+
+        with patch.dict(
+            "os.environ",
+            {
+                "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": "app-id",
+                "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": "env-id",
+                "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": "profile-id",
+            },
+            clear=False,
+        ):
+            result = _load_appconfig()
+
+        assert result is not None
+        assert result["max_retries"] == 7
+        assert result["retry_delay_seconds"] == 180
+        assert result["user_id"] == "user-123"
+        assert result["frequent_active_windows"] == [(8 * 60, 12 * 60)]
+        mock_load_appconfig_from_agent.assert_called_once_with("app-id", "env-id", "profile-id")
 
     @patch("src.handlers.auto_retrieval_handler._load_appconfig")
     @patch("src.handlers.auto_retrieval_handler._get_ssm_param")

@@ -178,10 +178,13 @@ class SchedulerStack(Stack):
                 "VIESSMANN_CREDENTIALS_SECRET_ARN": viessmann_credentials_secret_arn,
                 "AUTO_RETRIEVAL_FAILURE_TOPIC_ARN": failure_topic.topic_arn,
                 "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
-                "AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK": "true",
+                "AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK": "false",
                 "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": appconfig_application_id,
                 "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": appconfig_environment_id,
                 "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": appconfig_profile_id,
+                "AUTO_RETRIEVAL_USE_APPCONFIG_AGENT": "true",
+                "AUTO_RETRIEVAL_APPCONFIG_AGENT_ENDPOINT": "http://127.0.0.1:2772",
+                "AUTO_RETRIEVAL_APPCONFIG_AGENT_TIMEOUT_SECONDS": "2.0",
                 "PYTHONPATH": pythonpath,
                 "VIESSMANN_TOKEN_CACHE_PATH": "/tmp/viessmann/tokens.json",
             },
@@ -190,6 +193,14 @@ class SchedulerStack(Stack):
             description="Lambda for scheduled Viessmann data retrieval and DynamoDB storage",
             log_retention=logs.RetentionDays.ONE_WEEK,
         )
+        appconfig_agent_layer_arn = os.environ.get("APPCONFIG_AGENT_EXTENSION_LAYER_ARN", "").strip()
+        if appconfig_agent_layer_arn:
+            appconfig_agent_layer = lambda_.LayerVersion.from_layer_version_arn(
+                self,
+                "AppConfigAgentExtensionLayer",
+                appconfig_agent_layer_arn,
+            )
+            auto_retrieval_fn.add_layers(appconfig_agent_layer)
 
         # EventBridge Rule
         rule = events.Rule(

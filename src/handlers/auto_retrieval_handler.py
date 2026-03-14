@@ -15,6 +15,8 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
 
 # Lazily initialized clients
 _secrets_client = None
@@ -161,6 +163,79 @@ def _get_appconfig_identifiers() -> Tuple[str, str, str]:
     return app_id, env_id, profile_id
 
 
+def _normalize_appconfig_payload(payload: Dict[str, Any]) -> Dict[str, Any] | None:
+    """Normalize AppConfig payload keys into internal handler config keys."""
+    if not isinstance(payload, dict):
+        print("AppConfig payload is not an object; using fallback")
+        return None
+
+    result: Dict[str, Any] = {}
+    if "maxRetries" in payload:
+        result["max_retries"] = payload.get("maxRetries")
+    if "retryDelaySeconds" in payload:
+        result["retry_delay_seconds"] = payload.get("retryDelaySeconds")
+    if "userId" in payload:
+        result["user_id"] = payload.get("userId")
+    if "frequentActiveWindows" in payload:
+        windows_str = json.dumps(payload.get("frequentActiveWindows"))
+        windows = _parse_active_windows(windows_str)
+        if windows is not None:
+            result["frequent_active_windows"] = windows
+        else:
+            print("AppConfig frequentActiveWindows invalid; ignoring this field")
+    return result if result else None
+
+
+def _load_appconfig_from_agent(app_id: str, env_id: str, profile_id: str) -> Dict[str, Any] | None:
+    """
+    Load runtime config from the local AppConfig Agent endpoint.
+
+    Returns normalized config dictionary on success, otherwise None.
+    """
+    use_agent = os.environ.get("AUTO_RETRIEVAL_USE_APPCONFIG_AGENT", "false").strip().lower()
+    if use_agent not in ("1", "true", "yes", "on"):
+        return None
+
+    endpoint = os.environ.get("AUTO_RETRIEVAL_APPCONFIG_AGENT_ENDPOINT", "http://127.0.0.1:2772").strip()
+    endpoint = endpoint.rstrip("/")
+    if not endpoint:
+        return None
+
+    timeout_raw = os.environ.get("AUTO_RETRIEVAL_APPCONFIG_AGENT_TIMEOUT_SECONDS", "2.0").strip()
+    try:
+        timeout_seconds = max(0.1, float(timeout_raw))
+    except ValueError:
+        timeout_seconds = 2.0
+
+    url = (
+        f"{endpoint}/applications/{urllib_parse.quote(app_id, safe='')}"
+        f"/environments/{urllib_parse.quote(env_id, safe='')}"
+        f"/configurations/{urllib_parse.quote(profile_id, safe='')}"
+    )
+
+    try:
+        with urllib_request.urlopen(url, timeout=timeout_seconds) as response:
+            raw = response.read()
+    except Exception as e:
+        print(f"AppConfig Agent read failed: {e}; falling back to AppConfigData SDK")
+        return None
+
+    if not raw:
+        print("AppConfig Agent returned empty config; falling back to AppConfigData SDK")
+        return None
+
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except Exception as e:
+        print(f"AppConfig Agent payload parse failed: {e}; falling back to AppConfigData SDK")
+        return None
+
+    normalized = _normalize_appconfig_payload(payload)
+    if normalized is None:
+        print("AppConfig Agent payload invalid/empty; falling back to AppConfigData SDK")
+    return normalized
+
+
 def _load_appconfig() -> Dict[str, Any] | None:
     """
     Load and validate runtime config from AppConfig hosted profile.
@@ -170,6 +245,10 @@ def _load_appconfig() -> Dict[str, Any] | None:
     app_id, env_id, profile_id = _get_appconfig_identifiers()
     if not app_id or not env_id or not profile_id:
         return None
+
+    appconfig_from_agent = _load_appconfig_from_agent(app_id, env_id, profile_id)
+    if appconfig_from_agent is not None:
+        return appconfig_from_agent
 
     try:
         client = _get_appconfig_data_client()
@@ -198,25 +277,7 @@ def _load_appconfig() -> Dict[str, Any] | None:
         print(f"AppConfig payload parse failed: {e}; using fallback")
         return None
 
-    if not isinstance(payload, dict):
-        print("AppConfig payload is not an object; using fallback")
-        return None
-
-    result: Dict[str, Any] = {}
-    if "maxRetries" in payload:
-        result["max_retries"] = payload.get("maxRetries")
-    if "retryDelaySeconds" in payload:
-        result["retry_delay_seconds"] = payload.get("retryDelaySeconds")
-    if "userId" in payload:
-        result["user_id"] = payload.get("userId")
-    if "frequentActiveWindows" in payload:
-        windows_str = json.dumps(payload.get("frequentActiveWindows"))
-        windows = _parse_active_windows(windows_str)
-        if windows is not None:
-            result["frequent_active_windows"] = windows
-        else:
-            print("AppConfig frequentActiveWindows invalid; ignoring this field")
-    return result if result else None
+    return _normalize_appconfig_payload(payload)
 
 
 def _is_within_active_window(windows: List[Tuple[int, int]], now: datetime) -> bool:

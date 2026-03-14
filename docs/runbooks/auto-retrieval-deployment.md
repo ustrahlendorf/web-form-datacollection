@@ -2,6 +2,8 @@
 
 Step-by-step guide to deploy and configure the automatic Viessmann data retrieval feature.
 
+For AppConfig Agent adoption analysis and migration scope, see `docs/runbooks/appconfig-agent-fit.md`.
+
 ## Overview
 
 The auto-retrieval feature:
@@ -74,6 +76,56 @@ Then confirm with `GET /config/auto-retrieval` that values are active.
 - Keep `AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK=true` during first rollout.
 - If AppConfig read fails, verify Lambda falls back safely (and logs fallback usage).
 - After at least one successful full schedule cycle, plan cutover to `AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK=false`.
+
+## Phase 1.5: Enable AppConfig Agent Extension
+
+Phase 1 added AppConfig Agent-first runtime reads in `auto_retrieval_handler` with automatic fallback to AppConfigData SDK.
+To activate real local-agent reads in AWS Lambda, attach the AppConfig Agent extension layer during deploy.
+
+### 1) Export extension layer ARN before deploy
+
+Set the layer ARN for your region/account (example format shown):
+
+```bash
+export APPCONFIG_AGENT_EXTENSION_LAYER_ARN="arn:aws:lambda:eu-central-1:123456789012:layer:AWS-AppConfig-Extension:1"
+```
+
+Then redeploy both scheduler stacks:
+
+```bash
+task deploy-scheduler
+task deploy-scheduler-frequent
+```
+
+Note:
+- If `APPCONFIG_AGENT_EXTENSION_LAYER_ARN` is not set, deployment still succeeds.
+- In that case runtime continues with Agent-first code path enabled but typically falls back to AppConfigData SDK because no extension is attached.
+
+### 2) Verify extension is attached
+
+Check each function has a layer configured:
+
+```bash
+aws lambda get-function-configuration \
+  --function-name DataCollectionScheduler-dev-AutoRetrievalHandler... \
+  --region eu-central-1 \
+  --query "Layers[].Arn"
+```
+
+Repeat for the frequent scheduler Lambda.
+
+### 3) Post-deploy runtime verification checklist
+
+Run this checklist for **both** daily and frequent scheduler Lambdas:
+
+1. Invoke function once (manual invoke is fine).
+2. In CloudWatch logs, confirm there is no `AppConfig Agent read failed` message on healthy runs.
+3. Confirm config-dependent behavior remains correct (`userId`, retries, active windows).
+4. Temporarily force an agent endpoint failure (for example, set `AUTO_RETRIEVAL_APPCONFIG_AGENT_ENDPOINT` to an invalid local URL in a test deploy), invoke again, and verify:
+   - logs show `AppConfig Agent read failed`
+   - runtime continues by falling back to AppConfigData SDK
+   - function still completes (or fails only for unrelated reasons)
+5. Restore the correct endpoint (`http://127.0.0.1:2772`) after the fallback test.
 
 ## Step 1: Deploy Init Stack (if not already done)
 
