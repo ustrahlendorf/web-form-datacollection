@@ -1131,7 +1131,7 @@ function displayHistory(submissions) {
             <thead>
                 <tr>
                     <th>Date</th>
-                    <th>Time</th>
+                    <th>Time (UTC)</th>
                     <th>Operating Hours</th>
                     <th>Δ Operating Hours</th>
                     <th>Starts</th>
@@ -1140,7 +1140,7 @@ function displayHistory(submissions) {
                     <th>Δ Consumption (m³)</th>
                     <th>Supply Temp (°C)</th>
                     <th>Outside-Temp. Sensor (°C)</th>
-                    <th>Submitted</th>
+                    <th>Submitted (Local)</th>
                 </tr>
             </thead>
             <tbody>
