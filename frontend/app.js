@@ -40,6 +40,7 @@ const SETTINGS_DEPLOYMENT_TERMINAL_STATES = new Set([
     'ROLLED_BACK',
     'REVERTED',
 ]);
+const SETTINGS_SCHEDULER_PLACEHOLDER = 'Not available';
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', async () => {
@@ -488,6 +489,7 @@ function initializeSettingsFormDefaults() {
     clearSettingsErrors();
     clearSettingsMessage();
     renderSettingsDeploymentStatus(null, 'Status has not been loaded yet.');
+    renderSettingsSchedulerMetadata(null);
 }
 
 function normalizeSettingsConfig(rawConfig, fallbackUserId = '') {
@@ -715,6 +717,63 @@ function renderSettingsDeploymentStatus(deployment, note = '') {
     }
 }
 
+function normalizeSettingsSchedulerMetadata(rawScheduler) {
+    if (!rawScheduler || typeof rawScheduler !== 'object') {
+        return {
+            available: false,
+            source: 'eventbridge',
+            frequentScheduleCron: null,
+            frequentScheduleExpression: null,
+            frequentIntervalMinutes: null,
+            frequentRuleName: null,
+        };
+    }
+
+    return {
+        available: rawScheduler.available === true,
+        source: (typeof rawScheduler.source === 'string' && rawScheduler.source.trim() !== '')
+            ? rawScheduler.source.trim()
+            : 'eventbridge',
+        frequentScheduleCron: (typeof rawScheduler.frequentScheduleCron === 'string' && rawScheduler.frequentScheduleCron.trim() !== '')
+            ? rawScheduler.frequentScheduleCron.trim()
+            : null,
+        frequentScheduleExpression: (typeof rawScheduler.frequentScheduleExpression === 'string' && rawScheduler.frequentScheduleExpression.trim() !== '')
+            ? rawScheduler.frequentScheduleExpression.trim()
+            : null,
+        frequentIntervalMinutes: Number.isFinite(Number(rawScheduler.frequentIntervalMinutes))
+            ? Math.max(0, Math.round(Number(rawScheduler.frequentIntervalMinutes)))
+            : null,
+        frequentRuleName: (typeof rawScheduler.frequentRuleName === 'string' && rawScheduler.frequentRuleName.trim() !== '')
+            ? rawScheduler.frequentRuleName.trim()
+            : null,
+    };
+}
+
+function renderSettingsSchedulerMetadata(rawScheduler) {
+    const cronEl = document.getElementById('settings-scheduler-frequent-cron');
+    const intervalEl = document.getElementById('settings-scheduler-frequent-interval');
+    const noteEl = document.getElementById('settings-scheduler-note');
+    const scheduler = normalizeSettingsSchedulerMetadata(rawScheduler);
+
+    const cronText = scheduler.frequentScheduleCron || scheduler.frequentScheduleExpression || SETTINGS_SCHEDULER_PLACEHOLDER;
+    const intervalText = scheduler.frequentIntervalMinutes !== null
+        ? `${scheduler.frequentIntervalMinutes} minute${scheduler.frequentIntervalMinutes === 1 ? '' : 's'}`
+        : SETTINGS_SCHEDULER_PLACEHOLDER;
+    const availabilityText = scheduler.available ? 'available' : 'unavailable';
+    const sourceText = scheduler.source || 'eventbridge';
+    const ruleText = scheduler.frequentRuleName ? `, rule ${scheduler.frequentRuleName}` : '';
+
+    if (cronEl) {
+        cronEl.textContent = cronText;
+    }
+    if (intervalEl) {
+        intervalEl.textContent = intervalText;
+    }
+    if (noteEl) {
+        noteEl.textContent = `Source: ${sourceText} (${availabilityText}${ruleText})`;
+    }
+}
+
 function isSettingsDeploymentTerminal(stateValue) {
     return SETTINGS_DEPLOYMENT_TERMINAL_STATES.has(String(stateValue || '').toUpperCase());
 }
@@ -920,6 +979,7 @@ async function loadSettings() {
         }
 
         applyConfigToSettingsForm(result.config || null);
+        renderSettingsSchedulerMetadata(result.scheduler || null);
         const labelText = (result.versionLabel && String(result.versionLabel).trim() !== '')
             ? ` (version ${result.versionLabel})`
             : '';
@@ -927,6 +987,7 @@ async function loadSettings() {
         showSettingsMessage(`Settings loaded successfully${labelText}.`, 'success');
     } catch (error) {
         console.error('Error loading settings:', error);
+        renderSettingsSchedulerMetadata(null);
         showSettingsMessage(error.message || 'Failed to load settings.', 'error');
     }
 }
@@ -1686,6 +1747,9 @@ if (typeof module !== 'undefined' && module.exports) {
         computeYtdTotals,
         normalizeSettingsConfig,
         validateSettingsPayload,
+        normalizeSettingsSchedulerMetadata,
+        renderSettingsSchedulerMetadata,
+        loadSettings,
         __setAuthenticatedFetchForTests: (fn) => {
             authenticatedFetch = fn;
         },

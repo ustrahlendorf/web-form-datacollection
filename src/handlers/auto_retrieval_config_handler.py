@@ -17,6 +17,7 @@ from src.handlers.auto_retrieval_config_validator import _validate_config
 
 _appconfig_client = None
 _appconfig_data_client = None
+_events_client = None
 
 
 def _get_appconfig_client():
@@ -37,6 +38,16 @@ def _get_appconfig_data_client():
 
         _appconfig_data_client = boto3.client("appconfigdata")
     return _appconfig_data_client
+
+
+def _get_events_client():
+    """Get boto3 EventBridge client (lazy init for tests)."""
+    global _events_client
+    if _events_client is None:
+        import boto3
+
+        _events_client = boto3.client("events")
+    return _events_client
 
 
 def _extract_user_id(event: dict[str, Any]) -> str:
@@ -179,6 +190,76 @@ def _get_current_config(
     return parsed, latest_response.get("VersionLabel")
 
 
+def _extract_cron_expression(schedule_expression: str | None) -> str | None:
+    if not isinstance(schedule_expression, str):
+        return None
+    value = schedule_expression.strip()
+    if not value.startswith("cron(") or not value.endswith(")"):
+        return None
+    cron_value = value[5:-1].strip()
+    return cron_value or None
+
+
+def _derive_frequent_interval_minutes(cron_expression: str | None) -> int | None:
+    if not isinstance(cron_expression, str):
+        return None
+    fields = cron_expression.split()
+    if len(fields) != 6:
+        return None
+
+    minute, hour, day_of_month, month, day_of_week, year = fields
+    if hour != "*" or day_of_month != "*" or month != "*" or day_of_week != "?" or year != "*":
+        return None
+
+    if "/" not in minute:
+        return None
+    base, step = minute.split("/", 1)
+    if base not in {"0", "*"} or not step.isdigit():
+        return None
+
+    interval = int(step)
+    if interval <= 0 or interval > 59:
+        return None
+    return interval
+
+
+def _default_scheduler_payload(frequent_rule_name: str | None) -> dict[str, Any]:
+    return {
+        "frequentRuleName": frequent_rule_name,
+        "frequentScheduleCron": None,
+        "frequentScheduleExpression": None,
+        "frequentIntervalMinutes": None,
+        "source": "eventbridge",
+        "available": False,
+    }
+
+
+def _get_scheduler_metadata() -> dict[str, Any]:
+    frequent_rule_name = os.environ.get("AUTO_RETRIEVAL_FREQUENT_RULE_NAME", "").strip() or None
+    if not frequent_rule_name:
+        return _default_scheduler_payload(None)
+
+    scheduler_payload = _default_scheduler_payload(frequent_rule_name)
+    try:
+        describe_response = _get_events_client().describe_rule(Name=frequent_rule_name)
+    except Exception as exc:  # pragma: no cover - defensive catch for AWS runtime failures
+        print(f"Scheduler metadata unavailable for rule '{frequent_rule_name}': {exc}")
+        return scheduler_payload
+
+    schedule_expression = describe_response.get("ScheduleExpression")
+    if not isinstance(schedule_expression, str) or not schedule_expression.strip():
+        return scheduler_payload
+
+    scheduler_payload["frequentScheduleExpression"] = schedule_expression
+    cron_expression = _extract_cron_expression(schedule_expression)
+    scheduler_payload["frequentScheduleCron"] = cron_expression
+    scheduler_payload["frequentIntervalMinutes"] = _derive_frequent_interval_minutes(
+        cron_expression
+    )
+    scheduler_payload["available"] = True
+    return scheduler_payload
+
+
 def _handle_get(_event: dict[str, Any]) -> dict[str, Any]:
     app_id, env_id, profile_id, _strategy_id = _resolve_identifiers()
     current_config, version_label = _get_current_config(app_id, env_id, profile_id)
@@ -187,6 +268,7 @@ def _handle_get(_event: dict[str, Any]) -> dict[str, Any]:
         {
             "config": current_config,
             "versionLabel": version_label,
+            "scheduler": _get_scheduler_metadata(),
         },
     )
 

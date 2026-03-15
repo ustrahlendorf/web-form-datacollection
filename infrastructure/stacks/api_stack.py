@@ -42,6 +42,7 @@ class APIStack(Stack):
         appconfig_environment_id: str,
         appconfig_profile_id: str,
         appconfig_deployment_strategy_id: str,
+        auto_retrieval_frequent_rule_name: str | None = None,
         ssm_namespace_prefix: str = DEFAULT_SSM_PREFIX,
         cloudfront_domain: str | None = None,
         viessmann_credentials_secret_arn: str | None = None,
@@ -60,6 +61,7 @@ class APIStack(Stack):
             appconfig_environment_id: AppConfig environment id for auto-retrieval config
             appconfig_profile_id: AppConfig profile id for auto-retrieval config
             appconfig_deployment_strategy_id: AppConfig deployment strategy id
+            auto_retrieval_frequent_rule_name: EventBridge rule name for frequent scheduler
             ssm_namespace_prefix: Root SSM namespace prefix (for example /HeatingDataCollection)
             cloudfront_domain: CloudFront distribution domain name for CORS (e.g. dxxxx.cloudfront.net)
             viessmann_credentials_secret_arn: ARN of Secrets Manager secret with VIESSMANN_CLIENT_ID,
@@ -170,6 +172,18 @@ class APIStack(Stack):
             )
         )
 
+        # Read-only EventBridge permission for retrieving effective frequent scheduler cadence.
+        if auto_retrieval_frequent_rule_name:
+            lambda_execution_role.add_to_policy(
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=["events:DescribeRule"],
+                    resources=[
+                        f"arn:aws:events:{self.region}:{self.account}:rule/{auto_retrieval_frequent_rule_name}"
+                    ],
+                )
+            )
+
         # Read active DynamoDB table name from SSM Parameter Store pointer (owned by DynamoDBStack).
         submissions_table_name = ssm.StringParameter.value_for_string_parameter(
             self, ssm_parameter_name(self.ssm_prefix, *SUBMISSIONS_ACTIVE_TABLE_NAME_SEGMENTS)
@@ -198,6 +212,7 @@ class APIStack(Stack):
             appconfig_environment_id=appconfig_environment_id,
             appconfig_profile_id=appconfig_profile_id,
             appconfig_deployment_strategy_id=appconfig_deployment_strategy_id,
+            frequent_rule_name=auto_retrieval_frequent_rule_name,
         )
 
         # Wire Lambda functions to API Gateway routes with JWT authorization
@@ -517,6 +532,7 @@ class APIStack(Stack):
         appconfig_environment_id: str,
         appconfig_profile_id: str,
         appconfig_deployment_strategy_id: str,
+        frequent_rule_name: str | None = None,
     ) -> lambda_.Function:
         """Create Lambda function for GET/PUT /config/auto-retrieval endpoint."""
         return lambda_.Function(
@@ -542,6 +558,11 @@ class APIStack(Stack):
                 "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": appconfig_environment_id,
                 "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": appconfig_profile_id,
                 "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": appconfig_deployment_strategy_id,
+                **(
+                    {"AUTO_RETRIEVAL_FREQUENT_RULE_NAME": frequent_rule_name}
+                    if frequent_rule_name
+                    else {}
+                ),
             },
             timeout=Duration.seconds(30),
             memory_size=256,

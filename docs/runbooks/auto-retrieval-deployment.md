@@ -168,6 +168,8 @@ You can also manage this payload from the web app:
    - `deploymentNumber`
    - deployment `state` (typically `DEPLOYING` immediately after save)
 
+The Settings page also shows **Frequent schedule (cron)** and **Frequent interval** as read-only metadata sourced from the deployed EventBridge rule (`eventbridge` source). This display is informational only and is not part of the AppConfig save payload.
+
 Important: Save success confirms deployment was **started**. It does not guarantee rollout completion.
 
 ## Step 3: Configure AutoRetrieval User ID (SSM fallback only)
@@ -225,7 +227,7 @@ aws ssm put-parameter \
   --region eu-central-1
 ```
 
-**Note:** Changing `ScheduleCron` or `FrequentScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values). AppConfig runtime changes do **not** require redeploy.
+**Note:** Changing `ScheduleCron` or `FrequentScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values). AppConfig runtime changes do **not** require redeploy. The Settings read-only scheduler block updates only after the EventBridge rule is changed and redeployed.
 
 **Example: Restrict frequent scheduler to 08:00–12:00 and 14:00–18:00 in the configured active-window timezone**
 

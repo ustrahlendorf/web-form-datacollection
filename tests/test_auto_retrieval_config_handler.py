@@ -28,9 +28,11 @@ def _authorized_event(
     return event
 
 
+@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
 @patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_returns_current_payload(
     mock_get_appconfig_data_client: MagicMock,
+    mock_get_events_client: MagicMock,
 ) -> None:
     payload = {
         "schemaVersion": 1,
@@ -51,6 +53,11 @@ def test_get_auto_retrieval_config_returns_current_payload(
         "VersionLabel": "7",
     }
     mock_get_appconfig_data_client.return_value = appconfig_data_client
+    events_client = MagicMock()
+    events_client.describe_rule.return_value = {
+        "ScheduleExpression": "cron(0/15 * * * ? *)",
+    }
+    mock_get_events_client.return_value = events_client
 
     with patch.dict(
         "os.environ",
@@ -59,6 +66,7 @@ def test_get_auto_retrieval_config_returns_current_payload(
             "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": "env-id",
             "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": "profile-id",
             "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": "strategy-id",
+            "AUTO_RETRIEVAL_FREQUENT_RULE_NAME": "heating-auto-retrieval-frequent-dev",
         },
         clear=False,
     ):
@@ -68,6 +76,262 @@ def test_get_auto_retrieval_config_returns_current_payload(
     response_body = json.loads(response["body"])
     assert response_body["config"] == payload
     assert response_body["versionLabel"] == "7"
+    assert response_body["scheduler"] == {
+        "frequentRuleName": "heating-auto-retrieval-frequent-dev",
+        "frequentScheduleCron": "0/15 * * * ? *",
+        "frequentScheduleExpression": "cron(0/15 * * * ? *)",
+        "frequentIntervalMinutes": 15,
+        "source": "eventbridge",
+        "available": True,
+    }
+
+
+@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
+@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
+def test_get_auto_retrieval_config_scheduler_unavailable_when_describe_rule_fails(
+    mock_get_appconfig_data_client: MagicMock,
+    mock_get_events_client: MagicMock,
+) -> None:
+    payload = {
+        "schemaVersion": 1,
+        "maxRetries": 5,
+        "retryDelaySeconds": 300,
+        "userId": "test-user",
+        "frequentActiveWindows": [{"start": "00:00", "stop": "24:00"}],
+    }
+    appconfig_data_client = MagicMock()
+    appconfig_data_client.start_configuration_session.return_value = {
+        "InitialConfigurationToken": "token"
+    }
+    appconfig_data_client.get_latest_configuration.return_value = {
+        "Configuration": MagicMock(
+            read=MagicMock(return_value=json.dumps(payload).encode("utf-8"))
+        ),
+        "VersionLabel": "7",
+    }
+    mock_get_appconfig_data_client.return_value = appconfig_data_client
+    events_client = MagicMock()
+    events_client.describe_rule.side_effect = RuntimeError("boom")
+    mock_get_events_client.return_value = events_client
+
+    with patch.dict(
+        "os.environ",
+        {
+            "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": "app-id",
+            "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": "env-id",
+            "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": "profile-id",
+            "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": "strategy-id",
+            "AUTO_RETRIEVAL_FREQUENT_RULE_NAME": "heating-auto-retrieval-frequent-dev",
+        },
+        clear=False,
+    ):
+        response = lambda_handler(_authorized_event("GET"), None)
+
+    assert response["statusCode"] == 200
+    response_body = json.loads(response["body"])
+    assert response_body["config"] == payload
+    assert response_body["scheduler"] == {
+        "frequentRuleName": "heating-auto-retrieval-frequent-dev",
+        "frequentScheduleCron": None,
+        "frequentScheduleExpression": None,
+        "frequentIntervalMinutes": None,
+        "source": "eventbridge",
+        "available": False,
+    }
+
+
+@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
+@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
+def test_get_auto_retrieval_config_includes_scheduler_metadata_when_available(
+    mock_get_appconfig_data_client: MagicMock,
+    mock_get_events_client: MagicMock,
+) -> None:
+    payload = {
+        "schemaVersion": 1,
+        "maxRetries": 5,
+        "retryDelaySeconds": 300,
+        "userId": "test-user",
+        "frequentActiveWindows": [{"start": "00:00", "stop": "24:00"}],
+    }
+
+    appconfig_data_client = MagicMock()
+    appconfig_data_client.start_configuration_session.return_value = {
+        "InitialConfigurationToken": "token"
+    }
+    appconfig_data_client.get_latest_configuration.return_value = {
+        "Configuration": MagicMock(
+            read=MagicMock(return_value=json.dumps(payload).encode("utf-8"))
+        ),
+        "VersionLabel": "9",
+    }
+    mock_get_appconfig_data_client.return_value = appconfig_data_client
+
+    events_client = MagicMock()
+    events_client.describe_rule.return_value = {
+        "ScheduleExpression": "cron(0/15 * * * ? *)"
+    }
+    mock_get_events_client.return_value = events_client
+
+    with patch.dict(
+        "os.environ",
+        {
+            "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": "app-id",
+            "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": "env-id",
+            "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": "profile-id",
+            "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": "strategy-id",
+            "AUTO_RETRIEVAL_FREQUENT_RULE_NAME": "heating-auto-retrieval-frequent-dev",
+        },
+        clear=False,
+    ):
+        response = lambda_handler(_authorized_event("GET"), None)
+
+    assert response["statusCode"] == 200
+    response_body = json.loads(response["body"])
+    assert response_body["scheduler"] == {
+        "frequentRuleName": "heating-auto-retrieval-frequent-dev",
+        "frequentScheduleCron": "0/15 * * * ? *",
+        "frequentScheduleExpression": "cron(0/15 * * * ? *)",
+        "frequentIntervalMinutes": 15,
+        "source": "eventbridge",
+        "available": True,
+    }
+    events_client.describe_rule.assert_called_once_with(
+        Name="heating-auto-retrieval-frequent-dev"
+    )
+
+
+@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
+@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
+def test_get_auto_retrieval_config_keeps_success_response_when_scheduler_unavailable(
+    mock_get_appconfig_data_client: MagicMock,
+    mock_get_events_client: MagicMock,
+) -> None:
+    appconfig_data_client = MagicMock()
+    appconfig_data_client.start_configuration_session.return_value = {
+        "InitialConfigurationToken": "token"
+    }
+    appconfig_data_client.get_latest_configuration.return_value = {
+        "Configuration": MagicMock(read=MagicMock(return_value=b"{}")),
+        "VersionLabel": "10",
+    }
+    mock_get_appconfig_data_client.return_value = appconfig_data_client
+
+    events_client = MagicMock()
+    events_client.describe_rule.side_effect = RuntimeError("EventBridge unavailable")
+    mock_get_events_client.return_value = events_client
+
+    with patch.dict(
+        "os.environ",
+        {
+            "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": "app-id",
+            "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": "env-id",
+            "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": "profile-id",
+            "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": "strategy-id",
+            "AUTO_RETRIEVAL_FREQUENT_RULE_NAME": "heating-auto-retrieval-frequent-dev",
+        },
+        clear=False,
+    ):
+        response = lambda_handler(_authorized_event("GET"), None)
+
+    assert response["statusCode"] == 200
+    response_body = json.loads(response["body"])
+    assert response_body["scheduler"] == {
+        "frequentRuleName": "heating-auto-retrieval-frequent-dev",
+        "frequentScheduleCron": None,
+        "frequentScheduleExpression": None,
+        "frequentIntervalMinutes": None,
+        "source": "eventbridge",
+        "available": False,
+    }
+
+
+@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
+@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
+def test_get_auto_retrieval_config_scheduler_unavailable_when_rule_env_missing(
+    mock_get_appconfig_data_client: MagicMock,
+    mock_get_events_client: MagicMock,
+) -> None:
+    appconfig_data_client = MagicMock()
+    appconfig_data_client.start_configuration_session.return_value = {
+        "InitialConfigurationToken": "token"
+    }
+    appconfig_data_client.get_latest_configuration.return_value = {
+        "Configuration": MagicMock(read=MagicMock(return_value=b"{}")),
+        "VersionLabel": "10",
+    }
+    mock_get_appconfig_data_client.return_value = appconfig_data_client
+
+    with patch.dict(
+        "os.environ",
+        {
+            "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": "app-id",
+            "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": "env-id",
+            "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": "profile-id",
+            "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": "strategy-id",
+            "AUTO_RETRIEVAL_FREQUENT_RULE_NAME": "",
+        },
+        clear=False,
+    ):
+        response = lambda_handler(_authorized_event("GET"), None)
+
+    assert response["statusCode"] == 200
+    response_body = json.loads(response["body"])
+    assert response_body["scheduler"] == {
+        "frequentRuleName": None,
+        "frequentScheduleCron": None,
+        "frequentScheduleExpression": None,
+        "frequentIntervalMinutes": None,
+        "source": "eventbridge",
+        "available": False,
+    }
+    mock_get_events_client.assert_not_called()
+
+
+@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
+@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
+def test_get_auto_retrieval_config_scheduler_interval_null_for_non_derivable_cron(
+    mock_get_appconfig_data_client: MagicMock,
+    mock_get_events_client: MagicMock,
+) -> None:
+    appconfig_data_client = MagicMock()
+    appconfig_data_client.start_configuration_session.return_value = {
+        "InitialConfigurationToken": "token"
+    }
+    appconfig_data_client.get_latest_configuration.return_value = {
+        "Configuration": MagicMock(read=MagicMock(return_value=b"{}")),
+        "VersionLabel": "10",
+    }
+    mock_get_appconfig_data_client.return_value = appconfig_data_client
+
+    events_client = MagicMock()
+    events_client.describe_rule.return_value = {
+        "ScheduleExpression": "cron(5 6 * * ? *)",
+    }
+    mock_get_events_client.return_value = events_client
+
+    with patch.dict(
+        "os.environ",
+        {
+            "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": "app-id",
+            "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": "env-id",
+            "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": "profile-id",
+            "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": "strategy-id",
+            "AUTO_RETRIEVAL_FREQUENT_RULE_NAME": "heating-auto-retrieval-frequent-dev",
+        },
+        clear=False,
+    ):
+        response = lambda_handler(_authorized_event("GET"), None)
+
+    assert response["statusCode"] == 200
+    response_body = json.loads(response["body"])
+    assert response_body["scheduler"] == {
+        "frequentRuleName": "heating-auto-retrieval-frequent-dev",
+        "frequentScheduleCron": "5 6 * * ? *",
+        "frequentScheduleExpression": "cron(5 6 * * ? *)",
+        "frequentIntervalMinutes": None,
+        "source": "eventbridge",
+        "available": True,
+    }
 
 
 @patch("src.handlers.auto_retrieval_config_handler._get_appconfig_client")

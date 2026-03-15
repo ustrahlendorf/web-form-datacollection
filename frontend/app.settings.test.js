@@ -3,6 +3,10 @@
 const {
     normalizeSettingsConfig,
     validateSettingsPayload,
+    renderSettingsSchedulerMetadata,
+    loadSettings,
+    __setAuthenticatedFetchForTests,
+    __setConfigForTests,
 } = require('./app');
 
 describe('settings payload validation', () => {
@@ -117,5 +121,81 @@ describe('settings config normalization', () => {
 
         expect(normalized.frequentActiveWindows).toHaveLength(5);
         expect(normalized.frequentActiveWindows[4]).toEqual({ start: '04:00', stop: '05:00' });
+    });
+});
+
+function renderSchedulerFixture() {
+    document.body.innerHTML = `
+        <div id="settings-page">
+            <span id="settings-scheduler-frequent-cron"></span>
+            <span id="settings-scheduler-frequent-interval"></span>
+            <p id="settings-scheduler-note"></p>
+            <div id="settings-message"></div>
+        </div>
+    `;
+}
+
+describe('settings scheduler metadata rendering', () => {
+    beforeEach(() => {
+        renderSchedulerFixture();
+    });
+
+    test('renders complete scheduler metadata values', () => {
+        renderSettingsSchedulerMetadata({
+            available: true,
+            source: 'eventbridge',
+            frequentScheduleCron: '0/15 * * * ? *',
+            frequentScheduleExpression: 'cron(0/15 * * * ? *)',
+            frequentIntervalMinutes: 15,
+            frequentRuleName: 'heating-auto-retrieval-frequent-dev',
+        });
+
+        expect(document.getElementById('settings-scheduler-frequent-cron').textContent).toBe('0/15 * * * ? *');
+        expect(document.getElementById('settings-scheduler-frequent-interval').textContent).toBe('15 minutes');
+        expect(document.getElementById('settings-scheduler-note').textContent).toBe(
+            'Source: eventbridge (available, rule heating-auto-retrieval-frequent-dev)'
+        );
+    });
+
+    test('renders placeholders for malformed scheduler metadata', () => {
+        renderSettingsSchedulerMetadata({
+            available: 'yes',
+            source: '   ',
+            frequentScheduleCron: 123,
+            frequentScheduleExpression: [],
+            frequentIntervalMinutes: 'nope',
+            frequentRuleName: 7,
+        });
+
+        expect(document.getElementById('settings-scheduler-frequent-cron').textContent).toBe('Not available');
+        expect(document.getElementById('settings-scheduler-frequent-interval').textContent).toBe('Not available');
+        expect(document.getElementById('settings-scheduler-note').textContent).toBe('Source: eventbridge (unavailable)');
+    });
+
+    test('loadSettings keeps scheduler placeholders when metadata fetch fails', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            __setConfigForTests({ API_ENDPOINT: 'http://example.test' });
+            __setAuthenticatedFetchForTests(async () => {
+                throw new Error('network down');
+            });
+            renderSettingsSchedulerMetadata({
+                available: true,
+                source: 'eventbridge',
+                frequentScheduleCron: '0/30 * * * ? *',
+                frequentIntervalMinutes: 30,
+                frequentRuleName: 'rule-a',
+            });
+
+            await loadSettings();
+
+            expect(document.getElementById('settings-scheduler-frequent-cron').textContent).toBe('Not available');
+            expect(document.getElementById('settings-scheduler-frequent-interval').textContent).toBe('Not available');
+            expect(document.getElementById('settings-scheduler-note').textContent).toBe('Source: eventbridge (unavailable)');
+            expect(document.getElementById('settings-message').textContent).toBe('network down');
+            expect(document.getElementById('settings-message').classList.contains('error')).toBe(true);
+        } finally {
+            consoleErrorSpy.mockRestore();
+        }
     });
 });

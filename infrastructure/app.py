@@ -137,6 +137,9 @@ def create_app() -> App:
     )
 
     viessmann_credentials_secret_arn = os.environ.get("VIESSMANN_CREDENTIALS_SECRET_ARN")
+    auto_retrieval_frequent_rule_name = (
+        f"heating-auto-retrieval-frequent-{environment_name}"
+    )
 
     api_stack = APIStack(
         app,
@@ -149,6 +152,7 @@ def create_app() -> App:
         appconfig_environment_id=appconfig_stack.appconfig_environment.ref,
         appconfig_profile_id=appconfig_stack.appconfig_profile.ref,
         appconfig_deployment_strategy_id=appconfig_stack.deployment_strategy.ref,
+        auto_retrieval_frequent_rule_name=auto_retrieval_frequent_rule_name,
         cloudfront_domain=frontend_stack.distribution.domain_name,
         viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
         env=env_config,
