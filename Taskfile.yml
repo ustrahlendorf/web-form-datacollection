@@ -168,7 +168,7 @@ tasks:
     cmds:
       - cdk deploy "DataCollectionFrontend-dev"
 
-  deploy-scheduler:
+  deploy-scheduler-daily:
     desc: "Deploy Scheduler stack (dev) - auto-retrieval of Viessmann data"
     deps: [doctor]
     dir: "{{.APP_DIR}}"

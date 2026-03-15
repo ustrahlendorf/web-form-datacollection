@@ -194,6 +194,7 @@ class SchedulerFrequentStack(Stack):
             environment={
                 "SUBMISSIONS_TABLE": frequent_table.table_name,
                 "VIESSMANN_CREDENTIALS_SECRET_ARN": viessmann_credentials_secret_arn,
+                "ONCE_DAILY": "false",
                 "AUTO_RETRIEVAL_FAILURE_TOPIC_ARN": frequent_failure_topic.topic_arn,
                 "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
                 "AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK": "false",

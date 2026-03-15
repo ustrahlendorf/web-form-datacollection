@@ -311,12 +311,22 @@ def _get_active_windows_timezone() -> tuple[Any, str]:
         return timezone.utc, "UTC"
 
 
+def _is_once_daily_event() -> bool:
+    """Return True when invocation is the once-daily scheduled retrieval."""
+    raw = os.environ.get("ONCE_DAILY", "false").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
 def _check_active_window_and_maybe_skip() -> bool:
     """
     If ACTIVE_WINDOWS_PARAM is set, use AppConfig first and optionally SSM fallback.
     Returns True when current time is outside all active windows and retrieval should be skipped.
     Returns False if we should proceed.
     """
+    if _is_once_daily_event():
+        print("ONCE_DAILY=true: skipping active-window evaluation")
+        return False
+
     param_name = os.environ.get("ACTIVE_WINDOWS_PARAM")
     if not param_name:
         return False

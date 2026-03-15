@@ -43,7 +43,7 @@ Deploy in this order so AppConfig resources and API write-path exist before sche
 ```bash
 task deploy-init
 task deploy-api-with-deps
-task deploy-scheduler
+task deploy-scheduler-daily
 task deploy-scheduler-frequent
 ```
 
@@ -93,7 +93,7 @@ export APPCONFIG_AGENT_EXTENSION_LAYER_ARN="arn:aws:lambda:eu-central-1:12345678
 Then redeploy both scheduler stacks:
 
 ```bash
-task deploy-scheduler
+task deploy-scheduler-daily
 task deploy-scheduler-frequent
 ```
 
@@ -209,6 +209,10 @@ Deploy-time schedule values remain in SSM. Runtime values are managed in AppConf
 | AppConfig `retryDelaySeconds` | `300` | Runtime seconds between retries |
 | AppConfig `userId` | `SET_ME` | Runtime Cognito user `sub` |
 
+**Active-window behavior by scheduler type:**
+- Daily scheduler sets `ONCE_DAILY=true`; it always executes on its EventBridge schedule and ignores `ACTIVE_WINDOWS_PARAM` / `frequentActiveWindows`.
+- Frequent scheduler sets `ONCE_DAILY=false`; it evaluates active windows and may skip runs outside configured windows.
+
 Example: change schedule to 07:30 UTC:
 
 ```bash
@@ -236,7 +240,7 @@ aws ssm put-parameter \
 ## Step 5: Deploy Scheduler Stack
 
 ```bash
-task deploy-scheduler
+task deploy-scheduler-daily
 ```
 
 This creates:

@@ -16,7 +16,7 @@ from infrastructure.stacks.datalake_stack import DataLakeStack
 from infrastructure.stacks.dynamodb_stack import DynamoDBStack
 from infrastructure.stacks.frontend_stack import FrontendStack
 from infrastructure.stacks.init_stack import InitStack
-from infrastructure.stacks.scheduler_stack import SchedulerStack
+from infrastructure.stacks.scheduler_once_daily_stack import SchedulerOnceDailyStack
 from infrastructure.stacks.scheduler_frequent_stack import SchedulerFrequentStack
 
 
@@ -135,7 +135,7 @@ def create_app() -> App:
     )
 
     if viessmann_credentials_secret_arn:
-        scheduler_stack = SchedulerStack(
+        scheduler_once_daily_stack = SchedulerOnceDailyStack(
             app,
             f"DataCollectionScheduler-{environment_name}",
             environment_name=environment_name,
@@ -146,9 +146,9 @@ def create_app() -> App:
             env=env_config,
             description="Data Collection - Auto-retrieval Scheduler (dev)",
         )
-        scheduler_stack.add_dependency(init_stack)
-        scheduler_stack.add_dependency(dynamodb_stack)
-        scheduler_stack.add_dependency(appconfig_stack)
+        scheduler_once_daily_stack.add_dependency(init_stack)
+        scheduler_once_daily_stack.add_dependency(dynamodb_stack)
+        scheduler_once_daily_stack.add_dependency(appconfig_stack)
 
         # Scheduler frequent stack — production auto-retrieval with multiple runs per day
         scheduler_frequent_stack = SchedulerFrequentStack(

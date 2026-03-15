@@ -1,4 +1,4 @@
-"""Scheduler stack for automatic Viessmann data retrieval."""
+"""Once-daily scheduler stack for automatic Viessmann data retrieval."""
 
 from aws_cdk import (
     BundlingOptions,
@@ -17,7 +17,7 @@ from constructs import Construct
 import os
 
 
-class SchedulerStack(Stack):
+class SchedulerOnceDailyStack(Stack):
     """Stack for EventBridge Rule and Lambda for daily Viessmann auto-retrieval."""
 
     def __init__(
@@ -178,6 +178,7 @@ class SchedulerStack(Stack):
             environment={
                 "SUBMISSIONS_TABLE": submissions_table_name,
                 "VIESSMANN_CREDENTIALS_SECRET_ARN": viessmann_credentials_secret_arn,
+                "ONCE_DAILY": "true",
                 "AUTO_RETRIEVAL_FAILURE_TOPIC_ARN": failure_topic.topic_arn,
                 "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
                 "AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK": "false",

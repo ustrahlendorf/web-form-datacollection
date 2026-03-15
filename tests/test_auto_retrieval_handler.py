@@ -375,6 +375,7 @@ def test_lambda_handler_skips_when_outside_window(
         "os.environ",
         {
             "ACTIVE_WINDOWS_PARAM": "TestActiveWindows",
+            "ONCE_DAILY": "false",
             "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
         },
     ):
@@ -408,6 +409,7 @@ def test_lambda_handler_proceeds_when_inside_window(
         "os.environ",
         {
             "ACTIVE_WINDOWS_PARAM": "TestActiveWindows",
+            "ONCE_DAILY": "false",
             "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
             "SUBMISSIONS_TABLE": "test-table",
             "VIESSMANN_CREDENTIALS_SECRET_ARN": "arn:aws:secretsmanager:eu-central-1:123:secret:test",
@@ -428,6 +430,35 @@ def test_lambda_handler_proceeds_when_inside_window(
 
     # Proceeds past window check; fails on user_id not configured
     assert result["statusCode"] == 500
+
+
+@patch("src.handlers.auto_retrieval_handler._load_appconfig")
+@patch("src.handlers.auto_retrieval_handler._get_ssm_client")
+def test_lambda_handler_once_daily_ignores_active_windows(
+    mock_ssm_client: MagicMock, mock_load_appconfig: MagicMock
+) -> None:
+    """When ONCE_DAILY=true, active-window checks must be bypassed."""
+    with patch.dict(
+        "os.environ",
+        {
+            "ONCE_DAILY": "true",
+            "ACTIVE_WINDOWS_PARAM": "TestActiveWindows",
+            "SUBMISSIONS_TABLE": "test-table",
+            "VIESSMANN_CREDENTIALS_SECRET_ARN": "arn:aws:secretsmanager:eu-central-1:123:secret:test",
+        },
+    ):
+        with patch("src.handlers.auto_retrieval_handler._load_config") as mock_config:
+            mock_config.return_value = {
+                "max_retries": 1,
+                "retry_delay_seconds": 60,
+                "user_id": "SET_ME",
+            }
+            # Proves we do not return early with outside_active_window.
+            result = lambda_handler({}, None)
+
+    assert result["statusCode"] == 500
+    mock_load_appconfig.assert_not_called()
+    mock_ssm_client.assert_not_called()
 
 
 @patch("src.handlers.auto_retrieval_handler._load_appconfig")

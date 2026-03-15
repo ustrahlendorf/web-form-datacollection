@@ -14,7 +14,7 @@ Technical and operational fit evaluation for adopting AWS AppConfig Agent in thi
 
 ### Observed pattern
 
-- `SchedulerStack` invokes `src.handlers.auto_retrieval_handler.lambda_handler` on a daily cron.
+- `SchedulerOnceDailyStack` invokes `src.handlers.auto_retrieval_handler.lambda_handler` on a daily cron.
 - `SchedulerFrequentStack` invokes the same handler every 15 minutes (within active windows).
 - The frequent path can trigger two AppConfigData reads in one invocation when not skipped:
   - `_check_active_window_and_maybe_skip()` -> `_load_appconfig()`
@@ -72,7 +72,7 @@ If minimizing operational complexity is currently the top priority, defer only u
 
 1. **Infrastructure**
    - Add AWS AppConfig Agent Lambda extension/layer to both scheduler Lambdas:
-     - `infrastructure/stacks/scheduler_stack.py`
+     - `infrastructure/stacks/scheduler_once_daily_stack.py`
      - `infrastructure/stacks/scheduler_frequent_stack.py`
    - Add only required agent environment tuning (if needed), keep existing AppConfig IAM permissions initially.
 
