@@ -188,6 +188,64 @@ tasks:
     cmds:
       - cdk deploy "DataCollectionSchedulerFrequent-dev"
 
+  deploy:deps:
+    desc: "Show deploy task -> CDK stack dependency matrix (static transparency view)"
+    cmds:
+      - |
+        cat <<'EOF'
+        Deploy command dependency matrix (dev)
+        ======================================
+
+        deploy-init
+          - CDK command: cdk deploy --exclusively DataCollectionInit-dev
+          - Effective stacks: DataCollectionInit-dev
+          - Notes: exclusive deploy (dependency stacks are intentionally not pulled in)
+
+        deploy-dynamodb
+          - CDK command: cdk deploy DataCollectionDynamoDB-dev
+          - Effective stacks: DataCollectionInit-dev, DataCollectionDynamoDB-dev
+          - Notes: default CDK behavior includes dependencies
+
+        deploy-api
+          - CDK command: cdk deploy --exclusively DataCollectionAPI-dev
+          - Effective stacks: DataCollectionAPI-dev
+          - Notes: exclusive deploy for rollover/recovery workflows
+
+        deploy-api-with-deps
+          - CDK command: cdk deploy DataCollectionAPI-dev
+          - Effective stacks:
+            DataCollectionInit-dev
+            DataCollectionFrontend-dev
+            DataCollectionCognito-dev
+            DataCollectionDynamoDB-dev
+            DataCollectionDataLake-dev
+            DataCollectionAppConfig-dev
+            DataCollectionAPI-dev
+          - Notes: default CDK behavior includes dependencies
+
+        deploy-frontend
+          - CDK command: cdk deploy DataCollectionFrontend-dev
+          - Effective stacks: DataCollectionFrontend-dev
+          - Notes: no explicit stack dependencies in current CDK app wiring
+
+        deploy-scheduler-daily
+          - CDK command: cdk deploy DataCollectionScheduler-dev
+          - Effective stacks:
+            DataCollectionInit-dev
+            DataCollectionDynamoDB-dev
+            DataCollectionAppConfig-dev
+            DataCollectionScheduler-dev
+          - Notes: scheduler stacks exist only when VIESSMANN_CREDENTIALS_SECRET_ARN is set
+
+        deploy-scheduler-frequent
+          - CDK command: cdk deploy DataCollectionSchedulerFrequent-dev
+          - Effective stacks:
+            DataCollectionInit-dev
+            DataCollectionAppConfig-dev
+            DataCollectionSchedulerFrequent-dev
+          - Notes: scheduler stacks exist only when VIESSMANN_CREDENTIALS_SECRET_ARN is set
+        EOF
+
   invoke-auto-retrieval-frequent:
     desc: "Invoke frequent auto-retrieval Lambda (writes to frequent table only)"
     deps: [doctor-aws]
