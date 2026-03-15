@@ -1062,8 +1062,8 @@ function displayRecentSubmissions(submissions) {
     container.innerHTML = submissions.map(submission => `
         <div class="recent-item">
             <div class="recent-item-header">
-                <span>${submission.datum} ${submission.uhrzeit}</span>
-                <span class="recent-item-date">${formatTimestamp(submission.timestamp_utc)}</span>
+                <span>${submission.datum} ${submission.uhrzeit} (UTC)</span>
+                <span class="recent-item-date">${formatTimestamp(submission.timestamp_utc)} (local)</span>
             </div>
             <div class="recent-item-data">
                 <div class="recent-item-field">
