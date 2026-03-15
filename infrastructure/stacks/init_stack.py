@@ -7,18 +7,24 @@ Those are owned/updated by the DynamoDB stack to avoid ownership conflicts durin
 from aws_cdk import Stack, aws_ssm as ssm
 from constructs import Construct
 
+from infrastructure.stacks.ssm_contract import (
+    DEFAULT_SSM_NAMESPACE_PREFIX,
+    normalize_namespace_prefix,
+    ssm_parameter_name,
+)
+
 
 class InitStack(Stack):
-    """Stack responsible for static/future SSM parameters under /HeatingDataCollection/."""
+    """Stack responsible for static/future SSM parameters under a configured namespace."""
 
-    # Stable, single-environment namespace (no env segment by design)
-    SSM_PREFIX = "/HeatingDataCollection"
+    DEFAULT_SSM_PREFIX = DEFAULT_SSM_NAMESPACE_PREFIX
 
     def __init__(
         self,
         scope: Construct,
         construct_id: str,
         environment_name: str,
+        ssm_namespace_prefix: str = DEFAULT_SSM_PREFIX,
         **kwargs,
     ) -> None:
         """
@@ -28,10 +34,15 @@ class InitStack(Stack):
             scope: The parent construct
             construct_id: The logical ID of the stack
             environment_name: The environment name (dev, prod, etc.). Kept for consistency with other stacks.
+            ssm_namespace_prefix: Root SSM namespace prefix (for example /HeatingDataCollection)
             **kwargs: Additional arguments to pass to Stack
         """
         super().__init__(scope, construct_id, **kwargs)
         self.environment_name = environment_name
+        self.ssm_prefix = normalize_namespace_prefix(ssm_namespace_prefix)
+
+        def _param_name(*segments: str) -> str:
+            return ssm_parameter_name(self.ssm_prefix, *segments)
 
         # Static/future parameters to establish conventions + allow growth without touching infra stacks.
         # NOTE: Values are strings because SSM Parameter Store stores string values and consumers typically
@@ -39,7 +50,7 @@ class InitStack(Stack):
         self.schema_version_param = ssm.StringParameter(
             self,
             "ConfigSchemaVersion",
-            parameter_name=f"{self.SSM_PREFIX}/Config/SchemaVersion",
+            parameter_name=_param_name("Config", "SchemaVersion"),
             string_value="1",
             description="HeatingDataCollection config schema version (static contract owned by InitStack).",
         )
@@ -47,7 +58,7 @@ class InitStack(Stack):
         self.enable_passive_reads_param = ssm.StringParameter(
             self,
             "FeatureFlagEnablePassiveReads",
-            parameter_name=f"{self.SSM_PREFIX}/FeatureFlags/EnablePassiveReads",
+            parameter_name=_param_name("FeatureFlags", "EnablePassiveReads"),
             string_value="false",
             description=(
                 "Feature flag: when true, API/Lambda may read from passive submissions table "
@@ -58,7 +69,7 @@ class InitStack(Stack):
         self.rollover_runbook_version_param = ssm.StringParameter(
             self,
             "OperationsRolloverRunbookVersion",
-            parameter_name=f"{self.SSM_PREFIX}/Operations/Rollover/RunbookVersion",
+            parameter_name=_param_name("Operations", "Rollover", "RunbookVersion"),
             string_value="2026-01",
             description="Runbook version for annual rollover procedure (static contract owned by InitStack).",
         )
@@ -67,7 +78,7 @@ class InitStack(Stack):
         self.auto_retrieval_schedule_param = ssm.StringParameter(
             self,
             "AutoRetrievalScheduleCron",
-            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/ScheduleCron",
+            parameter_name=_param_name("AutoRetrieval", "ScheduleCron"),
             string_value="0 6 * * ? *",
             description="EventBridge cron expression for daily retrieval (default: 06:00 UTC).",
         )
@@ -75,7 +86,7 @@ class InitStack(Stack):
         self.auto_retrieval_frequent_schedule_param = ssm.StringParameter(
             self,
             "AutoRetrievalFrequentScheduleCron",
-            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/FrequentScheduleCron",
+            parameter_name=_param_name("AutoRetrieval", "FrequentScheduleCron"),
             string_value="0/15 * * * ? *",
             description="EventBridge cron for frequent scheduler (every 15 minutes within active windows).",
         )
@@ -85,7 +96,7 @@ class InitStack(Stack):
         self.auto_retrieval_frequent_active_windows_param = ssm.StringParameter(
             self,
             "AutoRetrievalFrequentActiveWindows",
-            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/FrequentActiveWindows",
+            parameter_name=_param_name("AutoRetrieval", "FrequentActiveWindows"),
             string_value='[{"start":"00:00","stop":"24:00"}]',
             description=(
                 "Active time windows for frequent scheduler (JSON array of {start,stop} in UTC HH:MM). "
@@ -97,7 +108,7 @@ class InitStack(Stack):
         self.auto_retrieval_max_retries_param = ssm.StringParameter(
             self,
             "AutoRetrievalMaxRetries",
-            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/MaxRetries",
+            parameter_name=_param_name("AutoRetrieval", "MaxRetries"),
             string_value="5",
             description="Migration-only SSM fallback for max retry attempts (runtime source is AppConfig).",
         )
@@ -105,7 +116,7 @@ class InitStack(Stack):
         self.auto_retrieval_retry_delay_param = ssm.StringParameter(
             self,
             "AutoRetrievalRetryDelaySeconds",
-            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/RetryDelaySeconds",
+            parameter_name=_param_name("AutoRetrieval", "RetryDelaySeconds"),
             string_value="300",
             description="Migration-only SSM fallback for retry delay seconds (runtime source is AppConfig).",
         )
@@ -113,7 +124,7 @@ class InitStack(Stack):
         self.auto_retrieval_user_id_param = ssm.StringParameter(
             self,
             "AutoRetrievalUserId",
-            parameter_name=f"{self.SSM_PREFIX}/AutoRetrieval/UserId",
+            parameter_name=_param_name("AutoRetrieval", "UserId"),
             string_value="SET_ME",
             description=(
                 "Migration-only SSM fallback for installation owner user_id (runtime source is AppConfig). "

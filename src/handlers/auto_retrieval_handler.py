@@ -28,6 +28,36 @@ _dynamodb = None
 _appconfig_data_client = None
 
 
+DEFAULT_SSM_NAMESPACE_PREFIX = "/HeatingDataCollection"
+
+
+def _normalize_namespace_prefix(prefix: str) -> str:
+    """Normalize namespace prefix to '/segment[/segment...]' without trailing slash."""
+    normalized = (prefix or "").strip()
+    if not normalized:
+        return DEFAULT_SSM_NAMESPACE_PREFIX
+    return f"/{normalized.lstrip('/')}".rstrip("/")
+
+
+def _default_auto_retrieval_ssm_prefix() -> str:
+    """
+    Resolve the auto-retrieval SSM prefix from env in one place.
+
+    Priority:
+    1) AUTO_RETRIEVAL_SSM_PREFIX (explicit runtime override)
+    2) SSM_NAMESPACE_PREFIX + '/AutoRetrieval' (shared namespace root)
+    3) DEFAULT_SSM_NAMESPACE_PREFIX + '/AutoRetrieval'
+    """
+    explicit_prefix = os.environ.get("AUTO_RETRIEVAL_SSM_PREFIX", "").strip()
+    if explicit_prefix:
+        return explicit_prefix.rstrip("/")
+
+    namespace_prefix = _normalize_namespace_prefix(
+        os.environ.get("SSM_NAMESPACE_PREFIX", DEFAULT_SSM_NAMESPACE_PREFIX)
+    )
+    return f"{namespace_prefix}/AutoRetrieval"
+
+
 def _ssm_fallback_enabled() -> bool:
     """Return whether migration fallback to runtime SSM values is enabled."""
     raw = os.environ.get("AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK", "true").strip().lower()
@@ -349,7 +379,7 @@ def _check_active_window_and_maybe_skip() -> bool:
         print("No AppConfig active windows and SSM fallback disabled; proceeding with retrieval")
         return False
 
-    ssm_prefix = os.environ.get("AUTO_RETRIEVAL_SSM_PREFIX", "/HeatingDataCollection/AutoRetrieval")
+    ssm_prefix = _default_auto_retrieval_ssm_prefix()
     path = f"{ssm_prefix}/{param_name}"
     try:
         client = _get_ssm_client()
@@ -377,7 +407,7 @@ def _get_ssm_param(name: str, default: str = "") -> str:
     if not _ssm_fallback_enabled():
         return default
 
-    ssm_prefix = os.environ.get("AUTO_RETRIEVAL_SSM_PREFIX", "/HeatingDataCollection/AutoRetrieval")
+    ssm_prefix = _default_auto_retrieval_ssm_prefix()
     path = f"{ssm_prefix}/{name}"
     try:
         client = _get_ssm_client()
@@ -466,7 +496,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if not user_id or user_id == "SET_ME":
         msg = (
             "AutoRetrieval userId not configured. Set userId in AppConfig "
-            "or enable SSM fallback and set /HeatingDataCollection/AutoRetrieval/UserId."
+            f"or enable SSM fallback and set {_default_auto_retrieval_ssm_prefix()}/UserId."
         )
         print(msg)
         _publish_failure_alert(msg, 0, max_retries)

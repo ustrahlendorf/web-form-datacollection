@@ -33,7 +33,8 @@ task deploy-frontend
 ```
 
 Notes:
-- `taskfile.env` is loaded automatically and contains `SSM_NAMESPACE_PREFIX=/HeatingDataCollection` for the single-environment setup.
+- `taskfile.env` is loaded automatically and contains `SSM_NAMESPACE_PREFIX` (default: `/HeatingDataCollection`) for the single-environment setup.
+- Use `PFX="${SSM_NAMESPACE_PREFIX:-/HeatingDataCollection}"` in ad-hoc CLI commands to keep SSM paths namespace-driven.
 - CDK synth/deploy requires `ACTIVE_SUBMISSIONS_TABLE_NAME` and `PASSIVE_SUBMISSIONS_TABLE_NAME` to be set; the Taskfile enforces this for DynamoDB/API/Frontend deploys.
 
 #### Option B: manual CDK commands (legacy)

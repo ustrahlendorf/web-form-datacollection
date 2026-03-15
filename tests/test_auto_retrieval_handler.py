@@ -8,6 +8,11 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from infrastructure.stacks.ssm_contract import (
+    AUTO_RETRIEVAL_SEGMENTS,
+    DEFAULT_SSM_NAMESPACE_PREFIX,
+    ssm_parameter_name,
+)
 from src.handlers.auto_retrieval_handler import (
     _parse_time_to_minutes,
     _parse_active_windows,
@@ -17,6 +22,10 @@ from src.handlers.auto_retrieval_handler import (
     _load_appconfig,
     _load_config,
     lambda_handler,
+)
+
+AUTO_RETRIEVAL_PREFIX = ssm_parameter_name(
+    DEFAULT_SSM_NAMESPACE_PREFIX, *AUTO_RETRIEVAL_SEGMENTS
 )
 
 
@@ -376,7 +385,7 @@ def test_lambda_handler_skips_when_outside_window(
         {
             "ACTIVE_WINDOWS_PARAM": "TestActiveWindows",
             "ONCE_DAILY": "false",
-            "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
+            "AUTO_RETRIEVAL_SSM_PREFIX": AUTO_RETRIEVAL_PREFIX,
         },
     ):
         with patch(
@@ -410,7 +419,7 @@ def test_lambda_handler_proceeds_when_inside_window(
         {
             "ACTIVE_WINDOWS_PARAM": "TestActiveWindows",
             "ONCE_DAILY": "false",
-            "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
+            "AUTO_RETRIEVAL_SSM_PREFIX": AUTO_RETRIEVAL_PREFIX,
             "SUBMISSIONS_TABLE": "test-table",
             "VIESSMANN_CREDENTIALS_SECRET_ARN": "arn:aws:secretsmanager:eu-central-1:123:secret:test",
         },

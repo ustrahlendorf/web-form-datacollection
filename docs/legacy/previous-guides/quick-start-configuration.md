@@ -6,8 +6,9 @@ From the repo root (`AWS-kiro/`), you can deploy the infra stacks with Taskfile 
 
 ```bash
 task doctor
+export PFX="${SSM_NAMESPACE_PREFIX:-/HeatingDataCollection}"
 
-# one-time: creates static SSM parameters under /HeatingDataCollection
+# one-time: creates static SSM parameters under ${PFX}
 task deploy-init
 
 # deploy/update DynamoDB pointers and API wiring
@@ -17,7 +18,8 @@ task deploy-frontend
 ```
 
 Notes:
-- The Taskfile loads `taskfile.env` automatically (including `SSM_NAMESPACE_PREFIX=/HeatingDataCollection`).
+- The Taskfile loads `taskfile.env` automatically (default: `SSM_NAMESPACE_PREFIX=/HeatingDataCollection`).
+- Use `PFX="${SSM_NAMESPACE_PREFIX:-/HeatingDataCollection}"` in ad-hoc CLI commands to avoid hardcoded namespace paths.
 - Frontend asset upload is still performed from `web-form-verbrauch/frontend/` (see below).
 
 ## One-Command Deployment

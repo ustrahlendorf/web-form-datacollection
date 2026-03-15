@@ -13,6 +13,14 @@ from aws_cdk import App, Environment
 from aws_cdk.assertions import Match, Template
 
 from infrastructure.stacks.dynamodb_stack import DynamoDBStack
+from infrastructure.stacks.ssm_contract import (
+    DEFAULT_SSM_NAMESPACE_PREFIX,
+    SUBMISSIONS_ACTIVE_TABLE_ARN_SEGMENTS,
+    SUBMISSIONS_ACTIVE_TABLE_NAME_SEGMENTS,
+    SUBMISSIONS_PASSIVE_TABLE_ARN_SEGMENTS,
+    SUBMISSIONS_PASSIVE_TABLE_NAME_SEGMENTS,
+    ssm_parameter_name,
+)
 
 
 def test_dynamodb_stack_writes_active_passive_ssm_pointers() -> None:
@@ -32,12 +40,13 @@ def test_dynamodb_stack_writes_active_passive_ssm_pointers() -> None:
     template = Template.from_stack(stack)
 
     template.resource_count_is("AWS::SSM::Parameter", 4)
+    expected_prefix = DEFAULT_SSM_NAMESPACE_PREFIX
 
     for expected_name in (
-        "/HeatingDataCollection/Submissions/Active/TableName",
-        "/HeatingDataCollection/Submissions/Active/TableArn",
-        "/HeatingDataCollection/Submissions/Passive/TableName",
-        "/HeatingDataCollection/Submissions/Passive/TableArn",
+        ssm_parameter_name(expected_prefix, *SUBMISSIONS_ACTIVE_TABLE_NAME_SEGMENTS),
+        ssm_parameter_name(expected_prefix, *SUBMISSIONS_ACTIVE_TABLE_ARN_SEGMENTS),
+        ssm_parameter_name(expected_prefix, *SUBMISSIONS_PASSIVE_TABLE_NAME_SEGMENTS),
+        ssm_parameter_name(expected_prefix, *SUBMISSIONS_PASSIVE_TABLE_ARN_SEGMENTS),
     ):
         template.has_resource_properties(
             "AWS::SSM::Parameter",

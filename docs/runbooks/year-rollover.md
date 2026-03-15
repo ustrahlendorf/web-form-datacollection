@@ -11,7 +11,8 @@ The roll-over is an **infrastructure switch**: update which physical table is co
 ### One-time prerequisite: deploy InitStack (SSM contract)
 
 InitStack creates the stable SSM “contract” parameters under the namespace prefix (single environment, no env segment):
-- `SSM_NAMESPACE_PREFIX=/HeatingDataCollection` (see `taskfile.env`)
+- `SSM_NAMESPACE_PREFIX` (default: `/HeatingDataCollection`, see `taskfile.env`)
+- Use `PFX="${SSM_NAMESPACE_PREFIX:-/HeatingDataCollection}"` in ad-hoc CLI commands.
 
 Deploy it once before your first roll-over:
 
@@ -27,10 +28,10 @@ task ssm:init:show
 
 - **SSM “contract” (required at deploy time)**
   - The API stack reads these parameters at deploy time (not at runtime):
-    - `/HeatingDataCollection/Submissions/Active/TableName`
-    - `/HeatingDataCollection/Submissions/Active/TableArn`
-    - `/HeatingDataCollection/Submissions/Passive/TableName`
-    - `/HeatingDataCollection/Submissions/Passive/TableArn`
+    - `${PFX}/Submissions/Active/TableName`
+    - `${PFX}/Submissions/Active/TableArn`
+    - `${PFX}/Submissions/Passive/TableName`
+    - `${PFX}/Submissions/Passive/TableArn`
 
 - **DynamoDB (CDK)**
   - The table schema is unchanged:
@@ -129,10 +130,11 @@ Run these checks before and after cutover.
 #### 1) Read pointer parameters
 
 ```bash
-aws ssm get-parameter --name "/HeatingDataCollection/Submissions/Active/TableName" --query "Parameter.Value" --output text
-aws ssm get-parameter --name "/HeatingDataCollection/Submissions/Active/TableArn"  --query "Parameter.Value" --output text
-aws ssm get-parameter --name "/HeatingDataCollection/Submissions/Passive/TableName" --query "Parameter.Value" --output text
-aws ssm get-parameter --name "/HeatingDataCollection/Submissions/Passive/TableArn"  --query "Parameter.Value" --output text
+PFX="${SSM_NAMESPACE_PREFIX:-/HeatingDataCollection}"
+aws ssm get-parameter --name "${PFX}/Submissions/Active/TableName" --query "Parameter.Value" --output text
+aws ssm get-parameter --name "${PFX}/Submissions/Active/TableArn"  --query "Parameter.Value" --output text
+aws ssm get-parameter --name "${PFX}/Submissions/Passive/TableName" --query "Parameter.Value" --output text
+aws ssm get-parameter --name "${PFX}/Submissions/Passive/TableArn"  --query "Parameter.Value" --output text
 ```
 
 Expected:
@@ -142,7 +144,8 @@ Expected:
 #### 2) Confirm the active table exists and is the one receiving writes
 
 ```bash
-ACTIVE_TABLE="$(aws ssm get-parameter --name "/HeatingDataCollection/Submissions/Active/TableName" --query "Parameter.Value" --output text)"
+PFX="${SSM_NAMESPACE_PREFIX:-/HeatingDataCollection}"
+ACTIVE_TABLE="$(aws ssm get-parameter --name "${PFX}/Submissions/Active/TableName" --query "Parameter.Value" --output text)"
 aws dynamodb describe-table --table-name "$ACTIVE_TABLE" --query "Table.TableStatus" --output text
 ```
 

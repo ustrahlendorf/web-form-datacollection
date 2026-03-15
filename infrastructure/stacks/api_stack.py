@@ -17,9 +17,19 @@ from aws_cdk import (
 from constructs import Construct
 import os
 
+from infrastructure.stacks.ssm_contract import (
+    DEFAULT_SSM_NAMESPACE_PREFIX,
+    SUBMISSIONS_ACTIVE_TABLE_ARN_SEGMENTS,
+    SUBMISSIONS_ACTIVE_TABLE_NAME_SEGMENTS,
+    normalize_namespace_prefix,
+    ssm_parameter_name,
+)
+
 
 class APIStack(Stack):
     """Stack for API Gateway HTTP API and Lambda execution role."""
+
+    DEFAULT_SSM_PREFIX = DEFAULT_SSM_NAMESPACE_PREFIX
 
     def __init__(
         self,
@@ -32,6 +42,7 @@ class APIStack(Stack):
         appconfig_environment_id: str,
         appconfig_profile_id: str,
         appconfig_deployment_strategy_id: str,
+        ssm_namespace_prefix: str = DEFAULT_SSM_PREFIX,
         cloudfront_domain: str | None = None,
         viessmann_credentials_secret_arn: str | None = None,
         **kwargs
@@ -49,6 +60,7 @@ class APIStack(Stack):
             appconfig_environment_id: AppConfig environment id for auto-retrieval config
             appconfig_profile_id: AppConfig profile id for auto-retrieval config
             appconfig_deployment_strategy_id: AppConfig deployment strategy id
+            ssm_namespace_prefix: Root SSM namespace prefix (for example /HeatingDataCollection)
             cloudfront_domain: CloudFront distribution domain name for CORS (e.g. dxxxx.cloudfront.net)
             viessmann_credentials_secret_arn: ARN of Secrets Manager secret with VIESSMANN_CLIENT_ID,
                 VIESSMANN_EMAIL, VIESSMANN_PASSWORD. If set, enables GET /heating/live endpoint.
@@ -56,6 +68,7 @@ class APIStack(Stack):
         """
         super().__init__(scope, construct_id, **kwargs)
         self.environment_name = environment_name
+        self.ssm_prefix = normalize_namespace_prefix(ssm_namespace_prefix)
 
         # Create HTTP API (not REST API for cost efficiency)
         # CORS origins will include both localhost for development and CloudFront domain for production
@@ -115,7 +128,7 @@ class APIStack(Stack):
         # Read active DynamoDB table ARN from SSM Parameter Store pointer (owned by DynamoDBStack).
         # This avoids tight coupling to CloudFormation exports/imports and makes rollovers deterministic.
         submissions_active_table_arn = ssm.StringParameter.value_for_string_parameter(
-            self, "/HeatingDataCollection/Submissions/Active/TableArn"
+            self, ssm_parameter_name(self.ssm_prefix, *SUBMISSIONS_ACTIVE_TABLE_ARN_SEGMENTS)
         )
 
         lambda_execution_role.add_to_policy(
@@ -159,7 +172,7 @@ class APIStack(Stack):
 
         # Read active DynamoDB table name from SSM Parameter Store pointer (owned by DynamoDBStack).
         submissions_table_name = ssm.StringParameter.value_for_string_parameter(
-            self, "/HeatingDataCollection/Submissions/Active/TableName"
+            self, ssm_parameter_name(self.ssm_prefix, *SUBMISSIONS_ACTIVE_TABLE_NAME_SEGMENTS)
         )
 
         # Create Lambda functions

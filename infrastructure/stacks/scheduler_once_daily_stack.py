@@ -16,9 +16,21 @@ from aws_cdk import (
 from constructs import Construct
 import os
 
+from infrastructure.stacks.ssm_contract import (
+    AUTO_RETRIEVAL_SEGMENTS,
+    DEFAULT_SSM_NAMESPACE_PREFIX,
+    SUBMISSIONS_ACTIVE_TABLE_ARN_SEGMENTS,
+    SUBMISSIONS_ACTIVE_TABLE_NAME_SEGMENTS,
+    normalize_namespace_prefix,
+    ssm_parameter_arn_from_segments,
+    ssm_parameter_name,
+)
+
 
 class SchedulerOnceDailyStack(Stack):
     """Stack for EventBridge Rule and Lambda for daily Viessmann auto-retrieval."""
+
+    DEFAULT_SSM_PREFIX = DEFAULT_SSM_NAMESPACE_PREFIX
 
     def __init__(
         self,
@@ -29,6 +41,7 @@ class SchedulerOnceDailyStack(Stack):
         appconfig_application_id: str,
         appconfig_environment_id: str,
         appconfig_profile_id: str,
+        ssm_namespace_prefix: str = DEFAULT_SSM_PREFIX,
         **kwargs,
     ) -> None:
         """
@@ -43,22 +56,27 @@ class SchedulerOnceDailyStack(Stack):
             appconfig_application_id: AppConfig application identifier
             appconfig_environment_id: AppConfig environment identifier
             appconfig_profile_id: AppConfig configuration profile identifier
+            ssm_namespace_prefix: Root SSM namespace prefix (for example /HeatingDataCollection)
             **kwargs: Additional arguments to pass to Stack
         """
         super().__init__(scope, construct_id, **kwargs)
         self.environment_name = environment_name
+        self.ssm_prefix = normalize_namespace_prefix(ssm_namespace_prefix)
+        self.auto_retrieval_ssm_prefix = ssm_parameter_name(
+            self.ssm_prefix, *AUTO_RETRIEVAL_SEGMENTS
+        )
 
         # Read config from SSM (parameters created by InitStack)
         schedule_cron = ssm.StringParameter.value_for_string_parameter(
-            self, "/HeatingDataCollection/AutoRetrieval/ScheduleCron"
+            self, ssm_parameter_name(self.ssm_prefix, *AUTO_RETRIEVAL_SEGMENTS, "ScheduleCron")
         )
 
         submissions_table_name = ssm.StringParameter.value_for_string_parameter(
-            self, "/HeatingDataCollection/Submissions/Active/TableName"
+            self, ssm_parameter_name(self.ssm_prefix, *SUBMISSIONS_ACTIVE_TABLE_NAME_SEGMENTS)
         )
 
         submissions_table_arn = ssm.StringParameter.value_for_string_parameter(
-            self, "/HeatingDataCollection/Submissions/Active/TableArn"
+            self, ssm_parameter_name(self.ssm_prefix, *SUBMISSIONS_ACTIVE_TABLE_ARN_SEGMENTS)
         )
 
         # SNS topic for failure alerts
@@ -96,7 +114,13 @@ class SchedulerOnceDailyStack(Stack):
                 effect=iam.Effect.ALLOW,
                 actions=["ssm:GetParameter"],
                 resources=[
-                    f"arn:aws:ssm:{self.region}:{self.account}:parameter/HeatingDataCollection/AutoRetrieval/*"
+                    ssm_parameter_arn_from_segments(
+                        self.region,
+                        self.account,
+                        self.ssm_prefix,
+                        *AUTO_RETRIEVAL_SEGMENTS,
+                        "*",
+                    )
                 ],
             )
         )
@@ -180,7 +204,7 @@ class SchedulerOnceDailyStack(Stack):
                 "VIESSMANN_CREDENTIALS_SECRET_ARN": viessmann_credentials_secret_arn,
                 "ONCE_DAILY": "true",
                 "AUTO_RETRIEVAL_FAILURE_TOPIC_ARN": failure_topic.topic_arn,
-                "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
+                "AUTO_RETRIEVAL_SSM_PREFIX": self.auto_retrieval_ssm_prefix,
                 "AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK": "false",
                 "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": appconfig_application_id,
                 "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": appconfig_environment_id,

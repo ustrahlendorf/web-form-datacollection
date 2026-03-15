@@ -20,6 +20,21 @@ from infrastructure.stacks.scheduler_once_daily_stack import SchedulerOnceDailyS
 from infrastructure.stacks.scheduler_frequent_stack import SchedulerFrequentStack
 
 
+def _normalize_ssm_namespace_prefix(prefix: str) -> str:
+    """Normalize SSM namespace prefix to '/segment[/segment...]' format."""
+    normalized = prefix.strip()
+    if not normalized:
+        raise SystemExit(
+            "SSM_NAMESPACE_PREFIX must not be empty. "
+            "Set it before running 'cdk synth/deploy'."
+        )
+    if not normalized.startswith("/"):
+        normalized = f"/{normalized}"
+    if normalized != "/":
+        normalized = normalized.rstrip("/")
+    return normalized
+
+
 def create_app() -> App:
     """
     Create and configure the CDK App (dev-only).
@@ -43,6 +58,9 @@ def create_app() -> App:
     )
 
     environment_name = "dev"
+    ssm_namespace_prefix = _normalize_ssm_namespace_prefix(
+        os.environ.get("SSM_NAMESPACE_PREFIX", "/HeatingDataCollection")
+    )
 
     # External configuration for DynamoDB table naming (active/passive).
     # These MUST be provided at deploy time so we never silently fall back to a hardcoded year.
@@ -70,6 +88,7 @@ def create_app() -> App:
         app,
         f"DataCollectionInit-{environment_name}",
         environment_name=environment_name,
+        ssm_namespace_prefix=ssm_namespace_prefix,
         env=env_config,
         description="Data Collection Web Application - Init (dev)",
     )
@@ -94,6 +113,7 @@ def create_app() -> App:
         app,
         f"DataCollectionDynamoDB-{environment_name}",
         environment_name=environment_name,
+        ssm_namespace_prefix=ssm_namespace_prefix,
         active_submissions_table_name=str(active_submissions_table_name),
         passive_submissions_table_name=str(passive_submissions_table_name),
         env=env_config,
@@ -122,6 +142,7 @@ def create_app() -> App:
         app,
         f"DataCollectionAPI-{environment_name}",
         environment_name=environment_name,
+        ssm_namespace_prefix=ssm_namespace_prefix,
         cognito_user_pool_id=cognito_stack.user_pool.user_pool_id,
         cognito_user_pool_client_id=cognito_stack.user_pool_client.user_pool_client_id,
         appconfig_application_id=appconfig_stack.appconfig_application.ref,
@@ -139,6 +160,7 @@ def create_app() -> App:
             app,
             f"DataCollectionScheduler-{environment_name}",
             environment_name=environment_name,
+            ssm_namespace_prefix=ssm_namespace_prefix,
             viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
             appconfig_application_id=appconfig_stack.appconfig_application.ref,
             appconfig_environment_id=appconfig_stack.appconfig_environment.ref,
@@ -155,6 +177,7 @@ def create_app() -> App:
             app,
             f"DataCollectionSchedulerFrequent-{environment_name}",
             environment_name=environment_name,
+            ssm_namespace_prefix=ssm_namespace_prefix,
             viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
             appconfig_application_id=appconfig_stack.appconfig_application.ref,
             appconfig_environment_id=appconfig_stack.appconfig_environment.ref,

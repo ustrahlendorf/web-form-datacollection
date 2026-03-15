@@ -22,9 +22,19 @@ from aws_cdk import (
 from constructs import Construct
 import os
 
+from infrastructure.stacks.ssm_contract import (
+    AUTO_RETRIEVAL_SEGMENTS,
+    DEFAULT_SSM_NAMESPACE_PREFIX,
+    normalize_namespace_prefix,
+    ssm_parameter_arn_from_segments,
+    ssm_parameter_name,
+)
+
 
 class SchedulerFrequentStack(Stack):
     """Stack for frequent auto-retrieval Lambda with DynamoDB table and SNS topic."""
+
+    DEFAULT_SSM_PREFIX = DEFAULT_SSM_NAMESPACE_PREFIX
 
     def __init__(
         self,
@@ -35,6 +45,7 @@ class SchedulerFrequentStack(Stack):
         appconfig_application_id: str,
         appconfig_environment_id: str,
         appconfig_profile_id: str,
+        ssm_namespace_prefix: str = DEFAULT_SSM_PREFIX,
         **kwargs,
     ) -> None:
         """
@@ -49,14 +60,20 @@ class SchedulerFrequentStack(Stack):
             appconfig_application_id: AppConfig application identifier
             appconfig_environment_id: AppConfig environment identifier
             appconfig_profile_id: AppConfig configuration profile identifier
+            ssm_namespace_prefix: Root SSM namespace prefix (for example /HeatingDataCollection)
             **kwargs: Additional arguments to pass to Stack
         """
         super().__init__(scope, construct_id, **kwargs)
         self.environment_name = environment_name
+        self.ssm_prefix = normalize_namespace_prefix(ssm_namespace_prefix)
+        self.auto_retrieval_ssm_prefix = ssm_parameter_name(
+            self.ssm_prefix, *AUTO_RETRIEVAL_SEGMENTS
+        )
 
         # Read frequent schedule from SSM (parameter created by InitStack)
         frequent_schedule_cron = ssm.StringParameter.value_for_string_parameter(
-            self, "/HeatingDataCollection/AutoRetrieval/FrequentScheduleCron"
+            self,
+            ssm_parameter_name(self.ssm_prefix, *AUTO_RETRIEVAL_SEGMENTS, "FrequentScheduleCron"),
         )
 
         # DynamoDB table — same schema as production (user_id, timestamp_utc)
@@ -112,7 +129,13 @@ class SchedulerFrequentStack(Stack):
                 effect=iam.Effect.ALLOW,
                 actions=["ssm:GetParameter"],
                 resources=[
-                    f"arn:aws:ssm:{self.region}:{self.account}:parameter/HeatingDataCollection/AutoRetrieval/*"
+                    ssm_parameter_arn_from_segments(
+                        self.region,
+                        self.account,
+                        self.ssm_prefix,
+                        *AUTO_RETRIEVAL_SEGMENTS,
+                        "*",
+                    )
                 ],
             )
         )
@@ -196,7 +219,7 @@ class SchedulerFrequentStack(Stack):
                 "VIESSMANN_CREDENTIALS_SECRET_ARN": viessmann_credentials_secret_arn,
                 "ONCE_DAILY": "false",
                 "AUTO_RETRIEVAL_FAILURE_TOPIC_ARN": frequent_failure_topic.topic_arn,
-                "AUTO_RETRIEVAL_SSM_PREFIX": "/HeatingDataCollection/AutoRetrieval",
+                "AUTO_RETRIEVAL_SSM_PREFIX": self.auto_retrieval_ssm_prefix,
                 "AUTO_RETRIEVAL_ENABLE_SSM_FALLBACK": "false",
                 "AUTO_RETRIEVAL_SKIP_DUPLICATE": "false",
                 "ACTIVE_WINDOWS_PARAM": "FrequentActiveWindows",

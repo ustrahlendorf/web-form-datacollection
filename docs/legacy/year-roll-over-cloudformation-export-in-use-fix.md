@@ -4,7 +4,7 @@
 
 This document applies only to older deployments where `APIStack` used CloudFormation `Export`/`ImportValue` wiring for DynamoDB table names/ARNs.
 
-The current design uses **SSM Parameter Store pointers** under `/HeatingDataCollection/Submissions/...` to decouple the stacks. For the up-to-date roll-over procedure, see:
+The current design uses **SSM Parameter Store pointers** under `${SSM_NAMESPACE_PREFIX}/Submissions/...` (default namespace: `/HeatingDataCollection`) to decouple the stacks. For the up-to-date roll-over procedure, see:
 - `docs/runbooks/year-rollover.md`
 
 ### Summary (what went wrong)

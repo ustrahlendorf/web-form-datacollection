@@ -9,11 +9,21 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+from infrastructure.stacks.ssm_contract import (
+    DEFAULT_SSM_NAMESPACE_PREFIX,
+    SUBMISSIONS_ACTIVE_TABLE_ARN_SEGMENTS,
+    SUBMISSIONS_ACTIVE_TABLE_NAME_SEGMENTS,
+    SUBMISSIONS_PASSIVE_TABLE_ARN_SEGMENTS,
+    SUBMISSIONS_PASSIVE_TABLE_NAME_SEGMENTS,
+    normalize_namespace_prefix,
+    ssm_parameter_name,
+)
+
 
 class DynamoDBStack(Stack):
     """Stack for DynamoDB table and data persistence configuration."""
 
-    SSM_PREFIX = "/HeatingDataCollection"
+    DEFAULT_SSM_PREFIX = DEFAULT_SSM_NAMESPACE_PREFIX
 
     def __init__(
         self,
@@ -22,6 +32,7 @@ class DynamoDBStack(Stack):
         environment_name: str,
         active_submissions_table_name: str,
         passive_submissions_table_name: str,
+        ssm_namespace_prefix: str = DEFAULT_SSM_PREFIX,
         **kwargs
     ) -> None:
         """
@@ -31,12 +42,17 @@ class DynamoDBStack(Stack):
             scope: The parent construct
             construct_id: The logical ID of the stack
             environment_name: The environment name (dev, prod, etc.)
+            ssm_namespace_prefix: Root SSM namespace prefix (for example /HeatingDataCollection)
             active_submissions_table_name: Physical table name for the active (current) submissions table
             passive_submissions_table_name: Physical table name for the passive (previous) submissions table
             **kwargs: Additional arguments to pass to Stack
         """
         super().__init__(scope, construct_id, **kwargs)
         self.environment_name = environment_name
+        self.ssm_prefix = normalize_namespace_prefix(ssm_namespace_prefix)
+
+        def _param_name(*segments: str) -> str:
+            return ssm_parameter_name(self.ssm_prefix, *segments)
 
         if not active_submissions_table_name:
             raise ValueError("active_submissions_table_name must not be empty")
@@ -134,28 +150,28 @@ class DynamoDBStack(Stack):
         self.submissions_active_table_name_pointer = ssm.StringParameter(
             self,
             "SubmissionsActiveTableNamePointer",
-            parameter_name=f"{self.SSM_PREFIX}/Submissions/Active/TableName",
+            parameter_name=_param_name(*SUBMISSIONS_ACTIVE_TABLE_NAME_SEGMENTS),
             string_value=active_table.table_name,
             description="Pointer: active (current) DynamoDB submissions table name",
         )
         self.submissions_active_table_arn_pointer = ssm.StringParameter(
             self,
             "SubmissionsActiveTableArnPointer",
-            parameter_name=f"{self.SSM_PREFIX}/Submissions/Active/TableArn",
+            parameter_name=_param_name(*SUBMISSIONS_ACTIVE_TABLE_ARN_SEGMENTS),
             string_value=active_table.table_arn,
             description="Pointer: active (current) DynamoDB submissions table ARN",
         )
         self.submissions_passive_table_name_pointer = ssm.StringParameter(
             self,
             "SubmissionsPassiveTableNamePointer",
-            parameter_name=f"{self.SSM_PREFIX}/Submissions/Passive/TableName",
+            parameter_name=_param_name(*SUBMISSIONS_PASSIVE_TABLE_NAME_SEGMENTS),
             string_value=passive_table.table_name,
             description="Pointer: passive (previous) DynamoDB submissions table name",
         )
         self.submissions_passive_table_arn_pointer = ssm.StringParameter(
             self,
             "SubmissionsPassiveTableArnPointer",
-            parameter_name=f"{self.SSM_PREFIX}/Submissions/Passive/TableArn",
+            parameter_name=_param_name(*SUBMISSIONS_PASSIVE_TABLE_ARN_SEGMENTS),
             string_value=passive_table.table_arn,
             description="Pointer: passive (previous) DynamoDB submissions table ARN",
         )

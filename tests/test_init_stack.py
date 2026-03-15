@@ -13,6 +13,7 @@ from aws_cdk import App, Environment
 from aws_cdk.assertions import Template
 
 from infrastructure.stacks.init_stack import InitStack
+from infrastructure.stacks.ssm_contract import DEFAULT_SSM_NAMESPACE_PREFIX, ssm_parameter_name
 
 
 def test_init_stack_creates_static_ssm_parameters() -> None:
@@ -32,11 +33,12 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
     template = Template.from_stack(stack)
 
     template.resource_count_is("AWS::SSM::Parameter", 9)
+    expected_prefix = DEFAULT_SSM_NAMESPACE_PREFIX
 
     template.has_resource_properties(
         "AWS::SSM::Parameter",
         {
-            "Name": "/HeatingDataCollection/Config/SchemaVersion",
+            "Name": ssm_parameter_name(expected_prefix, "Config", "SchemaVersion"),
             "Type": "String",
             "Value": "1",
         },
@@ -45,7 +47,7 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
     template.has_resource_properties(
         "AWS::SSM::Parameter",
         {
-            "Name": "/HeatingDataCollection/FeatureFlags/EnablePassiveReads",
+            "Name": ssm_parameter_name(expected_prefix, "FeatureFlags", "EnablePassiveReads"),
             "Type": "String",
             "Value": "false",
         },
@@ -54,7 +56,9 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
     template.has_resource_properties(
         "AWS::SSM::Parameter",
         {
-            "Name": "/HeatingDataCollection/Operations/Rollover/RunbookVersion",
+            "Name": ssm_parameter_name(
+                expected_prefix, "Operations", "Rollover", "RunbookVersion"
+            ),
             "Type": "String",
             "Value": "2026-01",
         },
@@ -63,7 +67,7 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
     template.has_resource_properties(
         "AWS::SSM::Parameter",
         {
-            "Name": "/HeatingDataCollection/AutoRetrieval/ScheduleCron",
+            "Name": ssm_parameter_name(expected_prefix, "AutoRetrieval", "ScheduleCron"),
             "Type": "String",
             "Value": "0 6 * * ? *",
         },
@@ -72,7 +76,7 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
     template.has_resource_properties(
         "AWS::SSM::Parameter",
         {
-            "Name": "/HeatingDataCollection/AutoRetrieval/MaxRetries",
+            "Name": ssm_parameter_name(expected_prefix, "AutoRetrieval", "MaxRetries"),
             "Type": "String",
             "Value": "5",
             "Description": "Migration-only SSM fallback for max retry attempts (runtime source is AppConfig).",
@@ -82,7 +86,9 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
     template.has_resource_properties(
         "AWS::SSM::Parameter",
         {
-            "Name": "/HeatingDataCollection/AutoRetrieval/FrequentScheduleCron",
+            "Name": ssm_parameter_name(
+                expected_prefix, "AutoRetrieval", "FrequentScheduleCron"
+            ),
             "Type": "String",
             "Value": "0/15 * * * ? *",
         },
@@ -91,7 +97,9 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
     template.has_resource_properties(
         "AWS::SSM::Parameter",
         {
-            "Name": "/HeatingDataCollection/AutoRetrieval/FrequentActiveWindows",
+            "Name": ssm_parameter_name(
+                expected_prefix, "AutoRetrieval", "FrequentActiveWindows"
+            ),
             "Type": "String",
             "Value": '[{"start":"00:00","stop":"24:00"}]',
         },
@@ -100,7 +108,9 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
     template.has_resource_properties(
         "AWS::SSM::Parameter",
         {
-            "Name": "/HeatingDataCollection/AutoRetrieval/RetryDelaySeconds",
+            "Name": ssm_parameter_name(
+                expected_prefix, "AutoRetrieval", "RetryDelaySeconds"
+            ),
             "Type": "String",
             "Value": "300",
             "Description": "Migration-only SSM fallback for retry delay seconds (runtime source is AppConfig).",
@@ -110,7 +120,7 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
     template.has_resource_properties(
         "AWS::SSM::Parameter",
         {
-            "Name": "/HeatingDataCollection/AutoRetrieval/UserId",
+            "Name": ssm_parameter_name(expected_prefix, "AutoRetrieval", "UserId"),
             "Type": "String",
             "Value": "SET_ME",
             "Description": (

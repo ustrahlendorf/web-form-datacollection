@@ -14,8 +14,9 @@ From the repo root (`web-form-verbrauch/`):
 
 ```bash
 task doctor
+export PFX="${SSM_NAMESPACE_PREFIX:-/HeatingDataCollection}"
 
-# one-time: creates static SSM parameters under /HeatingDataCollection
+# one-time: creates static SSM parameters under ${PFX}
 task deploy-init
 
 # deploy/update DynamoDB pointers and API wiring
@@ -25,7 +26,8 @@ task deploy-frontend
 ```
 
 Notes:
-- The Taskfile loads `taskfile.env` automatically (including `SSM_NAMESPACE_PREFIX=/HeatingDataCollection`).
+- The Taskfile loads `taskfile.env` automatically (default: `SSM_NAMESPACE_PREFIX=/HeatingDataCollection`).
+- Use `PFX="${SSM_NAMESPACE_PREFIX:-/HeatingDataCollection}"` in ad-hoc CLI commands to avoid hardcoded namespace paths.
 - For `deploy-dynamodb`, `deploy-api`, and `deploy-frontend`, set `ACTIVE_SUBMISSIONS_TABLE_NAME` and `PASSIVE_SUBMISSIONS_TABLE_NAME` in `taskfile.env` (e.g. `submissions-2025` / `submissions-2026`). `deploy-init` uses placeholders when these are unset.
 - Frontend asset upload is still performed from `web-form-verbrauch/frontend/` (next section).
 

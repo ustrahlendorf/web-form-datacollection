@@ -174,18 +174,19 @@ Important: Save success confirms deployment was **started**. It does not guarant
 
 The auto-retrieval stores data under a single Cognito user. The primary source is AppConfig `userId`.
 Set the SSM value only as fallback during migration.
+Use `PFX="${SSM_NAMESPACE_PREFIX:-/HeatingDataCollection}"` for CLI path examples below.
 
 **Option A: AWS Console**
 
 1. Go to AWS Systems Manager → Parameter Store
-2. Find `/HeatingDataCollection/AutoRetrieval/UserId`
+2. Find `${PFX}/AutoRetrieval/UserId`
 3. Edit and set the value to your Cognito user's `sub` (e.g. `a1b2c3d4-e5f6-7890-abcd-ef1234567890`)
 
 **Option B: AWS CLI**
 
 ```bash
 aws ssm put-parameter \
-  --name "/HeatingDataCollection/AutoRetrieval/UserId" \
+  --name "${PFX}/AutoRetrieval/UserId" \
   --value "YOUR_COGNITO_USER_SUB" \
   --type String \
   --overwrite \
@@ -202,8 +203,8 @@ Deploy-time schedule values remain in SSM. Runtime values are managed in AppConf
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `/HeatingDataCollection/AutoRetrieval/ScheduleCron` | `0 6 * * ? *` | EventBridge cron (06:00 UTC daily), deploy-time |
-| `/HeatingDataCollection/AutoRetrieval/FrequentScheduleCron` | `0/15 * * * ? *` | EventBridge cron for frequent scheduler (every 15 min), deploy-time |
+| `${PFX}/AutoRetrieval/ScheduleCron` | `0 6 * * ? *` | EventBridge cron (06:00 UTC daily), deploy-time |
+| `${PFX}/AutoRetrieval/FrequentScheduleCron` | `0/15 * * * ? *` | EventBridge cron for frequent scheduler (every 15 min), deploy-time |
 | AppConfig `frequentActiveWindows` | `[{"start":"00:00","stop":"24:00"}]` | Runtime active windows (`HH:MM`, max 5 windows) interpreted in Lambda timezone (`AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE`) |
 | AppConfig `maxRetries` | `5` | Runtime max retry attempts on API failure |
 | AppConfig `retryDelaySeconds` | `300` | Runtime seconds between retries |
@@ -217,7 +218,7 @@ Example: change schedule to 07:30 UTC:
 
 ```bash
 aws ssm put-parameter \
-  --name "/HeatingDataCollection/AutoRetrieval/ScheduleCron" \
+  --name "${PFX}/AutoRetrieval/ScheduleCron" \
   --value "30 7 * * ? *" \
   --type String \
   --overwrite \
@@ -230,7 +231,7 @@ aws ssm put-parameter \
 
 ```bash
 aws ssm put-parameter \
-  --name "/HeatingDataCollection/AutoRetrieval/FrequentActiveWindows" \
+  --name "${PFX}/AutoRetrieval/FrequentActiveWindows" \
   --value '[{"start":"08:00","stop":"12:00"},{"start":"14:00","stop":"18:00"}]' \
   --type String \
   --overwrite \
@@ -322,7 +323,7 @@ cdk destroy DataCollectionScheduler-dev
 
 | Symptom | Check |
 |---------|-------|
-| Lambda fails with "AutoRetrieval userId not configured" | Set AppConfig `userId` first. If migration fallback is enabled, also verify `/HeatingDataCollection/AutoRetrieval/UserId` |
+| Lambda fails with "AutoRetrieval userId not configured" | Set AppConfig `userId` first. If migration fallback is enabled, also verify `${PFX}/AutoRetrieval/UserId` |
 | Lambda fails with "VIESSMANN_CREDENTIALS_SECRET_ARN not set" | Ensure `taskfile.env` has `VIESSMANN_CREDENTIALS_SECRET_ARN` and Scheduler stack was deployed with it |
 | No data stored | Check CloudWatch Logs; may be skipped as duplicate (same datum_iso) |
 | SNS alert received | Check logs for error details; verify Viessmann API connectivity |
