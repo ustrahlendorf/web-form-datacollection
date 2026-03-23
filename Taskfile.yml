@@ -12,6 +12,7 @@ dotenv: ["taskfile.env"]
 #
 # Usage examples:
 #   task doctor
+#   task python:check-heating-deps
 #   task deploy-init
 #   ACTIVE_SUBMISSIONS_TABLE_NAME=submissions-2025 PASSIVE_SUBMISSIONS_TABLE_NAME=submissions-2026 task cdk:synth
 #   task deploy-dynamodb
@@ -62,8 +63,14 @@ tasks:
       - test -n "$SSM_NAMESPACE_PREFIX"
 
   doctor:
-    desc: "Preflight checks (tooling + required env vars)"
-    deps: [doctor-base, doctor-dynamodb-names]
+    desc: "Preflight checks (tooling + required env vars + heating deps alignment)"
+    deps: [doctor-base, doctor-dynamodb-names, python:check-heating-deps]
+
+  python:check-heating-deps:
+    desc: "Verify requirements-heating.txt aligns with backend/pyproject.toml (Viessmann Lambda)"
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - python3 scripts/check_heating_requirements.py
 
   test:
     desc: "Run backend + frontend tests"

@@ -39,6 +39,7 @@ For the full, canonical guide, see `getting-started.md`.
 
 ### reference
 
+- `reference/python-layout.md` — Python dependencies: root `requirements.txt`, `backend/pyproject.toml`, Lambda `requirements-heating.txt` (manual sync with pyproject), pytest `sys.path`
 - `reference/testing.md` — how to run tests + where coverage comes from
 - `reference/security.md` — security controls (high-level) + where they are enforced/tested
 

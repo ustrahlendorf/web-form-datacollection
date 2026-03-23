@@ -8,6 +8,18 @@ This is the **canonical** deployment + configuration guide for the app.
 - **frontend assets**: static files uploaded to S3 and served through CloudFront
 - **configuration**: frontend `.env` / generated `config.js` (from stack outputs)
 
+## Python environment
+
+From the repo root, use a virtual environment and root dependencies for CDK and pytest:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Roles of `requirements.txt`, `backend/pyproject.toml`, Lambda `requirements-heating.txt`, and how tests import `backend` without an editable install are described in `reference/python-layout.md`.
+
 ## recommended: deploy infrastructure via Taskfile (repo root)
 
 From the repo root (`web-form-verbrauch/`):

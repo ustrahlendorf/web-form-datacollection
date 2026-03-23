@@ -21,6 +21,16 @@ python3 -m pytest tests/test_auto_retrieval_config_handler.py
 cd frontend && npm test -- app.settings.test.js
 ```
 
+## backend dependency check (heating lambdas)
+
+If you change runtime dependencies under `backend/` (for example in `backend/pyproject.toml` for packages that also appear in `requirements-heating.txt`), run this before you open a PR:
+
+```bash
+task python:check-heating-deps
+```
+
+It checks that `requirements-heating.txt` stays compatible with the library metadata. See [python-layout.md](python-layout.md) for how those files relate.
+
 ## what the tests cover (at a glance)
 
 - validators (date/time/number normalization & range checks)
