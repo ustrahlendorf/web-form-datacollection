@@ -1,7 +1,5 @@
 """AppConfig stack for runtime auto-retrieval configuration."""
 
-import os
-
 from aws_cdk import (
     CfnOutput,
     Duration,
@@ -10,6 +8,8 @@ from aws_cdk import (
     aws_lambda as lambda_,
 )
 from constructs import Construct
+
+from infrastructure.cdk_constructs.python_lambda_asset import python_lambda_code_from_repo
 
 
 class AppConfigStack(Stack):
@@ -33,18 +33,7 @@ class AppConfigStack(Stack):
             "AutoRetrievalConfigValidatorFunction",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="src.handlers.auto_retrieval_config_validator.lambda_handler",
-            code=lambda_.Code.from_asset(
-                os.path.join(os.path.dirname(__file__), "..", ".."),
-                exclude=[
-                    "cdk.out",
-                    ".git",
-                    ".venv",
-                    "node_modules",
-                    ".pytest_cache",
-                    ".hypothesis",
-                    ".jsii-package-cache",
-                ],
-            ),
+            code=python_lambda_code_from_repo(),
             timeout=Duration.seconds(10),
             memory_size=128,
             description="Validates AppConfig auto-retrieval documents.",

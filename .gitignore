@@ -129,8 +129,8 @@ cdk.out/
 *.d.ts
 *.js
 !jest.config.js
-!frontend/app.js
-!frontend/auth.js
+!frontend/src/app.js
+!frontend/src/auth.js
 !frontend/app.settings.test.js
 *.metadata.json
 

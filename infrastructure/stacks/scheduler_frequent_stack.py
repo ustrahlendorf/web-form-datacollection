@@ -5,7 +5,6 @@ EventBridge Rule triggers multiple runs per day. Uses a dedicated SNS topic for 
 """
 
 from aws_cdk import (
-    BundlingOptions,
     Stack,
     aws_dynamodb as dynamodb,
     aws_events as events,
@@ -22,6 +21,14 @@ from aws_cdk import (
 from constructs import Construct
 import os
 
+from infrastructure.config.heating_lambda_env import (
+    BACKEND_PYTHONPATH,
+    VIESSMANN_TOKEN_CACHE_PATH,
+)
+from infrastructure.cdk_constructs.python_lambda_asset import (
+    heating_lambda_bundling,
+    python_lambda_code_from_repo,
+)
 from infrastructure.stacks.ssm_contract import (
     AUTO_RETRIEVAL_SEGMENTS,
     DEFAULT_SSM_NAMESPACE_PREFIX,
@@ -182,8 +189,6 @@ class SchedulerFrequentStack(Stack):
         )
 
         # Lambda function — same handler/code as production
-        asset_path = os.path.join(os.path.dirname(__file__), "..", "..")
-        pythonpath = "backend/src"
         appconfig_agent_layer_arn = os.environ.get("APPCONFIG_AGENT_EXTENSION_LAYER_ARN", "").strip()
         use_appconfig_agent = "true" if appconfig_agent_layer_arn else "false"
 
@@ -192,27 +197,7 @@ class SchedulerFrequentStack(Stack):
             "AutoRetrievalFrequentHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="src.handlers.auto_retrieval_handler.lambda_handler",
-            code=lambda_.Code.from_asset(
-                asset_path,
-                exclude=[
-                    "cdk.out",
-                    ".git",
-                    ".venv",
-                    "node_modules",
-                    ".pytest_cache",
-                    ".hypothesis",
-                    ".jsii-package-cache",
-                ],
-                bundling=BundlingOptions(
-                    image=lambda_.Runtime.PYTHON_3_11.bundling_image,
-                    command=[
-                        "bash",
-                        "-c",
-                        "pip install -r /asset-input/requirements-heating.txt -t /asset-output "
-                        "&& cp -r /asset-input/src /asset-input/backend /asset-output/",
-                    ],
-                ),
-            ),
+            code=python_lambda_code_from_repo(bundling=heating_lambda_bundling()),
             role=lambda_role,
             environment={
                 "SUBMISSIONS_TABLE": frequent_table.table_name,
@@ -230,8 +215,8 @@ class SchedulerFrequentStack(Stack):
                 "AUTO_RETRIEVAL_APPCONFIG_AGENT_ENDPOINT": "http://127.0.0.1:2772",
                 "AUTO_RETRIEVAL_APPCONFIG_AGENT_TIMEOUT_SECONDS": "2.0",
                 "AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE": "Europe/Berlin",
-                "PYTHONPATH": pythonpath,
-                "VIESSMANN_TOKEN_CACHE_PATH": "/tmp/viessmann/tokens.json",
+                "PYTHONPATH": BACKEND_PYTHONPATH,
+                "VIESSMANN_TOKEN_CACHE_PATH": VIESSMANN_TOKEN_CACHE_PATH,
             },
             timeout=Duration.minutes(15),
             memory_size=256,

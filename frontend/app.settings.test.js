@@ -7,7 +7,7 @@ const {
     loadSettings,
     __setAuthenticatedFetchForTests,
     __setConfigForTests,
-} = require('./app');
+} = require('./src/app');
 
 describe('settings payload validation', () => {
     test('accepts a valid payload', () => {

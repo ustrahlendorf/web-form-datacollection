@@ -2,11 +2,11 @@
   "name": "data-collection-frontend",
   "version": "1.0.0",
   "description": "Frontend for Data Collection Web Application",
-  "main": "app.js",
+  "main": "src/app.js",
   "scripts": {
     "test": "jest",
     "build": "bash build.sh",
-    "serve": "python -m http.server 8000",
+    "serve": "npm run build && python3 -m http.server 8000 --directory build",
     "deploy": "npm run build && aws s3 sync build/ s3://$S3_BUCKET --delete"
   },
   "keywords": [

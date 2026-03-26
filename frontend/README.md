@@ -21,11 +21,15 @@ The frontend is a static web application (HTML, CSS, JavaScript) that:
 
 ```
 frontend/
-├── index.html              # Main HTML file
-├── styles.css              # Application styles
-├── app.js                  # Main application logic
-├── auth.js                 # Authentication module
-├── config.js               # Configuration (generated during build)
+├── public/                 # Static entry HTML (not all files are copied to build/)
+│   ├── index.html          # Main HTML file
+│   ├── error-capture.html  # Diagnostics page (local / optional)
+│   └── form-integration.test.html  # Browser integration checks
+├── src/                    # Application JS/CSS sources
+│   ├── styles.css
+│   ├── app.js              # Main application logic
+│   └── auth.js             # Authentication module
+├── build/                  # Build output (generated; `config.*.js` hashed here)
 ├── build.sh                # Build script
 ├── deploy.sh               # Deployment script
 ├── setup-env.sh            # Environment setup script
@@ -33,8 +37,7 @@ frontend/
 ├── README.md               # This file
 ├── package.json            # NPM dependencies
 ├── jest.config.js          # Jest test configuration
-├── form.test.js            # Form component tests
-├── form-integration.test.html  # Integration tests
+├── *.test.js               # Jest tests (repo may ignore some via root .gitignore)
 └── form-prepopulation.pbt.js   # Property-based tests
 ```
 
@@ -81,10 +84,8 @@ Open the CloudFront URL in your browser and log in with your Cognito credentials
 To test the frontend locally:
 
 ```bash
-# Start a local web server
+# Build, then serve the build/ folder on http://localhost:8000
 npm run serve
-
-# Open http://localhost:8000 in your browser
 ```
 
 ### Running Tests

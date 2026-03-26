@@ -22,12 +22,12 @@ if [ -f ".env" ]; then
     set +a
 fi
 
-# Copy HTML, CSS, and JS files
+# Copy HTML from public/, JS/CSS from src/ (flat output for static hosting)
 echo "Copying frontend files..."
-cp index.html "$BUILD_DIR/"
-cp styles.css "$BUILD_DIR/"
-cp app.js "$BUILD_DIR/"
-cp auth.js "$BUILD_DIR/"
+cp public/index.html "$BUILD_DIR/"
+cp src/styles.css "$BUILD_DIR/"
+cp src/app.js "$BUILD_DIR/"
+cp src/auth.js "$BUILD_DIR/"
 
 # Create config.js with environment variables
 echo "Creating configuration file..."

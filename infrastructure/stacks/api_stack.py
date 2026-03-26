@@ -1,7 +1,6 @@
 """API Gateway and Lambda execution role stack."""
 
 from aws_cdk import (
-    BundlingOptions,
     Stack,
     aws_apigatewayv2_alpha as apigw,
     aws_apigatewayv2_authorizers_alpha as apigw_auth,
@@ -15,8 +14,15 @@ from aws_cdk import (
     RemovalPolicy,
 )
 from constructs import Construct
-import os
 
+from infrastructure.config.heating_lambda_env import (
+    BACKEND_PYTHONPATH,
+    VIESSMANN_TOKEN_CACHE_PATH,
+)
+from infrastructure.cdk_constructs.python_lambda_asset import (
+    heating_lambda_bundling,
+    python_lambda_code_from_repo,
+)
 from infrastructure.stacks.ssm_contract import (
     DEFAULT_SSM_NAMESPACE_PREFIX,
     SUBMISSIONS_ACTIVE_TABLE_ARN_SEGMENTS,
@@ -270,10 +276,7 @@ class APIStack(Stack):
             "SubmitHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="src.handlers.submit_handler.lambda_handler",
-            code=lambda_.Code.from_asset(
-                os.path.join(os.path.dirname(__file__), "..", ".."),
-                exclude=["cdk.out", ".git", ".venv", "node_modules", ".pytest_cache", ".hypothesis", ".jsii-package-cache"],
-            ),
+            code=python_lambda_code_from_repo(),
             role=lambda_execution_role,
             environment={
                 "SUBMISSIONS_TABLE": table_name,
@@ -314,10 +317,7 @@ class APIStack(Stack):
             "HistoryHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="src.handlers.history_handler.lambda_handler",
-            code=lambda_.Code.from_asset(
-                os.path.join(os.path.dirname(__file__), "..", ".."),
-                exclude=["cdk.out", ".git", ".venv", "node_modules", ".pytest_cache", ".hypothesis", ".jsii-package-cache"],
-            ),
+            code=python_lambda_code_from_repo(),
             role=lambda_execution_role,
             environment={
                 "SUBMISSIONS_TABLE": table_name,
@@ -358,10 +358,7 @@ class APIStack(Stack):
             "RecentHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="src.handlers.recent_handler.lambda_handler",
-            code=lambda_.Code.from_asset(
-                os.path.join(os.path.dirname(__file__), "..", ".."),
-                exclude=["cdk.out", ".git", ".venv", "node_modules", ".pytest_cache", ".hypothesis", ".jsii-package-cache"],
-            ),
+            code=python_lambda_code_from_repo(),
             role=lambda_execution_role,
             environment={
                 "SUBMISSIONS_TABLE": table_name,
@@ -480,42 +477,17 @@ class APIStack(Stack):
         Fetches heating values from Viessmann IoT API. Requires backend package
         and PYTHONPATH for backend.iot_data. Credentials from Secrets Manager.
         """
-        asset_path = os.path.join(os.path.dirname(__file__), "..", "..")
-        # Lambda extracts asset to /var/task; backend package is at backend/src/backend/
-        pythonpath = "backend/src"
-
         heating_live_fn = lambda_.Function(
             self,
             "HeatingLiveHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="src.handlers.heating_live_handler.lambda_handler",
-            code=lambda_.Code.from_asset(
-                asset_path,
-                exclude=[
-                    "cdk.out",
-                    ".git",
-                    ".venv",
-                    "node_modules",
-                    ".pytest_cache",
-                    ".hypothesis",
-                    ".jsii-package-cache",
-                ],
-                bundling=BundlingOptions(
-                    image=lambda_.Runtime.PYTHON_3_11.bundling_image,
-                    command=[
-                        "bash",
-                        "-c",
-                        "pip install -r /asset-input/requirements-heating.txt -t /asset-output "
-                        "&& cp -r /asset-input/src /asset-input/backend /asset-output/",
-                    ],
-                ),
-            ),
+            code=python_lambda_code_from_repo(bundling=heating_lambda_bundling()),
             role=lambda_execution_role,
             environment={
                 "VIESSMANN_CREDENTIALS_SECRET_ARN": viessmann_credentials_secret_arn,
-                "PYTHONPATH": pythonpath,
-                # Lambda filesystem is read-only except /tmp; token cache must use writable path.
-                "VIESSMANN_TOKEN_CACHE_PATH": "/tmp/viessmann/tokens.json",
+                "PYTHONPATH": BACKEND_PYTHONPATH,
+                "VIESSMANN_TOKEN_CACHE_PATH": VIESSMANN_TOKEN_CACHE_PATH,
             },
             timeout=Duration.seconds(60),
             memory_size=256,
@@ -540,18 +512,7 @@ class APIStack(Stack):
             "AutoRetrievalConfigHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="src.handlers.auto_retrieval_config_handler.lambda_handler",
-            code=lambda_.Code.from_asset(
-                os.path.join(os.path.dirname(__file__), "..", ".."),
-                exclude=[
-                    "cdk.out",
-                    ".git",
-                    ".venv",
-                    "node_modules",
-                    ".pytest_cache",
-                    ".hypothesis",
-                    ".jsii-package-cache",
-                ],
-            ),
+            code=python_lambda_code_from_repo(),
             role=lambda_execution_role,
             environment={
                 "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": appconfig_application_id,
