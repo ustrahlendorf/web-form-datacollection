@@ -30,10 +30,10 @@ From repository root:
 
 ```bash
 pytest -q \
-  tests/test_appconfig_stack.py \
-  tests/test_auto_retrieval_config_handler.py \
-  tests/test_auto_retrieval_handler.py \
-  tests/test_init_stack.py
+  tests/integration/test_appconfig_stack.py \
+  tests/unit/test_auto_retrieval_config_handler.py \
+  tests/unit/test_auto_retrieval_handler.py \
+  tests/integration/test_init_stack.py
 ```
 
 ### 2) Deploy stacks in dependency order

@@ -28,7 +28,7 @@ You do **not** need that install only to run `pytest` at the root; see the next 
 
 ## Tests: `tests/conftest.py` and `import backend`
 
-[`tests/conftest.py`](../../tests/conftest.py) prepends `backend/src` to `sys.path` during pytest startup. That way tests can use normal `import backend…` without requiring every contributor to run `pip install -e backend/`. This is **intentional**: it keeps the default developer path to “venv + root `requirements.txt` + pytest” as low-friction as possible.
+Test modules live under [`tests/unit/`](../../tests/unit/), [`tests/integration/`](../../tests/integration/), and [`tests/e2e/`](../../tests/e2e/) (see [`pytest.ini`](../../pytest.ini) `testpaths`). [`tests/conftest.py`](../../tests/conftest.py) prepends `backend/src` to `sys.path` during pytest startup. That way tests can use normal `import backend…` without requiring every contributor to run `pip install -e backend/`. This is **intentional**: it keeps the default developer path to “venv + root `requirements.txt` + pytest” as low-friction as possible.
 
 ## Viessmann-related Lambdas: `requirements-heating.txt` and CDK bundling
 
@@ -51,6 +51,7 @@ There is no automated sync step in the repo today; contributors are responsible 
 
 ## Related documentation
 
+- [`architecture/repo-layout.md`](../architecture/repo-layout.md) — blueprint: package strategy, Lambda asset model, `lambdas/*` naming (ADR: [`decisions/0001-repo-python-and-lambda-packaging.md`](../decisions/0001-repo-python-and-lambda-packaging.md)).
 - [`getting-started.md`](../getting-started.md) — deployment overview (Taskfile, frontend).
 - [`backend/README.md`](../backend/README.md) — Vis-Connect backend overview.
 - [`backend/vis-connect.md`](../backend/vis-connect.md) — Viessmann IoT API, OAuth, CLIs.

@@ -17,7 +17,11 @@ cd frontend && npm test
 # or: task test-frontend
 
 # Focused settings/AppConfig checks
-python3 -m pytest tests/test_auto_retrieval_config_handler.py
+python3 -m pytest tests/unit/test_auto_retrieval_config_handler.py
+
+# Run only unit or integration slices (see `pytest.ini` testpaths + markers)
+python3 -m pytest tests/unit
+python3 -m pytest tests/integration
 cd frontend && npm test -- app.settings.test.js
 ```
 

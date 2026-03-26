@@ -6,7 +6,7 @@ from pathlib import Path
 # redirect the jsii runtime package cache into the repo.
 os.environ.setdefault(
     "JSII_RUNTIME_PACKAGE_CACHE_ROOT",
-    str(Path(__file__).resolve().parent.parent / ".jsii-package-cache"),
+    str(Path(__file__).resolve().parent.parent.parent / ".jsii-package-cache"),
 )
 
 from aws_cdk import App, Environment
