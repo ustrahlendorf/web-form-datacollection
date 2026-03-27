@@ -14,9 +14,9 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timezone
 
-from src.handlers.submit_handler import lambda_handler as submit_handler
-from src.handlers.history_handler import lambda_handler as history_handler
-from src.handlers.recent_handler import lambda_handler as recent_handler
+from lambdas.submit.handler import lambda_handler as submit_handler
+from lambdas.history.handler import lambda_handler as history_handler
+from lambdas.recent.handler import lambda_handler as recent_handler
 
 
 # ============================================================================
@@ -92,7 +92,7 @@ def test_https_enforcement_s3_bucket():
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_jwt_authorization_required_submit_endpoint(mock_dynamodb):
     """
     For POST /submit endpoint, JWT authorization SHALL be required.
@@ -128,7 +128,7 @@ def test_jwt_authorization_required_submit_endpoint(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_jwt_authorization_required_history_endpoint(mock_dynamodb):
     """
     For GET /history endpoint, JWT authorization SHALL be required.
@@ -158,7 +158,7 @@ def test_jwt_authorization_required_history_endpoint(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_jwt_authorization_required_recent_endpoint(mock_dynamodb):
     """
     For GET /recent endpoint, JWT authorization SHALL be required.
@@ -187,7 +187,7 @@ def test_jwt_authorization_required_recent_endpoint(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_jwt_authorization_missing_request_context(mock_dynamodb):
     """
     For requests with missing requestContext, JWT authorization SHALL fail.
@@ -288,7 +288,7 @@ def test_cors_allowed_headers():
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_user_data_isolation_history_endpoint(mock_dynamodb):
     """
     For GET /history endpoint, user_id from JWT SHALL be used to filter results.
@@ -360,7 +360,7 @@ def test_user_data_isolation_history_endpoint(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_user_data_isolation_recent_endpoint(mock_dynamodb):
     """
     For GET /recent endpoint, user_id from JWT SHALL be used to filter results.
@@ -419,7 +419,7 @@ def test_user_data_isolation_recent_endpoint(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_user_data_isolation_submit_endpoint(mock_dynamodb):
     """
     For POST /submit endpoint, user_id from JWT SHALL be stored with submission.

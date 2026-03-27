@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.handlers import heating_live_handler as mod
+import lambdas.heating_live.handler as mod
 
 
 def test_extract_user_id_success() -> None:

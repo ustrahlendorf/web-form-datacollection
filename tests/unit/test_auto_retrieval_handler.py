@@ -13,7 +13,7 @@ from infrastructure.stacks.ssm_contract import (
     DEFAULT_SSM_NAMESPACE_PREFIX,
     ssm_parameter_name,
 )
-from src.handlers.auto_retrieval_handler import (
+from lambdas.auto_retrieval.handler import (
     _parse_time_to_minutes,
     _parse_active_windows,
     _is_within_active_window,
@@ -150,7 +150,7 @@ class TestIsWithinActiveWindow:
 class TestAppConfigLoading:
     """Tests for AppConfig-first loading and fallback behavior."""
 
-    @patch("src.handlers.auto_retrieval_handler._get_appconfig_data_client")
+    @patch("lambdas.auto_retrieval.handler._get_appconfig_data_client")
     def test_load_appconfig_parses_payload(self, mock_appconfig_client: MagicMock) -> None:
         client = MagicMock()
         client.start_configuration_session.return_value = {
@@ -184,7 +184,7 @@ class TestAppConfigLoading:
         assert result["user_id"] == "user-123"
         assert result["frequent_active_windows"] == [(8 * 60, 12 * 60)]
 
-    @patch("src.handlers.auto_retrieval_handler.urllib_request.urlopen")
+    @patch("lambdas.auto_retrieval.handler.urllib_request.urlopen")
     def test_load_appconfig_from_agent_parses_payload(self, mock_urlopen: MagicMock) -> None:
         payload = {
             "frequentActiveWindows": [{"start": "08:00", "stop": "12:00"}],
@@ -214,8 +214,8 @@ class TestAppConfigLoading:
         assert result["frequent_active_windows"] == [(8 * 60, 12 * 60)]
         mock_urlopen.assert_called_once()
 
-    @patch("src.handlers.auto_retrieval_handler._load_appconfig_from_agent")
-    @patch("src.handlers.auto_retrieval_handler._get_appconfig_data_client")
+    @patch("lambdas.auto_retrieval.handler._load_appconfig_from_agent")
+    @patch("lambdas.auto_retrieval.handler._get_appconfig_data_client")
     def test_load_appconfig_falls_back_to_sdk_when_agent_unavailable(
         self,
         mock_appconfig_client: MagicMock,
@@ -256,8 +256,8 @@ class TestAppConfigLoading:
         assert result["frequent_active_windows"] == [(8 * 60, 12 * 60)]
         mock_load_appconfig_from_agent.assert_called_once_with("app-id", "env-id", "profile-id")
 
-    @patch("src.handlers.auto_retrieval_handler._load_appconfig")
-    @patch("src.handlers.auto_retrieval_handler._get_ssm_param")
+    @patch("lambdas.auto_retrieval.handler._load_appconfig")
+    @patch("lambdas.auto_retrieval.handler._get_ssm_param")
     def test_load_config_prefers_appconfig_values(
         self, mock_get_ssm_param: MagicMock, mock_load_appconfig: MagicMock
     ) -> None:
@@ -276,8 +276,8 @@ class TestAppConfigLoading:
         }
         mock_get_ssm_param.assert_not_called()
 
-    @patch("src.handlers.auto_retrieval_handler._load_appconfig")
-    @patch("src.handlers.auto_retrieval_handler._get_ssm_param")
+    @patch("lambdas.auto_retrieval.handler._load_appconfig")
+    @patch("lambdas.auto_retrieval.handler._get_ssm_param")
     def test_load_config_falls_back_to_ssm_when_appconfig_invalid(
         self, mock_get_ssm_param: MagicMock, mock_load_appconfig: MagicMock
     ) -> None:
@@ -297,7 +297,7 @@ class TestAppConfigLoading:
             "user_id": "ssm-user",
         }
 
-    @patch("src.handlers.auto_retrieval_handler._load_appconfig")
+    @patch("lambdas.auto_retrieval.handler._load_appconfig")
     def test_load_config_can_disable_ssm_fallback(
         self, mock_load_appconfig: MagicMock
     ) -> None:
@@ -315,8 +315,8 @@ class TestAppConfigLoading:
             "user_id": "SET_ME",
         }
 
-    @patch("src.handlers.auto_retrieval_handler._load_appconfig")
-    @patch("src.handlers.auto_retrieval_handler._get_ssm_param")
+    @patch("lambdas.auto_retrieval.handler._load_appconfig")
+    @patch("lambdas.auto_retrieval.handler._get_ssm_param")
     def test_load_config_defaults_when_appconfig_and_ssm_values_invalid(
         self, mock_get_ssm_param: MagicMock, mock_load_appconfig: MagicMock
     ) -> None:
@@ -340,7 +340,7 @@ class TestAppConfigLoading:
             "user_id": "",
         }
 
-    @patch("src.handlers.auto_retrieval_handler._get_appconfig_data_client")
+    @patch("lambdas.auto_retrieval.handler._get_appconfig_data_client")
     def test_load_appconfig_returns_none_when_identifiers_missing(
         self, mock_appconfig_client: MagicMock
     ) -> None:
@@ -367,8 +367,8 @@ class TestAppConfigLoading:
 # =============================================================================
 
 
-@patch("src.handlers.auto_retrieval_handler._load_appconfig")
-@patch("src.handlers.auto_retrieval_handler._get_ssm_client")
+@patch("lambdas.auto_retrieval.handler._load_appconfig")
+@patch("lambdas.auto_retrieval.handler._get_ssm_client")
 def test_lambda_handler_skips_when_outside_window(
     mock_ssm_client: MagicMock, mock_load_appconfig: MagicMock
 ) -> None:
@@ -389,7 +389,7 @@ def test_lambda_handler_skips_when_outside_window(
         },
     ):
         with patch(
-            "src.handlers.auto_retrieval_handler.datetime"
+            "lambdas.auto_retrieval.handler.datetime"
         ) as mock_dt:
             # Simulate 15:00 UTC (outside 08:00-12:00)
             mock_dt.now.return_value = datetime(2025, 3, 8, 15, 0, 0, tzinfo=timezone.utc)
@@ -401,8 +401,8 @@ def test_lambda_handler_skips_when_outside_window(
     assert body == {"skipped": "outside_active_window"}
 
 
-@patch("src.handlers.auto_retrieval_handler._load_appconfig")
-@patch("src.handlers.auto_retrieval_handler._get_ssm_client")
+@patch("lambdas.auto_retrieval.handler._load_appconfig")
+@patch("lambdas.auto_retrieval.handler._get_ssm_client")
 def test_lambda_handler_proceeds_when_inside_window(
     mock_ssm_client: MagicMock, mock_load_appconfig: MagicMock
 ) -> None:
@@ -425,10 +425,10 @@ def test_lambda_handler_proceeds_when_inside_window(
         },
     ):
         with patch(
-            "src.handlers.auto_retrieval_handler.datetime"
+            "lambdas.auto_retrieval.handler.datetime"
         ) as mock_dt:
             mock_dt.now.return_value = datetime(2025, 3, 8, 10, 0, 0, tzinfo=timezone.utc)
-            with patch("src.handlers.auto_retrieval_handler._load_config") as mock_config:
+            with patch("lambdas.auto_retrieval.handler._load_config") as mock_config:
                 mock_config.return_value = {
                     "max_retries": 1,
                     "retry_delay_seconds": 60,
@@ -441,8 +441,8 @@ def test_lambda_handler_proceeds_when_inside_window(
     assert result["statusCode"] == 500
 
 
-@patch("src.handlers.auto_retrieval_handler._load_appconfig")
-@patch("src.handlers.auto_retrieval_handler._get_ssm_client")
+@patch("lambdas.auto_retrieval.handler._load_appconfig")
+@patch("lambdas.auto_retrieval.handler._get_ssm_client")
 def test_lambda_handler_once_daily_ignores_active_windows(
     mock_ssm_client: MagicMock, mock_load_appconfig: MagicMock
 ) -> None:
@@ -456,7 +456,7 @@ def test_lambda_handler_once_daily_ignores_active_windows(
             "VIESSMANN_CREDENTIALS_SECRET_ARN": "arn:aws:secretsmanager:eu-central-1:123:secret:test",
         },
     ):
-        with patch("src.handlers.auto_retrieval_handler._load_config") as mock_config:
+        with patch("lambdas.auto_retrieval.handler._load_config") as mock_config:
             mock_config.return_value = {
                 "max_retries": 1,
                 "retry_delay_seconds": 60,
@@ -470,18 +470,18 @@ def test_lambda_handler_once_daily_ignores_active_windows(
     mock_ssm_client.assert_not_called()
 
 
-@patch("src.handlers.auto_retrieval_handler._load_appconfig")
+@patch("lambdas.auto_retrieval.handler._load_appconfig")
 def test_check_active_window_prefers_appconfig(mock_load_appconfig: MagicMock) -> None:
     mock_load_appconfig.return_value = {"frequent_active_windows": [(8 * 60, 12 * 60)]}
     with patch.dict("os.environ", {"ACTIVE_WINDOWS_PARAM": "FrequentActiveWindows"}, clear=False):
-        with patch("src.handlers.auto_retrieval_handler.datetime") as mock_dt:
+        with patch("lambdas.auto_retrieval.handler.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2025, 3, 8, 15, 0, 0, tzinfo=timezone.utc)
             should_skip = _check_active_window_and_maybe_skip()
     assert should_skip is True
 
 
-@patch("src.handlers.auto_retrieval_handler._load_appconfig")
-@patch("src.handlers.auto_retrieval_handler._get_ssm_client")
+@patch("lambdas.auto_retrieval.handler._load_appconfig")
+@patch("lambdas.auto_retrieval.handler._get_ssm_client")
 def test_check_active_window_skips_ssm_when_fallback_disabled(
     mock_ssm_client: MagicMock, mock_load_appconfig: MagicMock
 ) -> None:
@@ -499,7 +499,7 @@ def test_check_active_window_skips_ssm_when_fallback_disabled(
     mock_ssm_client.assert_not_called()
 
 
-@patch("src.handlers.auto_retrieval_handler._load_appconfig")
+@patch("lambdas.auto_retrieval.handler._load_appconfig")
 def test_check_active_window_uses_configured_timezone(mock_load_appconfig: MagicMock) -> None:
     """Configured timezone should be used for active-window checks."""
     mock_load_appconfig.return_value = {"frequent_active_windows": [(22 * 60, 23 * 60)]}
@@ -512,7 +512,7 @@ def test_check_active_window_uses_configured_timezone(mock_load_appconfig: Magic
         },
         clear=False,
     ):
-        with patch("src.handlers.auto_retrieval_handler.datetime") as mock_dt:
+        with patch("lambdas.auto_retrieval.handler.datetime") as mock_dt:
             # Base instant is 21:30 UTC, which is 22:30 in Europe/Berlin (inside window).
             mock_dt.now.side_effect = (
                 lambda tz: datetime(2025, 3, 8, 21, 30, 0, tzinfo=timezone.utc).astimezone(tz)
@@ -522,7 +522,7 @@ def test_check_active_window_uses_configured_timezone(mock_load_appconfig: Magic
     assert should_skip is False
 
 
-@patch("src.handlers.auto_retrieval_handler._load_appconfig")
+@patch("lambdas.auto_retrieval.handler._load_appconfig")
 def test_check_active_window_invalid_timezone_falls_back_to_utc(
     mock_load_appconfig: MagicMock,
 ) -> None:
@@ -537,7 +537,7 @@ def test_check_active_window_invalid_timezone_falls_back_to_utc(
         },
         clear=False,
     ):
-        with patch("src.handlers.auto_retrieval_handler.datetime") as mock_dt:
+        with patch("lambdas.auto_retrieval.handler.datetime") as mock_dt:
             # 21:30 UTC is outside 22:00-23:00 when fallback timezone is UTC.
             mock_dt.now.side_effect = (
                 lambda tz: datetime(2025, 3, 8, 21, 30, 0, tzinfo=timezone.utc).astimezone(tz)
@@ -563,7 +563,7 @@ def test_lambda_handler_no_active_windows_param_proceeds() -> None:
                 "VIESSMANN_CREDENTIALS_SECRET_ARN": "arn:aws:secretsmanager:eu-central-1:123:secret:test",
             },
         ):
-            with patch("src.handlers.auto_retrieval_handler._load_config") as mock_config:
+            with patch("lambdas.auto_retrieval.handler._load_config") as mock_config:
                 mock_config.return_value = {
                     "max_retries": 1,
                     "retry_delay_seconds": 60,

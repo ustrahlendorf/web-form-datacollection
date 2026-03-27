@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch, MagicMock
 from hypothesis import given, strategies as st, assume, settings
 from datetime import datetime, timezone, timedelta
 
-from src.handlers.history_handler import (
+from lambdas.history.handler import (
     lambda_handler,
     extract_user_id,
     format_error_response,
@@ -30,7 +30,7 @@ from src.handlers.history_handler import (
     user_b_id=st.text(min_size=1, max_size=50),
 )
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_user_data_isolation(mock_dynamodb, user_a_id, user_b_id):
     """
     For any two different users, querying the history endpoint as User A SHALL never return submissions belonging to User B.
@@ -117,7 +117,7 @@ def test_user_data_isolation(mock_dynamodb, user_a_id, user_b_id):
     num_submissions=st.integers(min_value=2, max_value=10),
 )
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_history_sorting_order(mock_dynamodb, num_submissions):
     """
     For any user with multiple submissions, the history endpoint SHALL return submissions sorted by timestamp_utc in descending order (newest first).
@@ -183,7 +183,7 @@ def test_history_sorting_order(mock_dynamodb, num_submissions):
 )
 @settings(deadline=None)
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_pagination_consistency(mock_dynamodb, total_submissions, limit):
     """
     For any paginated query with limit and next_token, the results SHALL not overlap with previous pages and SHALL contain the correct number of items (up to the limit).
@@ -258,7 +258,7 @@ def test_pagination_consistency(mock_dynamodb, total_submissions, limit):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_authentication_required_missing_jwt(mock_dynamodb):
     """
     For any request without valid JWT token, the handler SHALL return HTTP 401.
@@ -286,7 +286,7 @@ def test_authentication_required_missing_jwt(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_authentication_required_missing_request_context(mock_dynamodb):
     """
     For any request without requestContext, the handler SHALL return HTTP 401.
@@ -392,7 +392,7 @@ def test_format_success_response_with_next_token():
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_history_handler_with_valid_request(mock_dynamodb):
     """
     For a valid history request, the handler SHALL return 200 with submissions.
@@ -438,7 +438,7 @@ def test_history_handler_with_valid_request(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_history_handler_with_limit_parameter(mock_dynamodb):
     """
     For a history request with limit parameter, the handler SHALL respect it.
@@ -471,7 +471,7 @@ def test_history_handler_with_limit_parameter(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_history_handler_with_next_token(mock_dynamodb):
     """
     For a history request with next_token, the handler SHALL use it for pagination.
@@ -513,7 +513,7 @@ def test_history_handler_with_next_token(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_history_handler_with_database_error(mock_dynamodb):
     """
     For a database error during query, the handler SHALL return 500.
@@ -560,7 +560,7 @@ def test_history_handler_missing_table_env_var():
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_history_handler_empty_results(mock_dynamodb):
     """
     For a user with no submissions, the handler SHALL return 200 with empty array.

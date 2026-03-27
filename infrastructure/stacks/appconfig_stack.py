@@ -32,7 +32,7 @@ class AppConfigStack(Stack):
             self,
             "AutoRetrievalConfigValidatorFunction",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="src.handlers.auto_retrieval_config_validator.lambda_handler",
+            handler="lambdas.auto_retrieval_config_validator.handler.lambda_handler",
             code=python_lambda_code_from_repo(),
             timeout=Duration.seconds(10),
             memory_size=128,

@@ -16,9 +16,9 @@ from datetime import datetime, timezone, timedelta
 from io import StringIO
 import sys
 
-from src.handlers.submit_handler import lambda_handler as submit_handler
-from src.handlers.history_handler import lambda_handler as history_handler
-from src.handlers.recent_handler import lambda_handler as recent_handler
+from lambdas.submit.handler import lambda_handler as submit_handler
+from lambdas.history.handler import lambda_handler as history_handler
+from lambdas.recent.handler import lambda_handler as recent_handler
 
 
 # ============================================================================
@@ -29,7 +29,7 @@ from src.handlers.recent_handler import lambda_handler as recent_handler
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_cloudwatch_logs_capturing_submit_handler_execution(mock_dynamodb, caplog):
     """
     For Lambda execution, the system SHALL log all operations to CloudWatch Logs.
@@ -74,7 +74,7 @@ def test_cloudwatch_logs_capturing_submit_handler_execution(mock_dynamodb, caplo
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_cloudwatch_logs_capturing_history_handler_execution(mock_dynamodb, caplog):
     """
     For Lambda execution, the system SHALL log all operations to CloudWatch Logs.
@@ -122,7 +122,7 @@ def test_cloudwatch_logs_capturing_history_handler_execution(mock_dynamodb, capl
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_cloudwatch_logs_capturing_recent_handler_execution(mock_dynamodb, caplog):
     """
     For Lambda execution, the system SHALL log all operations to CloudWatch Logs.
@@ -179,7 +179,7 @@ def test_cloudwatch_logs_capturing_recent_handler_execution(mock_dynamodb, caplo
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_error_logs_database_write_failure(mock_dynamodb, caplog):
     """
     For database errors, the system SHALL log error details with appropriate severity.
@@ -219,7 +219,7 @@ def test_error_logs_database_write_failure(mock_dynamodb, caplog):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_error_logs_database_query_failure(mock_dynamodb, caplog):
     """
     For database query errors, the system SHALL log error details with appropriate severity.
@@ -249,7 +249,7 @@ def test_error_logs_database_query_failure(mock_dynamodb, caplog):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_error_logs_validation_failure(mock_dynamodb, caplog):
     """
     For validation errors, the system SHALL log validation details.
@@ -287,7 +287,7 @@ def test_error_logs_validation_failure(mock_dynamodb, caplog):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_error_logs_authentication_failure(mock_dynamodb, caplog):
     """
     For authentication errors, the system SHALL log authentication failure details.
@@ -330,7 +330,7 @@ def test_error_logs_authentication_failure(mock_dynamodb, caplog):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_latency_metrics_submit_handler_success(mock_dynamodb):
     """
     For request processing, the system SHALL track latency metrics.
@@ -373,7 +373,7 @@ def test_latency_metrics_submit_handler_success(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_latency_metrics_history_handler_success(mock_dynamodb):
     """
     For request processing, the system SHALL track latency metrics.
@@ -426,7 +426,7 @@ def test_latency_metrics_history_handler_success(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_latency_metrics_recent_handler_success(mock_dynamodb):
     """
     For request processing, the system SHALL track latency metrics.
@@ -486,7 +486,7 @@ def test_latency_metrics_recent_handler_success(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_error_scenario_missing_environment_variable(mock_dynamodb):
     """
     For missing environment variables, the system SHALL log error and return 500.
@@ -519,7 +519,7 @@ def test_error_scenario_missing_environment_variable(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_error_scenario_invalid_json_body(mock_dynamodb):
     """
     For invalid JSON in request body, the system SHALL log error and return 400.
@@ -550,7 +550,7 @@ def test_error_scenario_invalid_json_body(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_error_scenario_missing_required_fields(mock_dynamodb):
     """
     For missing required fields, the system SHALL log validation error and return 400.
@@ -584,7 +584,7 @@ def test_error_scenario_missing_required_fields(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_error_scenario_out_of_range_values(mock_dynamodb):
     """
     For out-of-range values, the system SHALL log validation error and return 400.
@@ -639,7 +639,7 @@ def test_error_scenario_out_of_range_values(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_error_scenario_invalid_pagination_token(mock_dynamodb):
     """
     For invalid pagination tokens, the system SHALL handle gracefully.
@@ -687,7 +687,7 @@ def test_error_scenario_invalid_pagination_token(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_successful_request_logging_submit(mock_dynamodb):
     """
     For successful requests, the system SHALL log request details.
@@ -736,7 +736,7 @@ def test_successful_request_logging_submit(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_successful_request_logging_history(mock_dynamodb):
     """
     For successful history requests, the system SHALL log request details.

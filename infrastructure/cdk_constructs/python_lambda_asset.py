@@ -12,7 +12,7 @@ def python_lambda_code_from_repo(*, bundling: BundlingOptions | None = None) -> 
     """
     Asset bundle: entire repo root with shared excludes.
 
-    Optional Docker ``bundling`` installs ``requirements-heating.txt`` and copies ``src`` + ``backend``.
+    Optional Docker ``bundling`` installs ``requirements-heating.txt`` and copies ``src``, ``backend``, and ``lambdas``.
     """
     kwargs: dict = {"exclude": list(LAMBDA_CODE_ASSET_EXCLUDE)}
     if bundling is not None:
@@ -21,13 +21,13 @@ def python_lambda_code_from_repo(*, bundling: BundlingOptions | None = None) -> 
 
 
 def heating_lambda_bundling() -> BundlingOptions:
-    """Bundling step shared by heating / Viessmann Lambdas (pip + copy ``src`` and ``backend``)."""
+    """Bundling step shared by heating / Viessmann Lambdas (pip + copy ``src``, ``backend``, ``lambdas``)."""
     return BundlingOptions(
         image=lambda_.Runtime.PYTHON_3_11.bundling_image,
         command=[
             "bash",
             "-c",
             "pip install -r /asset-input/requirements-heating.txt -t /asset-output "
-            "&& cp -r /asset-input/src /asset-input/backend /asset-output/",
+            "&& cp -r /asset-input/src /asset-input/backend /asset-input/lambdas /asset-output/",
         ],
     )

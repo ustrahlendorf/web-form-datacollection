@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch, MagicMock
 from hypothesis import given, strategies as st, assume
 from datetime import datetime, timezone, timedelta
 
-from src.handlers.recent_handler import (
+from lambdas.recent.handler import (
     lambda_handler,
     extract_user_id,
     format_error_response,
@@ -27,7 +27,7 @@ from src.handlers.recent_handler import (
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_recent_submissions_limited_to_three_days(mock_dynamodb):
     """
     For any user querying the /recent endpoint, the returned submissions SHALL only include submissions from the past 3 days (72 hours from current time).
@@ -106,7 +106,7 @@ def test_recent_submissions_limited_to_three_days(mock_dynamodb):
     num_submissions=st.integers(min_value=4, max_value=20),
 )
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_recent_submissions_limited_to_three_items(mock_dynamodb, num_submissions):
     """
     For any user querying the /recent endpoint, the returned array SHALL contain at most 3 submissions, even if more than 3 submissions exist within the past 3 days.
@@ -171,7 +171,7 @@ def test_recent_submissions_limited_to_three_items(mock_dynamodb, num_submission
     num_submissions=st.integers(min_value=2, max_value=3),
 )
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_recent_submissions_sorted_descending(mock_dynamodb, num_submissions):
     """
     For any user querying the /recent endpoint, the returned submissions SHALL be sorted by timestamp_utc in descending order (newest first).
@@ -239,7 +239,7 @@ def test_recent_submissions_sorted_descending(mock_dynamodb, num_submissions):
     user_b_id=st.text(min_size=1, max_size=50),
 )
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_recent_submissions_user_isolation(mock_dynamodb, user_a_id, user_b_id):
     """
     For any two different users, querying the /recent endpoint as User A SHALL never return submissions belonging to User B.
@@ -402,7 +402,7 @@ def test_format_success_response():
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_recent_handler_with_valid_request(mock_dynamodb):
     """
     For a valid recent submissions request, the handler SHALL return 200 with submissions.
@@ -448,7 +448,7 @@ def test_recent_handler_with_valid_request(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_recent_handler_with_no_submissions(mock_dynamodb):
     """
     For a user with no recent submissions, the handler SHALL return 200 with empty array.
@@ -479,7 +479,7 @@ def test_recent_handler_with_no_submissions(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_recent_handler_with_database_error(mock_dynamodb):
     """
     For a database error during query, the handler SHALL return 500.
@@ -524,7 +524,7 @@ def test_recent_handler_missing_table_env_var():
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_recent_handler_authentication_required_missing_jwt(mock_dynamodb):
     """
     For any request without valid JWT token, the handler SHALL return HTTP 401.
@@ -551,7 +551,7 @@ def test_recent_handler_authentication_required_missing_jwt(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_recent_handler_authentication_required_missing_request_context(mock_dynamodb):
     """
     For any request without requestContext, the handler SHALL return HTTP 401.

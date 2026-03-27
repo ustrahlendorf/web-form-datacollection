@@ -275,7 +275,7 @@ class APIStack(Stack):
             self,
             "SubmitHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="src.handlers.submit_handler.lambda_handler",
+            handler="lambdas.submit.handler.lambda_handler",
             code=python_lambda_code_from_repo(),
             role=lambda_execution_role,
             environment={
@@ -316,7 +316,7 @@ class APIStack(Stack):
             self,
             "HistoryHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="src.handlers.history_handler.lambda_handler",
+            handler="lambdas.history.handler.lambda_handler",
             code=python_lambda_code_from_repo(),
             role=lambda_execution_role,
             environment={
@@ -357,7 +357,7 @@ class APIStack(Stack):
             self,
             "RecentHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="src.handlers.recent_handler.lambda_handler",
+            handler="lambdas.recent.handler.lambda_handler",
             code=python_lambda_code_from_repo(),
             role=lambda_execution_role,
             environment={
@@ -481,7 +481,7 @@ class APIStack(Stack):
             self,
             "HeatingLiveHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="src.handlers.heating_live_handler.lambda_handler",
+            handler="lambdas.heating_live.handler.lambda_handler",
             code=python_lambda_code_from_repo(bundling=heating_lambda_bundling()),
             role=lambda_execution_role,
             environment={
@@ -511,7 +511,7 @@ class APIStack(Stack):
             self,
             "AutoRetrievalConfigHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="src.handlers.auto_retrieval_config_handler.lambda_handler",
+            handler="lambdas.auto_retrieval_config.handler.lambda_handler",
             code=python_lambda_code_from_repo(),
             role=lambda_execution_role,
             environment={

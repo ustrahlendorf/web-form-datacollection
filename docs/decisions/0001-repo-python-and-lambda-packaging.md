@@ -8,7 +8,7 @@
 
 The repository today has:
 
-- Lambda handler code under `src/handlers/`, referenced by CDK as `src.handlers.<module>.lambda_handler`.
+- Lambda handler code under `lambdas/<function>/handler.py`, referenced by CDK as `lambdas.<function>.handler.lambda_handler` (with transitional `src/handlers/*` re-exports).
 - A separate installable Python package **`backend`** under `backend/src/backend/`, used by Viessmann/heating flows and bundled into Lambda artifacts with `PYTHONPATH` including `backend/src`.
 - Multiple bundling paths: typical root-based assets with excludes, and Docker-based bundling for heating with `requirements-heating.txt`.
 

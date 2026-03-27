@@ -11,7 +11,7 @@ from hypothesis import given, strategies as st, assume
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from src.handlers.submit_handler import (
+from lambdas.submit.handler import (
     lambda_handler,
     extract_user_id,
     format_error_response,
@@ -35,7 +35,7 @@ from src.handlers.submit_handler import (
     verbrauch_qm=st.floats(min_value=0.01, max_value=19.99, allow_nan=False, allow_infinity=False),
 )
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_submission_storage_round_trip(
     mock_dynamodb, user_id, datum, uhrzeit, betriebsstunden, starts, verbrauch_qm
 ):
@@ -94,7 +94,7 @@ def test_submission_storage_round_trip(
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_submit_handler_stores_optional_temperatures(mock_dynamodb):
     """
     For a submission with vorlauf_temp and aussentemp, the handler SHALL store them in DynamoDB.
@@ -130,7 +130,7 @@ def test_submit_handler_stores_optional_temperatures(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_submit_handler_computes_deltas_when_previous_exists(mock_dynamodb):
     """
     For a submission where a previous submission exists, the handler SHALL compute deltas (new - previous).
@@ -190,7 +190,7 @@ def test_submit_handler_computes_deltas_when_previous_exists(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_submit_handler_body_as_dict_coerces_decimal_and_computes_deltas(mock_dynamodb):
     """
     If the event body is already a dict (not a JSON string), the handler SHALL still compute
@@ -257,7 +257,7 @@ def test_submit_handler_body_as_dict_coerces_decimal_and_computes_deltas(mock_dy
     invalid_datum=st.text(min_size=1).filter(lambda x: x not in ["15.12.2025"]),
 )
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_invalid_data_rejection_bad_date(mock_dynamodb, invalid_datum):
     """
     For any submission with invalid datum, the handler SHALL return HTTP 400 and not store data.
@@ -308,7 +308,7 @@ def test_invalid_data_rejection_bad_date(mock_dynamodb, invalid_datum):
     ),
 )
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_invalid_data_rejection_bad_consumption(mock_dynamodb, invalid_verbrauch):
     """
     For any submission with invalid verbrauch_qm, the handler SHALL return HTTP 400 and not store data.
@@ -351,7 +351,7 @@ def test_invalid_data_rejection_bad_consumption(mock_dynamodb, invalid_verbrauch
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_authentication_required_missing_jwt(mock_dynamodb):
     """
     For any request without valid JWT token, the handler SHALL return HTTP 401.
@@ -386,7 +386,7 @@ def test_authentication_required_missing_jwt(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_authentication_required_missing_request_context(mock_dynamodb):
     """
     For any request without requestContext, the handler SHALL return HTTP 401.
@@ -485,7 +485,7 @@ def test_format_success_response():
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_submit_handler_with_valid_data(mock_dynamodb):
     """
     For a valid submission request, the handler SHALL return 200 and store the data.
@@ -521,7 +521,7 @@ def test_submit_handler_with_valid_data(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_submit_handler_with_missing_field(mock_dynamodb):
     """
     For a submission with missing required field, the handler SHALL return 400.
@@ -552,7 +552,7 @@ def test_submit_handler_with_missing_field(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_submit_handler_with_database_error(mock_dynamodb):
     """
     For a database error during write, the handler SHALL return 500.

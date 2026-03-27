@@ -1,5 +1,6 @@
 """
 Lambda handlers for the data collection web application.
 
-Provides HTTP request handlers for form submission, history retrieval, and recent submissions.
+Implementation modules live under ``lambdas/<function>/handler.py``; this package
+re-exports them for transitional imports.
 """

@@ -196,7 +196,7 @@ class SchedulerFrequentStack(Stack):
             self,
             "AutoRetrievalFrequentHandler",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="src.handlers.auto_retrieval_handler.lambda_handler",
+            handler="lambdas.auto_retrieval.handler.lambda_handler",
             code=python_lambda_code_from_repo(bundling=heating_lambda_bundling()),
             role=lambda_role,
             environment={

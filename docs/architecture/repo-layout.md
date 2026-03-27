@@ -12,13 +12,13 @@ This document is the **architecture blueprint** for how we organise Python code,
 
 | Area | Location | Role |
 |------|----------|------|
-| Handlers | `src/handlers/*.py` | Lambda `handler=` modules (see CDK stacks). |
+| Handlers | `lambdas/<fn>/handler.py` | Lambda `handler=` modules (see CDK stacks). `src/handlers/*.py` re-exports during migration. |
 | Form / API domain | `src/models.py`, `src/validators.py`, `src/viessmann_submit.py` | Shared logic used by handlers (not all of it is Viessmann-specific). |
 | Vis-Connect library | `backend/src/backend/` (package name **`backend`**) | OAuth, IoT config, feature data; CLIs from `backend/pyproject.toml`. |
-| CDK | `infrastructure/` | Stacks define Lambdas, bundling, and handler strings such as `src.handlers.submit_handler.lambda_handler`. |
+| CDK | `infrastructure/` | Stacks define Lambdas, bundling, and handler strings such as `lambdas.submit.handler.lambda_handler`. |
 | Tests | `tests/unit/`, `tests/integration/`, `tests/e2e/` | Pytest layout: fast isolated tests vs CDK/template and multi-handler flows; `e2e/` reserved for opt-in live tests. Shared `tests/conftest.py` applies to all. |
 
-Most Lambdas use a **repository-root** (or similarly broad) asset with excludes; the **heating live** function uses **Docker bundling** plus `requirements-heating.txt` and copies `src` and `backend` into the image output. Details remain documented in `reference/python-layout.md` and in `infrastructure/stacks/api_stack.py`.
+Most Lambdas use a **repository-root** (or similarly broad) asset with excludes; the **heating live** and **auto-retrieval** schedulers use **Docker bundling** plus `requirements-heating.txt` and copy `src`, `backend`, and `lambdas` into the image output. Details remain documented in `reference/python-layout.md` and in `infrastructure/stacks/api_stack.py`.
 
 ## Package strategy
 
@@ -53,17 +53,17 @@ We distinguish three **strategic** options (full comparison in ADR 0001):
 
 When handlers are moved under `lambdas/`, **one directory per deployed function** (or per logical Lambda resource), using **snake_case** names that match the product name, not internal class names.
 
-Suggested mapping from **current** handler modules (as of CDK configuration):
+CDK handler modules (Phase E layout):
 
-| CDK handler module (today) | Suggested `lambdas/` directory |
-|----------------------------|--------------------------------|
-| `src.handlers.submit_handler` | `lambdas/submit/` |
-| `src.handlers.history_handler` | `lambdas/history/` |
-| `src.handlers.recent_handler` | `lambdas/recent/` |
-| `src.handlers.heating_live_handler` | `lambdas/heating_live/` |
-| `src.handlers.auto_retrieval_handler` | `lambdas/auto_retrieval/` |
-| `src.handlers.auto_retrieval_config_handler` | `lambdas/auto_retrieval_config/` |
-| `src.handlers.auto_retrieval_config_validator` | `lambdas/auto_retrieval_config_validator/` |
+| CDK handler module | `lambdas/` directory |
+|--------------------|----------------------|
+| `lambdas.submit.handler` | `lambdas/submit/` |
+| `lambdas.history.handler` | `lambdas/history/` |
+| `lambdas.recent.handler` | `lambdas/recent/` |
+| `lambdas.heating_live.handler` | `lambdas/heating_live/` |
+| `lambdas.auto_retrieval.handler` | `lambdas/auto_retrieval/` |
+| `lambdas.auto_retrieval_config.handler` | `lambdas/auto_retrieval_config/` |
+| `lambdas.auto_retrieval_config_validator.handler` | `lambdas/auto_retrieval_config_validator/` |
 
 **Conventions:**
 
@@ -73,7 +73,7 @@ Suggested mapping from **current** handler modules (as of CDK configuration):
 
 ## Compatibility shims (transition)
 
-During migration, a thin **`src/legacy/`** (or equivalent re-export layer) may re-export moved handlers so external runbooks and deep links to module paths break less abruptly. This is **temporary**; remove shims once grep shows no remaining `src.handlers` references in tests, docs, and CDK.
+**`src/handlers/*`** and **`src/legacy/`** document transitional re-exports from `lambdas.*.handler`. Remove shims in Phase G once nothing depends on `src.handlers` imports.
 
 ## Related documents
 

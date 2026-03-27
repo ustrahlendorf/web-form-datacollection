@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from src.handlers.auto_retrieval_config_validator import lambda_handler
+from lambdas.auto_retrieval_config_validator.handler import lambda_handler
 
 
 def _valid_config() -> dict:

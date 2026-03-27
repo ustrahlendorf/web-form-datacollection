@@ -9,9 +9,9 @@ import json
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timezone, timedelta
-from src.handlers.submit_handler import lambda_handler as submit_handler
-from src.handlers.history_handler import lambda_handler as history_handler
-from src.handlers.recent_handler import lambda_handler as recent_handler
+from lambdas.submit.handler import lambda_handler as submit_handler
+from lambdas.history.handler import lambda_handler as history_handler
+from lambdas.recent.handler import lambda_handler as recent_handler
 
 
 # ============================================================================
@@ -20,8 +20,8 @@ from src.handlers.recent_handler import lambda_handler as recent_handler
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_end_to_end_flow_submit_and_retrieve(mock_history_dynamodb, mock_submit_dynamodb):
     """
     For an end-to-end flow, a user SHALL be able to submit a form and retrieve it from history.
@@ -105,7 +105,7 @@ def test_end_to_end_flow_submit_and_retrieve(mock_history_dynamodb, mock_submit_
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_form_prepopulation_with_current_datetime(mock_dynamodb):
     """
     For form pre-population, the system SHALL use the current date and time.
@@ -154,7 +154,7 @@ def test_form_prepopulation_with_current_datetime(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_recent_submissions_display_on_form_page(mock_dynamodb):
     """
     For the form page, the system SHALL display the last 3 submissions from the past 3 days.
@@ -213,7 +213,7 @@ def test_recent_submissions_display_on_form_page(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_pagination_on_history_page(mock_dynamodb):
     """
     For the history page, the system SHALL support pagination with limit and next_token.
@@ -275,7 +275,7 @@ def test_pagination_on_history_page(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_user_data_isolation_in_history(mock_dynamodb):
     """
     For user data isolation, User A SHALL never see submissions from User B.
@@ -355,7 +355,7 @@ def test_user_data_isolation_in_history(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_error_handling_invalid_inputs(mock_dynamodb):
     """
     For invalid inputs, the system SHALL return HTTP 400 with error details.
@@ -407,7 +407,7 @@ def test_error_handling_invalid_inputs(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_error_handling_database_errors(mock_dynamodb):
     """
     For database errors, the system SHALL return HTTP 500.
@@ -444,7 +444,7 @@ def test_error_handling_database_errors(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
 def test_error_handling_authentication_errors(mock_dynamodb):
     """
     For missing authentication, the system SHALL return HTTP 401.
@@ -480,8 +480,8 @@ def test_error_handling_authentication_errors(mock_dynamodb):
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.submit_handler.dynamodb")
-@patch("src.handlers.history_handler.dynamodb")
+@patch("lambdas.submit.handler.dynamodb")
+@patch("lambdas.history.handler.dynamodb")
 def test_multiple_submissions_and_history_retrieval(mock_history_dynamodb, mock_submit_dynamodb):
     """
     For multiple submissions, the system SHALL store all and retrieve them in correct order.
@@ -562,7 +562,7 @@ def test_multiple_submissions_and_history_retrieval(mock_history_dynamodb, mock_
 
 
 @patch.dict("os.environ", {"SUBMISSIONS_TABLE": "test-table"})
-@patch("src.handlers.recent_handler.dynamodb")
+@patch("lambdas.recent.handler.dynamodb")
 def test_recent_submissions_respects_three_day_window(mock_dynamodb):
     """
     For recent submissions, the system SHALL only return submissions from the past 3 days.

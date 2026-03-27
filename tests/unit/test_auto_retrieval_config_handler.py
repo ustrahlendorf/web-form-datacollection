@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-from src.handlers.auto_retrieval_config_handler import lambda_handler
+from lambdas.auto_retrieval_config.handler import lambda_handler
 
 
 def _authorized_event(
@@ -28,8 +28,8 @@ def _authorized_event(
     return event
 
 
-@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
-@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
+@patch("lambdas.auto_retrieval_config.handler._get_events_client")
+@patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_returns_current_payload(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
@@ -86,8 +86,8 @@ def test_get_auto_retrieval_config_returns_current_payload(
     }
 
 
-@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
-@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
+@patch("lambdas.auto_retrieval_config.handler._get_events_client")
+@patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_scheduler_unavailable_when_describe_rule_fails(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
@@ -140,8 +140,8 @@ def test_get_auto_retrieval_config_scheduler_unavailable_when_describe_rule_fail
     }
 
 
-@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
-@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
+@patch("lambdas.auto_retrieval_config.handler._get_events_client")
+@patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_includes_scheduler_metadata_when_available(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
@@ -200,8 +200,8 @@ def test_get_auto_retrieval_config_includes_scheduler_metadata_when_available(
     )
 
 
-@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
-@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
+@patch("lambdas.auto_retrieval_config.handler._get_events_client")
+@patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_keeps_success_response_when_scheduler_unavailable(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
@@ -245,8 +245,8 @@ def test_get_auto_retrieval_config_keeps_success_response_when_scheduler_unavail
     }
 
 
-@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
-@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
+@patch("lambdas.auto_retrieval_config.handler._get_events_client")
+@patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_scheduler_unavailable_when_rule_env_missing(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
@@ -287,8 +287,8 @@ def test_get_auto_retrieval_config_scheduler_unavailable_when_rule_env_missing(
     mock_get_events_client.assert_not_called()
 
 
-@patch("src.handlers.auto_retrieval_config_handler._get_events_client")
-@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_data_client")
+@patch("lambdas.auto_retrieval_config.handler._get_events_client")
+@patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_scheduler_interval_null_for_non_derivable_cron(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
@@ -334,7 +334,7 @@ def test_get_auto_retrieval_config_scheduler_interval_null_for_non_derivable_cro
     }
 
 
-@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_client")
+@patch("lambdas.auto_retrieval_config.handler._get_appconfig_client")
 def test_put_auto_retrieval_config_creates_version_and_starts_deployment(
     mock_get_appconfig_client: MagicMock,
 ) -> None:
@@ -389,7 +389,7 @@ def test_put_auto_retrieval_config_creates_version_and_starts_deployment(
     )
 
 
-@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_client")
+@patch("lambdas.auto_retrieval_config.handler._get_appconfig_client")
 def test_get_deployment_status_returns_latest_deployment(
     mock_get_appconfig_client: MagicMock,
 ) -> None:
@@ -434,7 +434,7 @@ def test_get_deployment_status_returns_latest_deployment(
     )
 
 
-@patch("src.handlers.auto_retrieval_config_handler._get_appconfig_client")
+@patch("lambdas.auto_retrieval_config.handler._get_appconfig_client")
 def test_get_deployment_status_returns_specific_deployment_when_number_provided(
     mock_get_appconfig_client: MagicMock,
 ) -> None:

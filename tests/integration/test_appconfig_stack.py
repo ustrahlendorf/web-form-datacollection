@@ -59,7 +59,7 @@ def test_appconfig_stack_creates_application_environment_profile_and_validators(
     template.has_resource_properties(
         "AWS::Lambda::Function",
         {
-            "Handler": "src.handlers.auto_retrieval_config_validator.lambda_handler",
+            "Handler": "lambdas.auto_retrieval_config_validator.handler.lambda_handler",
             "Runtime": "python3.11",
             "Timeout": 10,
         },
