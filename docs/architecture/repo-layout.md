@@ -12,20 +12,20 @@ This document is the **architecture blueprint** for how we organise Python code,
 
 | Area | Location | Role |
 |------|----------|------|
-| Handlers | `lambdas/<fn>/handler.py` | Lambda `handler=` modules (see CDK stacks). `src/handlers/*.py` re-exports during migration. |
+| Handlers | `lambdas/<fn>/handler.py` | Lambda `handler=` modules (see CDK stacks). |
 | Form / API domain | `backend/src/backend/shared/` (`models`, `validators`) | Shared submission schema and validation used by HTTP handlers. |
 | Viessmann integration | `backend/src/backend/viessmann/` (`api_auth`, `viessmann_submit`) | OAuth and storing Viessmann-derived rows as submissions. |
 | Heating / IoT | `backend/src/backend/heating/iot_data/` | IoT config, feature fetch/extract, `heating_values`; CLIs from `backend/pyproject.toml`. |
 | CDK | `infrastructure/` | Stacks define Lambdas, bundling, and handler strings such as `lambdas.submit.handler.lambda_handler`. |
 | Tests | `tests/unit/`, `tests/integration/`, `tests/e2e/` | Pytest layout: fast isolated tests vs CDK/template and multi-handler flows; `e2e/` reserved for opt-in live tests. Shared `tests/conftest.py` applies to all. |
 
-Most Lambdas use a **repository-root** (or similarly broad) asset with excludes; the **heating live** and **auto-retrieval** schedulers use **Docker bundling** plus `requirements-heating.txt` and copy `src`, `backend`, and `lambdas` into the image output. Details remain documented in `reference/python-layout.md` and in `infrastructure/stacks/api_stack.py`.
+Most Lambdas use a **repository-root** asset with shared excludes (`infrastructure/config/lambda_assets.py`); the **heating live** and **auto-retrieval** schedulers use **Docker bundling** plus `requirements-heating.txt` and copy `backend` and `lambdas` into the image output. Details remain documented in `reference/python-layout.md` and in `infrastructure/stacks/api_stack.py`.
 
 ## Package strategy
 
 ### Two import roots today
 
-1. **`src`** — not installed as a package; available on `PYTHONPATH` inside bundles that copy the `src` tree (handlers, legacy shims during migration).
+1. **`lambdas`** — handler modules at `lambdas.<function>.handler` with the **repository root** on `PYTHONPATH` inside Lambda assets (and pytest; see `tests/conftest.py`).
 2. **`backend`** — installable package (`pip install -e backend/`); domain modules live under `backend.shared`, `backend.viessmann`, and `backend.heating`. Tests expose it via `tests/conftest.py` prepending `backend/src` to `sys.path`.
 
 ### Decisions (see ADR 0001)
@@ -46,7 +46,7 @@ We distinguish three **strategic** options (full comparison in ADR 0001):
 |--------|------|----------|
 | **A — Shared runtime root (recommended for migration)** | One logical runtime tree per bundle (often repo root or a shared `_bundle/`): CDK copies `backend/` and the handler tree into the asset. Handlers may **physically** live under `lambdas/<name>/` while imports and bundling commands are updated together. | Incremental Phase E: fewer packaging variants to maintain. |
 | **B — One asset per function** | `Code.from_asset("lambdas/foo")` with an explicit file list per function; optional **Lambda layer** for `backend`. | Smaller ZIPs, stricter isolation; more CDK and release complexity. |
-| **C — Document only** | No code moves; only docs and peripheral layout. | Minimal effort; dual `src` + `backend` world remains. |
+| **C — Document only** | No code moves; only docs and peripheral layout. | Minimal effort; keeps older layout until handlers and assets are migrated. |
 
 **Chosen direction for upcoming work:** **Option A** — prefer a **single, well-defined copy list** per bundle type (standard vs heating Docker) over many per-function assets, until there is a concrete need for Option B (size, compliance, or independent release cadence).
 
@@ -71,10 +71,6 @@ CDK handler modules (Phase E layout):
 - Each folder exposes a **`lambda_handler`** (or the symbol referenced by CDK) in a small module such as `handler.py` or `__init__.py`; the exact file name is chosen when implementing Phase E.
 - **Do not** invent separate Lambdas for concerns that are **library-only** today (for example token refresh inside `backend`); keep those in the `backend` package.
 - If two stacks share the **same** handler code (for example scheduled vs daily auto retrieval using `auto_retrieval_handler`), they still use **one** `lambdas/auto_retrieval/` tree and two CDK `Function` resources pointing at the same handler string.
-
-## Compatibility shims (transition)
-
-**`src/handlers/*`** and **`src/legacy/`** document transitional re-exports from `lambdas.*.handler`. Remove shims in Phase G once nothing depends on `src.handlers` imports.
 
 ## Related documents
 

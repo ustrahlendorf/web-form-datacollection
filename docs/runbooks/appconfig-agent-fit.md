@@ -6,8 +6,8 @@ Technical and operational fit evaluation for adopting AWS AppConfig Agent in thi
 
 - **AppConfig Agent currently in use:** **No**
 - Runtime config reads use direct AppConfigData SDK calls (`start_configuration_session` + `get_latest_configuration`) in:
-  - `src/handlers/auto_retrieval_handler.py`
-  - `src/handlers/auto_retrieval_config_handler.py`
+  - `lambdas/auto_retrieval/handler.py`
+  - `lambdas/auto_retrieval_config/handler.py`
 - Infrastructure currently sets AppConfig identifiers and IAM for direct calls, but does not configure an AppConfig Agent Lambda extension/layer or `localhost:2772` runtime path.
 
 ## Existing Lambda call pattern fit
@@ -19,7 +19,7 @@ Technical and operational fit evaluation for adopting AWS AppConfig Agent in thi
 - The frequent path can trigger two AppConfigData reads in one invocation when not skipped:
   - `_check_active_window_and_maybe_skip()` -> `_load_appconfig()`
   - `_load_config()` -> `_load_appconfig()` again
-- Config API GET (`src/handlers/auto_retrieval_config_handler.py`) also reads effective config via AppConfigData on demand.
+- Config API GET (`lambdas/auto_retrieval_config/handler.py`) also reads effective config via AppConfigData on demand.
 
 ### Why this matters
 
@@ -64,7 +64,7 @@ Rationale:
 
 - The frequent scheduler pattern creates repeated reads and is the clearest benefit target.
 - Migration scope stays small if limited to the scheduled runtime path first.
-- Direct SDK in `auto_retrieval_config_handler` is low-frequency and operationally clear for management APIs.
+- Direct SDK in `lambdas.auto_retrieval_config.handler` is low-frequency and operationally clear for management APIs.
 
 If minimizing operational complexity is currently the top priority, defer only until extension ownership/monitoring is explicitly assigned; otherwise this is a good incremental adoption candidate.
 
@@ -77,9 +77,9 @@ If minimizing operational complexity is currently the top priority, defer only u
    - Add only required agent environment tuning (if needed), keep existing AppConfig IAM permissions initially.
 
 2. **Runtime**
-   - Update `src/handlers/auto_retrieval_handler.py` to fetch config from local agent endpoint first.
+   - Update `lambdas/auto_retrieval/handler.py` to fetch config from local agent endpoint first.
    - Keep existing direct SDK and/or SSM fallback as controlled fallback path during rollout.
-   - Avoid changing `src/handlers/auto_retrieval_config_handler.py` in phase 1.
+   - Avoid changing `lambdas/auto_retrieval_config/handler.py` in phase 1.
 
 3. **Operations**
    - Add CloudWatch log checks for extension startup and local fetch failures.
