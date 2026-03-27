@@ -3,7 +3,7 @@ Lambda handler for heating live data endpoint.
 
 Handles GET /heating/live requests. Fetches gas consumption (m³ today so far, m³ yesterday),
 betriebsstunden, starts, supply temperature, and outside temperature from the Viessmann IoT API via the
-backend.iot_data.heating_values module. Credentials are read from AWS Secrets Manager.
+backend.heating.iot_data.heating_values module. Credentials are read from AWS Secrets Manager.
 """
 
 import json
@@ -122,8 +122,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         os.environ["VIESSMANN_EMAIL"] = creds["VIESSMANN_EMAIL"]
         os.environ["VIESSMANN_PASSWORD"] = creds["VIESSMANN_PASSWORD"]
 
-        from backend.iot_data.get_iot_config import get_iot_config
-        from backend.iot_data.heating_values import get_heating_values
+        from backend.heating.iot_data.get_iot_config import get_iot_config
+        from backend.heating.iot_data.heating_values import get_heating_values
 
         iot_config = get_iot_config(timeout_seconds=30.0, ssl_verify=True)
         values = get_heating_values(iot_config, timeout_seconds=30.0, ssl_verify=True)

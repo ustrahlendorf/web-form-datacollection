@@ -1,11 +1,11 @@
-"""Unit tests for backend.iot_data.feature_extractors."""
+"""Unit tests for backend.heating.iot_data.feature_extractors."""
 
 from unittest.mock import Mock
 
 import pytest
 
-import backend.iot_data.feature_extractors as ext_mod
-from backend.iot_data.get_iot_config import IotConfig
+import backend.heating.iot_data.feature_extractors as ext_mod
+from backend.heating.iot_data.get_iot_config import IotConfig
 
 
 def _make_iot_config() -> IotConfig:

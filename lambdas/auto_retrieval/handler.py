@@ -507,10 +507,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     os.environ["VIESSMANN_EMAIL"] = creds["VIESSMANN_EMAIL"]
     os.environ["VIESSMANN_PASSWORD"] = creds["VIESSMANN_PASSWORD"]
 
-    from backend.iot_data.get_iot_config import get_iot_config
-    from backend.iot_data.heating_values import get_heating_values
+    from backend.heating.iot_data.get_iot_config import get_iot_config
+    from backend.heating.iot_data.heating_values import get_heating_values
 
-    from src.viessmann_submit import store_viessmann_submission
+    from backend.viessmann.viessmann_submit import store_viessmann_submission
 
     last_error = None
     for attempt in range(1, max_retries + 1):

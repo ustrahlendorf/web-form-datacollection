@@ -28,8 +28,8 @@ from typing import Any, Optional
 
 import requests
 
-from .. import config as config_mod
-from ..api_auth import auth as auth_mod
+from ...shared import config as config_mod
+from ...viessmann.api_auth import auth as auth_mod
 
 # Buffer in seconds: treat token as expired this many seconds before actual expiry.
 _TOKEN_EXPIRY_BUFFER = 300  # 5 minutes

@@ -7,7 +7,7 @@ Tests correctness properties of validation functions using hypothesis.
 import pytest
 from datetime import datetime, timedelta
 from hypothesis import given, strategies as st, assume
-from src.validators import (
+from backend.shared.validators import (
     validate_date,
     validate_time,
     validate_integer,

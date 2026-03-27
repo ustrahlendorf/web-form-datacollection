@@ -1,5 +1,5 @@
 """
-Unit tests for PKCE helper functions in `backend.api_auth.auth`.
+Unit tests for PKCE helper functions in `backend.viessmann.api_auth.auth`.
 
 These tests are intentionally offline (no network calls).
 They validate deterministic S256 computation and basic verifier invariants.
@@ -12,7 +12,7 @@ import pytest
 
 @pytest.fixture(scope="session")
 def vis_auth():
-    import backend.api_auth.auth as vis_auth_mod
+    import backend.viessmann.api_auth.auth as vis_auth_mod
 
     return vis_auth_mod
 

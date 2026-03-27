@@ -14,8 +14,8 @@ from typing import Any, Optional
 
 import requests
 
-from .. import config as config_mod
-from ..api_auth import auth as auth_mod
+from ...shared import config as config_mod
+from ...viessmann.api_auth import auth as auth_mod
 from .get_iot_config import IotConfig, api_get_json, _extract_list
 
 # Module-level URL templates for testability.

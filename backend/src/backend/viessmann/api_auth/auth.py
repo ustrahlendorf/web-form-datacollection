@@ -49,7 +49,7 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
-from .. import config as _config
+from ...shared import config as _config
 
 # Module-level URL constants for testability (used by test_vis_connect_get_iot_config).
 AUTHORIZE_URL = _config.get_authorize_url()
@@ -115,7 +115,7 @@ def configure_logging(*, run_id: str, level: str) -> logging.LoggerAdapter:
     for h in root.handlers:
         h.addFilter(_RunIdFilter(run_id))
 
-    logger = logging.getLogger("backend.api_auth")
+    logger = logging.getLogger("backend.viessmann.api_auth")
     # We intentionally do NOT inject run_id via LoggerAdapter `extra`, because
     # our LogRecordFactory already sets run_id on every record. Injecting it
     # twice would raise KeyError ("Attempt to overwrite 'run_id' in LogRecord").
@@ -803,14 +803,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         if log is not None:
             log.error("CLI error: %s", _sanitize_text(str(e)))
         else:
-            logging.getLogger("backend.api_auth").error("CLI error: %s", _sanitize_text(str(e)))
+            logging.getLogger("backend.viessmann.api_auth").error("CLI error: %s", _sanitize_text(str(e)))
         print(f"Error: {e}", file=sys.stderr)
         return 2
     except requests.exceptions.SSLError as e:
         if log is not None:
             log.error("SSL error: %s", str(e))
         else:
-            logging.getLogger("backend.api_auth").error("SSL error: %s", str(e))
+            logging.getLogger("backend.viessmann.api_auth").error("SSL error: %s", str(e))
         print(
             "Error: SSL verification failed. "
             "If you must (not recommended), retry with --insecure-skip-ssl-verify. "
@@ -822,14 +822,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         if log is not None:
             log.error("request timed out")
         else:
-            logging.getLogger("backend.api_auth").error("request timed out")
+            logging.getLogger("backend.viessmann.api_auth").error("request timed out")
         print("Error: request timed out. Try increasing --timeout-seconds.", file=sys.stderr)
         return 4
     except KeyboardInterrupt:
         if log is not None:
             log.warning("interrupted by user")
         else:
-            logging.getLogger("backend.api_auth").warning("interrupted by user")
+            logging.getLogger("backend.viessmann.api_auth").warning("interrupted by user")
         print("Interrupted.", file=sys.stderr)
         return 130
 

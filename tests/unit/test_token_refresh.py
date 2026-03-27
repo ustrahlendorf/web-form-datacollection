@@ -15,8 +15,8 @@ from unittest.mock import Mock
 import pytest
 import requests
 
-import backend.api_auth.auth as auth_mod
-import backend.iot_data.get_iot_config as get_iot_mod
+import backend.viessmann.api_auth.auth as auth_mod
+import backend.heating.iot_data.get_iot_config as get_iot_mod
 
 
 def _make_json_response(payload: dict, *, status_code: int = 200) -> requests.Response:

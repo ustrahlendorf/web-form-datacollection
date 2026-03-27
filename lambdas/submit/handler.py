@@ -10,8 +10,8 @@ import os
 from typing import Dict, Any
 from decimal import Decimal
 
-from src.models import create_submission
-from src.validators import validate_submission
+from backend.shared.models import create_submission
+from backend.shared.validators import validate_submission
 
 
 # Lazily initialized DynamoDB resource (tests patch this symbol).

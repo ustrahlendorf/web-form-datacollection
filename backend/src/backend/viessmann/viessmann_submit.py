@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
-from src.models import create_submission
+from backend.shared.models import create_submission
 
 
 def _format_datum(dt: datetime) -> str:

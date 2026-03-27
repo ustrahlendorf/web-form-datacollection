@@ -13,7 +13,7 @@ import json
 import sys
 from typing import Optional
 
-from ..api_auth import auth as auth_mod
+from ...viessmann.api_auth import auth as auth_mod
 from .feature_extractors import get_feature_value
 from .get_iot_config import get_iot_config
 

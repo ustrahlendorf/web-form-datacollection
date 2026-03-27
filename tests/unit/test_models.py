@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 from hypothesis import given, strategies as st
 from decimal import Decimal
-from src.models import (
+from backend.shared.models import (
     Submission,
     generate_submission_id,
     generate_timestamp_utc,

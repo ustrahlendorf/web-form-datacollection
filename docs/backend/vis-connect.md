@@ -50,10 +50,10 @@ flowchart TD
 
 | Layer | Module | Responsibility | Returns |
 |-------|--------|----------------|---------|
-| **Auth** | `api_auth.auth` | OAuth 2.0 + PKCE; exchange credentials for access token; token refresh | Access token, user info |
-| **Config** | `iot_data.get_iot_config` | Resolve installation id, gateway serial, device id from IoT equipment endpoints | `IotConfig` |
-| **Fetch** | `iot_data.feature_data_fetcher` | HTTP GET to Viessmann API; parse `data` array | Raw feature dict `{feature, isEnabled, properties, commands}` |
-| **Extract** | `iot_data.feature_extractors` | Map feature path to extractor; apply it | Typed value (float, dict, etc.) or raw `properties` |
+| **Auth** | `viessmann.api_auth.auth` | OAuth 2.0 + PKCE; exchange credentials for access token; token refresh | Access token, user info |
+| **Config** | `heating.iot_data.get_iot_config` | Resolve installation id, gateway serial, device id from IoT equipment endpoints | `IotConfig` |
+| **Fetch** | `heating.iot_data.feature_data_fetcher` | HTTP GET to Viessmann API; parse `data` array | Raw feature dict `{feature, isEnabled, properties, commands}` |
+| **Extract** | `heating.iot_data.feature_extractors` | Map feature path to extractor; apply it | Typed value (float, dict, etc.) or raw `properties` |
 
 ## data flow
 
@@ -158,11 +158,11 @@ flowchart LR
 
 | Component | Purpose |
 |-----------|---------|
-| `api_auth.auth` | OAuth 2.0 + PKCE flow; exchanges credentials for access token; calls `/users/me` |
-| `iot_data.get_iot_config` | Resolves installation id, gateway serial, device id from IoT equipment endpoints |
-| `iot_data.feature_data_fetcher` | Fetches device features from the Viessmann API |
-| `iot_data.feature_extractors` | Maps feature paths to typed values (temperature, consumption, etc.) |
-| `iot_data.feature_value_cli` | CLI to fetch a single feature value and print as JSON |
+| `viessmann.api_auth.auth` | OAuth 2.0 + PKCE flow; exchanges credentials for access token; calls `/users/me` |
+| `heating.iot_data.get_iot_config` | Resolves installation id, gateway serial, device id from IoT equipment endpoints |
+| `heating.iot_data.feature_data_fetcher` | Fetches device features from the Viessmann API |
+| `heating.iot_data.feature_extractors` | Maps feature paths to typed values (temperature, consumption, etc.) |
+| `heating.iot_data.feature_value_cli` | CLI to fetch a single feature value and print as JSON |
 
 ## setup
 
@@ -248,8 +248,8 @@ Examples:
 For use in scripts or other Python code:
 
 ```python
-from backend.iot_data.get_iot_config import get_iot_config
-from backend.iot_data.feature_extractors import get_feature_value
+from backend.heating.iot_data.get_iot_config import get_iot_config
+from backend.heating.iot_data.feature_extractors import get_feature_value
 
 cfg = get_iot_config(timeout_seconds=30.0, ssl_verify=True)
 value = get_feature_value("heating.circuits.0.temperature", cfg)
@@ -259,9 +259,9 @@ value = get_feature_value("heating.circuits.0.temperature", cfg)
 To avoid duplicate HTTP calls when querying multiple features:
 
 ```python
-from backend.iot_data.get_iot_config import get_iot_config
-from backend.iot_data.feature_data_fetcher import get_device_features
-from backend.iot_data.feature_extractors import get_feature_value
+from backend.heating.iot_data.get_iot_config import get_iot_config
+from backend.heating.iot_data.feature_data_fetcher import get_device_features
+from backend.heating.iot_data.feature_extractors import get_feature_value
 
 cfg = get_iot_config()
 features = get_device_features(cfg)
@@ -282,7 +282,7 @@ By default, tokens are cached at `~/.viessmann/tokens.json` (or `VIESSMANN_TOKEN
 
 ## heating live endpoint (Lambda)
 
-The `GET /heating/live` API endpoint fetches live heating values from the Viessmann IoT API. It uses the `backend.iot_data.heating_values` module. Response includes: `gas_consumption_m3_today` (m³ today so far), `gas_consumption_m3_yesterday` (m³ yesterday), betriebsstunden, starts, supply temp, outside temp.
+The `GET /heating/live` API endpoint fetches live heating values from the Viessmann IoT API. It uses the `backend.heating.iot_data.heating_values` module. Response includes: `gas_consumption_m3_today` (m³ today so far), `gas_consumption_m3_yesterday` (m³ yesterday), betriebsstunden, starts, supply temp, outside temp.
 
 **Setup:**
 

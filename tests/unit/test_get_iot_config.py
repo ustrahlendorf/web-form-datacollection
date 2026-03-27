@@ -3,8 +3,8 @@ from unittest.mock import Mock
 
 import pytest
 
-import backend.api_auth.auth as auth_mod
-import backend.iot_data.get_iot_config as get_iot_mod
+import backend.viessmann.api_auth.auth as auth_mod
+import backend.heating.iot_data.get_iot_config as get_iot_mod
 
 def _make_cfg(*, timeout_seconds: float = 12.5, ssl_verify: bool = True):
     return SimpleNamespace(timeout_seconds=timeout_seconds, ssl_verify=ssl_verify)

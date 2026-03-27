@@ -22,7 +22,7 @@ def pytest_configure() -> None:
     web_form_root = Path(__file__).resolve().parent.parent  # .../web-form-verbrauch
     backend_src = web_form_root / "backend" / "src"
 
-    # Repo root: `lambdas` and `src` top-level packages (pytest rootdir is usually this too).
+    # Repo root: `lambdas` and `src` (pytest rootdir is usually this too).
     sys.path.insert(0, str(web_form_root))
 
     if backend_src.is_dir():

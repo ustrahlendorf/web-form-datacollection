@@ -11,7 +11,7 @@ def auth_module():
     """
     Import the auth module from the `backend` package.
     """
-    import backend.api_auth.auth as auth_mod
+    import backend.viessmann.api_auth.auth as auth_mod
 
     return auth_mod
 
@@ -71,7 +71,7 @@ def test_exchange_code_for_token_logs_sanitized_response(auth_module, caplog) ->
         code_verifier="code-verifier",
     )
 
-    log = logging.LoggerAdapter(logging.getLogger("backend.api_auth.test"), {})
+    log = logging.LoggerAdapter(logging.getLogger("backend.viessmann.api_auth.test"), {})
     caplog.set_level(logging.DEBUG)
 
     # Act

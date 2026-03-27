@@ -45,9 +45,9 @@ def _load_dotenv(log: Optional[logging.LoggerAdapter] = None) -> None:
 
     # Candidate 1: standard location – current working directory
     cwd_env = Path.cwd() / ".env"
-    # Candidate 2: backend project root (2 levels up from this source file)
-    #   config.py → backend/ → src/ → backend/
-    package_root_env = Path(__file__).resolve().parents[2] / ".env"
+    # Candidate 2: backend project root (directory with backend/pyproject.toml)
+    #   shared/config.py → backend(package) → src → backend(project)
+    package_root_env = Path(__file__).resolve().parents[3] / ".env"
 
     env_file: Optional[Path] = None
     if cwd_env.is_file():

@@ -1,13 +1,13 @@
-"""Unit tests for backend.iot_data.feature_data_fetcher."""
+"""Unit tests for backend.heating.iot_data.feature_data_fetcher."""
 
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
-import backend.api_auth.auth as auth_mod
-import backend.iot_data.feature_data_fetcher as fetcher_mod
-from backend.iot_data.get_iot_config import IotConfig
+import backend.viessmann.api_auth.auth as auth_mod
+import backend.heating.iot_data.feature_data_fetcher as fetcher_mod
+from backend.heating.iot_data.get_iot_config import IotConfig
 
 
 def _make_iot_config(

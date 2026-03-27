@@ -1,4 +1,4 @@
-"""Tests for src.viessmann_submit module."""
+"""Tests for backend.viessmann.viessmann_submit module."""
 
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.viessmann_submit import (
+from backend.viessmann.viessmann_submit import (
     _viessmann_to_submission_values,
     _datum_to_iso,
     store_viessmann_submission,

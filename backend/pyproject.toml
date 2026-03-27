@@ -11,9 +11,9 @@ requires-python = ">=3.10"
 dependencies = ["requests", "python-dotenv>=1.0"]
 
 [project.scripts]
-api-auth = "backend.api_auth.auth:main"
-iot-data-config = "backend.iot_data.get_iot_config:main"
-iot-data-feature = "backend.iot_data.feature_value_cli:main"
+api-auth = "backend.viessmann.api_auth.auth:main"
+iot-data-config = "backend.heating.iot_data.get_iot_config:main"
+iot-data-feature = "backend.heating.iot_data.feature_value_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

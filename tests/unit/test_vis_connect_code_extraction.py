@@ -1,5 +1,5 @@
 """
-Unit tests for authorization-code extraction in `backend.api_auth.auth`.
+Unit tests for authorization-code extraction in `backend.viessmann.api_auth.auth`.
 
 No network calls are performed. We validate extraction from:
 - Redirect Location header (preferred)
@@ -16,7 +16,7 @@ import pytest
 
 @pytest.fixture(scope="session")
 def vis_auth():
-    import backend.api_auth.auth as vis_auth_mod
+    import backend.viessmann.api_auth.auth as vis_auth_mod
 
     return vis_auth_mod
 

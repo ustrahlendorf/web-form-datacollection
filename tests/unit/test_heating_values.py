@@ -1,11 +1,11 @@
-"""Unit tests for backend.iot_data.heating_values."""
+"""Unit tests for backend.heating.iot_data.heating_values."""
 
 from unittest.mock import patch
 
 import pytest
 
-import backend.iot_data.heating_values as hv_mod
-from backend.iot_data.get_iot_config import IotConfig
+import backend.heating.iot_data.heating_values as hv_mod
+from backend.heating.iot_data.get_iot_config import IotConfig
 
 
 def _make_iot_config() -> IotConfig:

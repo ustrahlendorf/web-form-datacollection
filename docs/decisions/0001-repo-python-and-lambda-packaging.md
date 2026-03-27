@@ -37,7 +37,7 @@ We need agreed rules for **package naming**, **what goes into each Lambda asset*
 ### Negative / trade-offs
 
 - Function ZIPs may remain **larger** than a per-function minimal asset until Option B (per-function assets or layers) is adopted later.
-- **Two import roots** (`src` and `backend`) remain until domain consolidation phases finish; contributors must still read `python-layout.md`.
+- **Two import roots** (`src`/`lambdas` vs `backend`) remain for handler entry points vs the installable package; contributors must still read `python-layout.md`.
 
 ### Follow-up
 

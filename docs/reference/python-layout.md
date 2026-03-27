@@ -1,6 +1,6 @@
 # Python layout in this repository
 
-This page is the **single reference** for how Python dependencies and import paths are organised. Two code areas stay separate: application and Lambda handler code lives under `src/`, the Vis-Connect library lives under `backend/src/backend/`. CDK bundling and import paths are built around that split.
+This page is the **single reference** for how Python dependencies and import paths are organised. Lambda handler entry points and transitional shims live under `src/` and `lambdas/`; the installable **`backend`** package under `backend/src/backend/` holds domain code in **`backend.shared`** (models, validators, URL config), **`backend.viessmann`** (OAuth, `viessmann_submit`), and **`backend.heating.iot_data`** (IoT config, features, `heating_values`). CDK bundling and `PYTHONPATH` are built around that split.
 
 ## Root: `requirements.txt`
 
@@ -32,7 +32,7 @@ Test modules live under [`tests/unit/`](../../tests/unit/), [`tests/integration/
 
 ## Viessmann-related Lambdas: `requirements-heating.txt` and CDK bundling
 
-Heating / Viessmann handlers are bundled with **`requirements-heating.txt`**: the CDK asset step runs `pip install -r requirements-heating.txt` into the Lambda artifact, then copies `src`, `backend`, and `lambdas` into the bundle (for example in `infrastructure/stacks/api_stack.py` for the heating-live function). At runtime, `PYTHONPATH` includes `backend/src` so the packaged `backend` package is importable next to the handlers.
+Heating / Viessmann handlers are bundled with **`requirements-heating.txt`**: the CDK asset step runs `pip install -r requirements-heating.txt` into the Lambda artifact, then copies `src`, `backend`, and `lambdas` into the bundle (for example in `infrastructure/stacks/api_stack.py` for the heating-live function). At runtime, `PYTHONPATH` includes `backend/src` so the packaged `backend` package (including `backend.heating.iot_data`, `backend.viessmann`, `backend.shared`) is importable next to the handlers. The **submit** Lambda sets the same `PYTHONPATH` so it can import `backend.shared.models` and `backend.shared.validators`.
 
 ### Convention: `backend/pyproject.toml` ↔ `requirements-heating.txt`
 

@@ -280,6 +280,7 @@ class APIStack(Stack):
             role=lambda_execution_role,
             environment={
                 "SUBMISSIONS_TABLE": table_name,
+                "PYTHONPATH": BACKEND_PYTHONPATH,
                 **(
                     {"PASSIVE_SUBMISSIONS_TABLE": passive_table_name}
                     if passive_table_name
@@ -475,7 +476,7 @@ class APIStack(Stack):
         Create Lambda function for GET /heating/live endpoint.
 
         Fetches heating values from Viessmann IoT API. Requires backend package
-        and PYTHONPATH for backend.iot_data. Credentials from Secrets Manager.
+        and PYTHONPATH for backend.heating.iot_data. Credentials from Secrets Manager.
         """
         heating_live_fn = lambda_.Function(
             self,

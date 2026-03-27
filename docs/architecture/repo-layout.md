@@ -13,8 +13,9 @@ This document is the **architecture blueprint** for how we organise Python code,
 | Area | Location | Role |
 |------|----------|------|
 | Handlers | `lambdas/<fn>/handler.py` | Lambda `handler=` modules (see CDK stacks). `src/handlers/*.py` re-exports during migration. |
-| Form / API domain | `src/models.py`, `src/validators.py`, `src/viessmann_submit.py` | Shared logic used by handlers (not all of it is Viessmann-specific). |
-| Vis-Connect library | `backend/src/backend/` (package name **`backend`**) | OAuth, IoT config, feature data; CLIs from `backend/pyproject.toml`. |
+| Form / API domain | `backend/src/backend/shared/` (`models`, `validators`) | Shared submission schema and validation used by HTTP handlers. |
+| Viessmann integration | `backend/src/backend/viessmann/` (`api_auth`, `viessmann_submit`) | OAuth and storing Viessmann-derived rows as submissions. |
+| Heating / IoT | `backend/src/backend/heating/iot_data/` | IoT config, feature fetch/extract, `heating_values`; CLIs from `backend/pyproject.toml`. |
 | CDK | `infrastructure/` | Stacks define Lambdas, bundling, and handler strings such as `lambdas.submit.handler.lambda_handler`. |
 | Tests | `tests/unit/`, `tests/integration/`, `tests/e2e/` | Pytest layout: fast isolated tests vs CDK/template and multi-handler flows; `e2e/` reserved for opt-in live tests. Shared `tests/conftest.py` applies to all. |
 
@@ -24,13 +25,13 @@ Most Lambdas use a **repository-root** (or similarly broad) asset with excludes;
 
 ### Two import roots today
 
-1. **`src`** — not installed as a package; available on `PYTHONPATH` inside bundles that copy the `src` tree.
-2. **`backend`** — installable package (`pip install -e backend/`); tests also expose it via `tests/conftest.py` prepending `backend/src` to `sys.path`.
+1. **`src`** — not installed as a package; available on `PYTHONPATH` inside bundles that copy the `src` tree (handlers, legacy shims during migration).
+2. **`backend`** — installable package (`pip install -e backend/`); domain modules live under `backend.shared`, `backend.viessmann`, and `backend.heating`. Tests expose it via `tests/conftest.py` prepending `backend/src` to `sys.path`.
 
 ### Decisions (see ADR 0001)
 
 - **Keep the published package name `backend` through the planned refactor phases** unless a dedicated rename initiative is approved. Renaming touches every `import backend…`, CLIs, CDK paths, and documentation; it is deferred to reduce moving parts during handler and asset migration.
-- **Domain consolidation under `backend/`** (for example subpackages for Viessmann, heating, shared form logic) is a **later** phase, after handler placement is stable. Until then, `src/` may remain the home for form-centric modules even if the long-term target is to fold them into `backend` (or a clearly named `backend/shared`).
+- **Domain consolidation under `backend/`** — `shared`, `viessmann`, and `heating` subpackages hold form models, Viessmann auth/submit, and IoT data code respectively (see **Current state** table above).
 
 ### `requirements-heating.txt`
 

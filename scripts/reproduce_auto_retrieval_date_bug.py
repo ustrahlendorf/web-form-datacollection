@@ -15,15 +15,20 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-# Ensure project root is on path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure project root and backend package root are on path
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _root)
+sys.path.insert(0, os.path.join(_root, "backend", "src"))
 
 # Simulate retrieval at 2026-03-10 06:00:45 UTC (matches user's observed timestamp_utc)
 RETRIEVAL_TIME = datetime(2026, 3, 10, 6, 0, 45, tzinfo=timezone.utc)
 
 
 def main() -> None:
-    from src.viessmann_submit import _viessmann_to_submission_values, store_viessmann_submission
+    from backend.viessmann.viessmann_submit import (
+        _viessmann_to_submission_values,
+        store_viessmann_submission,
+    )
 
     values = {
         "gas_consumption_m3_yesterday": 1.5,
