@@ -20,6 +20,7 @@ dotenv: ["taskfile.env"]
 # Notes:
 # - This project expects ACTIVE_/PASSIVE_ table names to be set explicitly for CDK synth/deploy.
 # - Python/Node environments (e.g. venv, npm install) are assumed to be prepared by the user.
+# - Tasks that run Python or CDK expect an activated venv (`source .venv/bin/activate`); see `_python:require-venv`.
 
 vars:
   # Task working directory root (this repo).
@@ -36,6 +37,17 @@ tasks:
     desc: "List available tasks"
     cmds:
       - task -l
+
+  _python:require-venv:
+    internal: true
+    cmds:
+      - |
+        if [ -z "${VIRTUAL_ENV:-}" ]; then
+          echo "ERROR: Python virtual environment is not active." >&2
+          echo "  From the repo root: source .venv/bin/activate" >&2
+          echo "  (Windows: .venv\\Scripts\\activate)" >&2
+          exit 1
+        fi
 
   doctor-base:
     desc: "Preflight checks (tooling only)"
@@ -58,7 +70,7 @@ tasks:
 
   doctor-init:
     desc: "Preflight checks for InitStack (requires SSM namespace env var)"
-    deps: [doctor-base]
+    deps: [doctor-base, _python:require-venv]
     cmds:
       - test -n "$SSM_NAMESPACE_PREFIX"
 
@@ -68,6 +80,7 @@ tasks:
 
   python:check-heating-deps:
     desc: "Verify requirements-heating.txt aligns with backend/pyproject.toml (Viessmann Lambda)"
+    deps: [_python:require-venv]
     dir: "{{.APP_DIR}}"
     cmds:
       - python3 scripts/check_heating_requirements.py
@@ -78,6 +91,7 @@ tasks:
 
   test-backend:
     desc: "Run pytest"
+    deps: [_python:require-venv]
     dir: "{{.APP_DIR}}"
     cmds:
       - python3 -m pytest -q
@@ -277,7 +291,7 @@ tasks:
 
   destroy-scheduler-frequent:
     desc: "Destroy Scheduler frequent stack (removes frequent table and Lambda)"
-    deps: [doctor-aws]
+    deps: [doctor-aws, _python:require-venv]
     dir: "{{.APP_DIR}}"
     env:
       CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
@@ -321,6 +335,7 @@ tasks:
 
   env:print:
     desc: "Print shell exports for ACTIVE_/PASSIVE_ table names (use with eval)"
+    deps: [_python:require-venv]
     vars:
       # Prefer explicit task args; fall back to current shell env vars if present.
       ACTIVE: '{{default .ACTIVE_SUBMISSIONS_TABLE_NAME .ACTIVE}}'
