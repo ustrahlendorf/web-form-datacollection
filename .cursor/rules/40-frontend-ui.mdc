@@ -1,0 +1,18 @@
+---
+description: Static frontend under frontend/; src + public; tests and scripts; no node_modules edits
+globs:
+  - frontend/src/**/*.js
+  - frontend/src/**/*.css
+  - frontend/public/**/*.html
+  - frontend/*.js
+alwaysApply: false
+---
+
+# Frontend (static UI)
+
+- **Primary code:** **`frontend/src/`** (JS, CSS). **`frontend/public/`** for static assets such as `index.html`. Follow existing patterns in `frontend/src` for structure, styling, and UX consistency.
+- **Tooling:** Root-level **`frontend/*.js`** includes tests (e.g. `*.test.js`) and **`jest.config.js`**—when changing behavior covered by tests, run **`npm test`** from `frontend/` (see [docs/getting-started.md](docs/getting-started.md)).
+- **Build / deploy:** From `frontend/`, use the documented scripts (e.g. `setup-env.sh`, `build.sh`, `deploy.sh`) per getting-started—not ad-hoc copies into `node_modules`.
+- **Do not** edit **`node_modules/`** or commit generated artefacts from dependencies.
+
+**Overview:** [docs/getting-started.md](docs/getting-started.md) (frontend deploy section).

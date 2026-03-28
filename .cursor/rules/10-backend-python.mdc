@@ -1,0 +1,17 @@
+---
+description: backend package layout, imports, dependencies vs heating Lambda bundle
+globs:
+  - backend/**/*.py
+  - backend/pyproject.toml
+alwaysApply: false
+---
+
+# Backend Python (`backend`)
+
+- **Package root:** `backend/src/backend/`. Imports use `backend.shared`, `backend.viessmann`, `backend.heating…` (not ad-hoc sys.path hacks in library code).
+- **Subpackages:** `shared` (models, validators, URL config), `viessmann` (OAuth, submit), `heating.iot_data` (IoT config, features, `heating_values`). Keep concerns in the right subpackage.
+- **`pyproject.toml`:** Source of truth for the installable package’s runtime deps and CLI entry points (`api-auth`, `iot-data-*`, etc.).
+- **Heating / Viessmann Lambdas:** Lambda bundles install from repo-root **`requirements-heating.txt`**, which must stay **manually aligned** with `pyproject.toml` when you change shared dependencies. See [docs/reference/python-layout.md](docs/reference/python-layout.md).
+- **Tests:** Pytest prepends `backend/src` via `tests/conftest.py` so `import backend…` works without `pip install -e` for every contributor—match that layout in new tests.
+
+**Full detail:** [docs/reference/python-layout.md](docs/reference/python-layout.md) and [docs/architecture/repo-layout.md](docs/architecture/repo-layout.md).

@@ -1,0 +1,16 @@
+---
+description: Repo layout—where handlers, domain, IaC, and UI live; links to canonical docs
+alwaysApply: true
+---
+
+# Repository boundaries
+
+- **`lambdas/<function>/`** — Lambda entry points (e.g. `handler.py` with `lambda_handler`). One snake_case folder per deployed function; CDK `handler=` strings point here. Do not put heavy domain logic only used by libraries here—keep that in `backend`.
+- **`backend/`** — Installable package `backend` (`backend/src/backend/`): `shared` (models, validators), `viessmann`, `heating.iot_data`. Shared by handlers and tests.
+- **`infrastructure/`** — AWS CDK (stacks, constructs, bundling). Root **`cdk.json`** drives synth/deploy with this tree.
+- **`frontend/`** — Static UI; build/deploy scripts live there. Prefer editing under **`frontend/src/`** (and `frontend/public/`), not `node_modules`.
+- **`tests/`** — `tests/unit`, `tests/integration`, `tests/e2e`; shared `tests/conftest.py`.
+
+**Canonical docs:** [docs/README.md](docs/README.md) index; layout blueprint [docs/architecture/repo-layout.md](docs/architecture/repo-layout.md); packaging ADR [docs/decisions/0001-repo-python-and-lambda-packaging.md](docs/decisions/0001-repo-python-and-lambda-packaging.md). Operations and Taskfile-driven deploy order: [docs/getting-started.md](docs/getting-started.md) and [Taskfile.yml](Taskfile.yml).
+
+**Do not** duplicate long variable lists or secrets from Taskfile/docs inside rules—link and follow the documented env (e.g. table names for synth/deploy).

@@ -1,0 +1,16 @@
+---
+description: Python CDK under infrastructure/; synth env; handler strings and bundling
+globs:
+  - infrastructure/**/*.py
+  - cdk.json
+alwaysApply: false
+---
+
+# CDK infrastructure
+
+- **Scope:** `infrastructure/` stacks, constructs, and config (e.g. **`infrastructure/config/lambda_assets.py`**). Root **`cdk.json`** is part of the CDK project—keep handler paths and app entry consistent with it.
+- **Handlers:** `handler=` / entry must match real modules under **`lambdas/`** (e.g. `lambdas.submit.handler.lambda_handler`). When moving or renaming handlers, update every `Function` that references them.
+- **Synth / deploy inputs:** Table names and related vars are required for meaningful synth and deploy (see **`Taskfile.yml`** comments and [docs/getting-started.md](docs/getting-started.md)—e.g. `ACTIVE_SUBMISSIONS_TABLE_NAME`, `PASSIVE_SUBMISSIONS_TABLE_NAME`). Load via **`taskfile.env`** for Task-driven workflows; do not commit secrets.
+- **Lambda assets:** Reuse **`LAMBDA_CODE_ASSET_EXCLUDE`** from `lambda_assets.py` for root-based bundles; heating Docker flows use **`requirements-heating.txt`**—keep bundling changes consistent with [docs/reference/python-layout.md](docs/reference/python-layout.md).
+
+**Layout context:** [docs/architecture/repo-layout.md](docs/architecture/repo-layout.md).

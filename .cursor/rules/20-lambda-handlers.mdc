@@ -1,0 +1,15 @@
+---
+description: Thin Lambda handlers under lambdas/; lambda_handler; CDK asset alignment
+globs: lambdas/**/*.py
+alwaysApply: false
+---
+
+# Lambda handlers (`lambdas`)
+
+- **Role:** Thin entry points. Implement HTTP/event glue here; put reusable logic in **`backend`** and import it (`backend.shared…`, `backend.viessmann…`, `backend.heating…`).
+- **Symbol:** Expose the handler symbol wired in CDK (commonly **`lambda_handler`**) in `handler.py` (or the module CDK references).
+- **Layout:** One directory per function, **snake_case**, aligned with CDK handler modules (e.g. `lambdas/submit/handler.py` → `lambdas.submit.handler.lambda_handler`). See the handler ↔ directory table in [docs/architecture/repo-layout.md](docs/architecture/repo-layout.md).
+- **Bundling:** Default repo-root ZIP assets use the shared exclude list in **`infrastructure/config/lambda_assets.py`**. Heating-related functions use Docker + **`requirements-heating.txt`** (see `infrastructure/stacks/`). Do not assume arbitrary repo files are in the bundle—check the stack and `lambda_assets.py` before relying on new paths.
+- **Avoid:** Large refactors that change handler module paths or package layout without updating **CDK** `handler=` strings and asset config in lockstep.
+
+**Reference:** [docs/reference/python-layout.md](docs/reference/python-layout.md).
