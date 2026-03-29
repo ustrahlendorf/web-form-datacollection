@@ -2,6 +2,7 @@ const {
   parseGermanDateToUtcMidnight,
   computeYtdTotals,
   computeWeeklyPeakStats,
+  computeWeeklyMinimumStats,
   getIsoWeekPartsFromUtcDate,
   formatIsoWeekDdMmRange,
 } = require('./src/app.js');
@@ -327,6 +328,161 @@ describe('Analyze helpers', () => {
       expect(peaks.peakVerbrauchQm && peaks.peakVerbrauchQm.isoWeek).toBeGreaterThan(1);
       expect(peaks.peakVorlaufTemp).toBeNull();
       expect(peaks.peakOutsideTemp).toBeNull();
+    });
+  });
+
+  describe('computeWeeklyMinimumStats', () => {
+    test('aggregates by ISO week; minimum week is min consumption; hours/starts match that week', () => {
+      const w1a = {
+        datum: '01.01.2025',
+        delta_betriebsstunden: 10,
+        delta_starts: 2,
+        verbrauch_qm: 1.0,
+      };
+      const w1b = {
+        datum: '02.01.2025',
+        delta_betriebsstunden: 5,
+        delta_starts: 1,
+        verbrauch_qm: 2.0,
+      };
+      const w2 = {
+        datum: '08.01.2025',
+        delta_betriebsstunden: 30,
+        delta_starts: 1,
+        verbrauch_qm: 1.0,
+      };
+      const sorted = [w1a, w1b, w2];
+      const mins = computeWeeklyMinimumStats(sorted);
+      expect(mins.consumptionMinimumTied).toBe(false);
+      expect(mins.minVerbrauchQm).toEqual({
+        sum: 1,
+        isoWeekYear: 2025,
+        isoWeek: 2,
+      });
+      expect(mins.minBetriebsstunden).toEqual({
+        sum: 30,
+        isoWeekYear: 2025,
+        isoWeek: 2,
+      });
+      expect(mins.minStarts).toEqual({
+        sum: 1,
+        isoWeekYear: 2025,
+        isoWeek: 2,
+      });
+      expect(mins.minVorlaufTemp).toBeNull();
+      expect(mins.minOutsideTemp).toBeNull();
+    });
+
+    test('on equal consumption across weeks picks lexicographically earlier week and sets consumptionMinimumTied', () => {
+      const earlierWeek = {
+        datum: '10.02.2025',
+        delta_betriebsstunden: 5,
+        delta_starts: 0,
+        verbrauch_qm: 1,
+      };
+      const laterWeek = {
+        datum: '17.02.2025',
+        delta_betriebsstunden: 5,
+        delta_starts: 0,
+        verbrauch_qm: 1,
+      };
+      const mins = computeWeeklyMinimumStats([laterWeek, earlierWeek]);
+      expect(mins.consumptionMinimumTied).toBe(true);
+      expect(mins.minBetriebsstunden).toEqual({
+        sum: 5,
+        isoWeekYear: 2025,
+        isoWeek: 7,
+      });
+      expect(mins.minStarts).toEqual({
+        sum: 0,
+        isoWeekYear: 2025,
+        isoWeek: 7,
+      });
+      expect(mins.minVerbrauchQm).toEqual({
+        sum: 1,
+        isoWeekYear: 2025,
+        isoWeek: 7,
+      });
+      expect(mins.minVorlaufTemp).toBeNull();
+      expect(mins.minOutsideTemp).toBeNull();
+    });
+
+    test('empty submissions array returns null mins for all metrics', () => {
+      expect(computeWeeklyMinimumStats([])).toEqual({
+        minBetriebsstunden: null,
+        minStarts: null,
+        minVerbrauchQm: null,
+        minVorlaufTemp: null,
+        minOutsideTemp: null,
+        consumptionMinimumTied: false,
+      });
+    });
+
+    test('equal weekly sums across ISO week years: picks lexicographically earlier week', () => {
+      const rowEarlier = {
+        datum: '15.12.2025',
+        delta_betriebsstunden: 4,
+        delta_starts: 2,
+        verbrauch_qm: 1.25,
+      };
+      const rowLater = {
+        datum: '29.12.2025',
+        delta_betriebsstunden: 4,
+        delta_starts: 2,
+        verbrauch_qm: 1.25,
+      };
+      const dEarlier = parseGermanDateToUtcMidnight('15.12.2025');
+      const pEarlier = getIsoWeekPartsFromUtcDate(dEarlier);
+      const mins = computeWeeklyMinimumStats([rowLater, rowEarlier]);
+      expect(mins.consumptionMinimumTied).toBe(true);
+      expect(mins.minVerbrauchQm).toEqual({
+        sum: 1.25,
+        isoWeekYear: pEarlier.isoWeekYear,
+        isoWeek: pEarlier.isoWeek,
+      });
+    });
+
+    test('sums chained vorlauf_temp and aussentemp deltas in the minimum-consumption ISO week', () => {
+      const lowA = {
+        datum: '01.01.2025',
+        delta_betriebsstunden: 0,
+        delta_starts: 0,
+        verbrauch_qm: 1,
+        vorlauf_temp: 40,
+        aussentemp: 10,
+      };
+      const lowB = {
+        datum: '02.01.2025',
+        delta_betriebsstunden: 0,
+        delta_starts: 0,
+        verbrauch_qm: 1,
+        vorlauf_temp: 41,
+        aussentemp: 9,
+      };
+      const highA = {
+        datum: '08.01.2025',
+        delta_betriebsstunden: 0,
+        delta_starts: 0,
+        verbrauch_qm: 20,
+      };
+      const highB = {
+        datum: '09.01.2025',
+        delta_betriebsstunden: 0,
+        delta_starts: 0,
+        verbrauch_qm: 30,
+      };
+      const mins = computeWeeklyMinimumStats([lowA, lowB, highA, highB]);
+      expect(mins.minVerbrauchQm && mins.minVerbrauchQm.isoWeek).toBe(1);
+      expect(mins.minVorlaufTemp).toEqual({
+        sum: 1,
+        isoWeekYear: 2025,
+        isoWeek: 1,
+      });
+      expect(mins.minOutsideTemp).toEqual({
+        sum: -1,
+        isoWeekYear: 2025,
+        isoWeek: 1,
+      });
     });
   });
 

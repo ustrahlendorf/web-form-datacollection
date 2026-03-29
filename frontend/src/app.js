@@ -1394,35 +1394,13 @@ function chainedReadingDelta(submission, prevSubmission, key) {
 }
 
 /**
- * Weekly sums over the same submission list as YTD (typically sorted by calendar day).
- * Per ISO week: sum of delta_betriebsstunden, delta_starts, verbrauch_qm, and chained
- * vorlauf_temp / aussentemp deltas vs. the prior list entry.
- * Peak week is the week with maximum sum verbrauch_qm; ties break to lexicographically
- * earlier (isoWeekYear, isoWeek). Operating hours and starts shown are sums for that week.
- * consumptionPeakTied is true when more than one week shares that maximum consumption sum.
- * peakVorlaufTemp / peakOutsideTemp are null when no chained temperature delta contributed in that ISO week.
- *
+ * Per-ISO-week aggregates for consumption-related stats (same rules as peak/min week cards).
  * @param {object[]} sortedSubmissions
- * @returns {{
- *   peakBetriebsstunden: { sum: number, isoWeekYear: number, isoWeek: number } | null,
- *   peakStarts: { sum: number, isoWeekYear: number, isoWeek: number } | null,
- *   peakVerbrauchQm: { sum: number, isoWeekYear: number, isoWeek: number } | null,
- *   peakVorlaufTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
- *   peakOutsideTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
- *   consumptionPeakTied: boolean,
- * }}
+ * @returns {Array<{ isoWeekYear: number, isoWeek: number, sumDeltaBetriebsstunden: number, sumDeltaStarts: number, sumVerbrauchQm: number, sumDeltaVorlauf: number, sumDeltaAussen: number, vorlaufDeltaCount: number, aussenDeltaCount: number }>}
  */
-function computeWeeklyPeakStats(sortedSubmissions) {
-    const empty = {
-        peakBetriebsstunden: null,
-        peakStarts: null,
-        peakVerbrauchQm: null,
-        peakVorlaufTemp: null,
-        peakOutsideTemp: null,
-        consumptionPeakTied: false,
-    };
+function buildWeeklyConsumptionBuckets(sortedSubmissions) {
     if (!Array.isArray(sortedSubmissions) || sortedSubmissions.length === 0) {
-        return empty;
+        return [];
     }
 
     const map = new Map();
@@ -1481,12 +1459,18 @@ function computeWeeklyPeakStats(sortedSubmissions) {
         }
     }
 
-    if (map.size === 0) {
-        return empty;
+    return Array.from(map.values());
+}
+
+/**
+ * @param {object[]} aggregates - weekly buckets from buildWeeklyConsumptionBuckets
+ * @param {'max'|'min'} mode
+ * @returns {object | null}
+ */
+function pickWeeklyBucketByConsumptionExtreme(aggregates, mode) {
+    if (!aggregates.length) {
+        return null;
     }
-
-    const aggregates = Array.from(map.values());
-
     let bestAgg = null;
     for (const agg of aggregates) {
         if (bestAgg === null) {
@@ -1494,13 +1478,64 @@ function computeWeeklyPeakStats(sortedSubmissions) {
             continue;
         }
         const sum = agg.sumVerbrauchQm;
-        const betterSum = sum > bestAgg.sumVerbrauchQm;
-        const tieEarlier =
-            sum === bestAgg.sumVerbrauchQm &&
-            compareIsoWeekOrder(agg.isoWeekYear, agg.isoWeek, bestAgg.isoWeekYear, bestAgg.isoWeek) < 0;
-        if (betterSum || tieEarlier) {
-            bestAgg = agg;
+        if (mode === 'max') {
+            const betterSum = sum > bestAgg.sumVerbrauchQm;
+            const tieEarlier =
+                sum === bestAgg.sumVerbrauchQm &&
+                compareIsoWeekOrder(agg.isoWeekYear, agg.isoWeek, bestAgg.isoWeekYear, bestAgg.isoWeek) < 0;
+            if (betterSum || tieEarlier) {
+                bestAgg = agg;
+            }
+        } else {
+            const betterSum = sum < bestAgg.sumVerbrauchQm;
+            const tieEarlier =
+                sum === bestAgg.sumVerbrauchQm &&
+                compareIsoWeekOrder(agg.isoWeekYear, agg.isoWeek, bestAgg.isoWeekYear, bestAgg.isoWeek) < 0;
+            if (betterSum || tieEarlier) {
+                bestAgg = agg;
+            }
         }
+    }
+    return bestAgg;
+}
+
+/**
+ * Weekly sums over the same submission list as YTD (typically sorted by calendar day).
+ * Per ISO week: sum of delta_betriebsstunden, delta_starts, verbrauch_qm, and chained
+ * vorlauf_temp / aussentemp deltas vs. the prior list entry.
+ * Peak week is the week with maximum sum verbrauch_qm; ties break to lexicographically
+ * earlier (isoWeekYear, isoWeek). Operating hours and starts shown are sums for that week.
+ * consumptionPeakTied is true when more than one week shares that maximum consumption sum.
+ * peakVorlaufTemp / peakOutsideTemp are null when no chained temperature delta contributed in that ISO week.
+ *
+ * @param {object[]} sortedSubmissions
+ * @returns {{
+ *   peakBetriebsstunden: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   peakStarts: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   peakVerbrauchQm: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   peakVorlaufTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   peakOutsideTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   consumptionPeakTied: boolean,
+ * }}
+ */
+function computeWeeklyPeakStats(sortedSubmissions) {
+    const empty = {
+        peakBetriebsstunden: null,
+        peakStarts: null,
+        peakVerbrauchQm: null,
+        peakVorlaufTemp: null,
+        peakOutsideTemp: null,
+        consumptionPeakTied: false,
+    };
+
+    const aggregates = buildWeeklyConsumptionBuckets(sortedSubmissions);
+    if (aggregates.length === 0) {
+        return empty;
+    }
+
+    const bestAgg = pickWeeklyBucketByConsumptionExtreme(aggregates, 'max');
+    if (!bestAgg) {
+        return empty;
     }
 
     const maxConsumption = bestAgg.sumVerbrauchQm;
@@ -1544,6 +1579,84 @@ function computeWeeklyPeakStats(sortedSubmissions) {
             }
             : null,
         consumptionPeakTied,
+    };
+}
+
+/**
+ * Same weekly aggregation as peak; selects the ISO week with minimum sum verbrauch_qm.
+ * Ties break to lexicographically earlier (isoWeekYear, isoWeek).
+ *
+ * @param {object[]} sortedSubmissions
+ * @returns {{
+ *   minBetriebsstunden: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   minStarts: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   minVerbrauchQm: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   minVorlaufTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   minOutsideTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   consumptionMinimumTied: boolean,
+ * }}
+ */
+function computeWeeklyMinimumStats(sortedSubmissions) {
+    const empty = {
+        minBetriebsstunden: null,
+        minStarts: null,
+        minVerbrauchQm: null,
+        minVorlaufTemp: null,
+        minOutsideTemp: null,
+        consumptionMinimumTied: false,
+    };
+
+    const aggregates = buildWeeklyConsumptionBuckets(sortedSubmissions);
+    if (aggregates.length === 0) {
+        return empty;
+    }
+
+    const bestAgg = pickWeeklyBucketByConsumptionExtreme(aggregates, 'min');
+    if (!bestAgg) {
+        return empty;
+    }
+
+    const minConsumption = bestAgg.sumVerbrauchQm;
+    let weeksAtMin = 0;
+    for (const agg of aggregates) {
+        if (agg.sumVerbrauchQm === minConsumption) {
+            weeksAtMin += 1;
+        }
+    }
+    const consumptionMinimumTied = weeksAtMin > 1;
+
+    const { isoWeekYear, isoWeek } = bestAgg;
+    return {
+        minBetriebsstunden: {
+            sum: bestAgg.sumDeltaBetriebsstunden,
+            isoWeekYear,
+            isoWeek,
+        },
+        minStarts: {
+            sum: bestAgg.sumDeltaStarts,
+            isoWeekYear,
+            isoWeek,
+        },
+        minVerbrauchQm: {
+            sum: bestAgg.sumVerbrauchQm,
+            isoWeekYear,
+            isoWeek,
+        },
+        minVorlaufTemp: bestAgg.vorlaufDeltaCount > 0
+            ? {
+                sum: bestAgg.sumDeltaVorlauf,
+                isoWeekYear,
+                isoWeek,
+            }
+            : null,
+        minOutsideTemp: bestAgg.aussenDeltaCount > 0
+            ? {
+                sum: bestAgg.sumDeltaAussen,
+                isoWeekYear,
+                isoWeek,
+            }
+            : null,
+        consumptionMinimumTied,
     };
 }
 
@@ -1661,6 +1774,10 @@ function getAnalyzePeakWeekContainer() {
     return document.getElementById('analyze-peak-week-col');
 }
 
+function getAnalyzeMinimumWeekContainer() {
+    return document.getElementById('analyze-min-week-col');
+}
+
 function setAnalyzePageTitle(year) {
     const el = document.getElementById('analyze-page-title');
     if (!el) {
@@ -1697,6 +1814,34 @@ function renderAnalyzePeakWeekEmpty() {
     if (!container) return;
     container.innerHTML = `
         <h3>Peak week (consumption)</h3>
+        <p class="empty-state">No submissions found yet.</p>
+    `;
+}
+
+function renderAnalyzeMinWeekLoading() {
+    const container = getAnalyzeMinimumWeekContainer();
+    if (!container) return;
+    container.innerHTML = `
+        <h3>Minimum week (consumption)</h3>
+        <p class="empty-state">Loading statistics...</p>
+    `;
+}
+
+function renderAnalyzeMinWeekError(message) {
+    const container = getAnalyzeMinimumWeekContainer();
+    if (!container) return;
+    const safeMsg = (typeof message === 'string' && message.trim() !== '') ? message.trim() : 'Failed to load statistics';
+    container.innerHTML = `
+        <h3>Minimum week (consumption)</h3>
+        <p class="empty-state">${safeMsg}</p>
+    `;
+}
+
+function renderAnalyzeMinWeekEmpty() {
+    const container = getAnalyzeMinimumWeekContainer();
+    if (!container) return;
+    container.innerHTML = `
+        <h3>Minimum week (consumption)</h3>
         <p class="empty-state">No submissions found yet.</p>
     `;
 }
@@ -1780,6 +1925,56 @@ function renderAnalyzePeakWeek(peaks) {
     `;
 }
 
+/**
+ * @param {{ minBetriebsstunden, minStarts, minVerbrauchQm, minVorlaufTemp, minOutsideTemp, consumptionMinimumTied }} mins - from computeWeeklyMinimumStats
+ */
+function renderAnalyzeMinWeek(mins) {
+    const container = getAnalyzeMinimumWeekContainer();
+    if (!container) return;
+
+    const m = mins && typeof mins === 'object' ? mins : {};
+    const tied = Boolean(m.consumptionMinimumTied);
+    const cardClass = tied ? 'analyze-card analyze-card--consumption-tied' : 'analyze-card';
+    const tieBanner = tied
+        ? '<p class="analyze-peak-tie-banner" role="status">⚠ Multiple weeks share this minimum consumption; showing the lexicographically earlier week.</p>'
+        : '';
+
+    const cwLine = formatPeakWeekContextLine(m.minVerbrauchQm);
+    const cwLineHtml = cwLine
+        ? `<div class="analyze-peak-week-range-line" role="note">${cwLine}</div>`
+        : '';
+
+    container.innerHTML = `
+        <div class="${cardClass}">
+            <div class="analyze-card-title">Minimum week (consumption)</div>
+            ${tieBanner}
+            <div class="analyze-metrics">
+                ${cwLineHtml}
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Consumption (m³)</span>
+                    <span class="analyze-metric-value">${formatPeakScalarValue(m.minVerbrauchQm, { kind: 'decimal', decimals: 2 })}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Operating hours</span>
+                    <span class="analyze-metric-value">${formatPeakScalarValue(m.minBetriebsstunden, { kind: 'int' })}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Starts</span>
+                    <span class="analyze-metric-value">${formatPeakScalarValue(m.minStarts, { kind: 'int' })}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Supply Temp. (°C)</span>
+                    <span class="analyze-metric-value">${formatPeakTempValue(m.minVorlaufTemp, { kind: 'decimal', decimals: 1 })}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Outside Temp Sensor (°C)</span>
+                    <span class="analyze-metric-value">${formatPeakTempValue(m.minOutsideTemp, { kind: 'decimal', decimals: 1 })}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function renderAnalyzeLoading() {
     setAnalyzePageTitle(null);
     const container = getAnalyzeTotalsContainer();
@@ -1789,6 +1984,7 @@ function renderAnalyzeLoading() {
         <p class="empty-state">Loading statistics...</p>
     `;
     renderAnalyzePeakWeekLoading();
+    renderAnalyzeMinWeekLoading();
 }
 
 function renderAnalyzeError(message) {
@@ -1801,6 +1997,7 @@ function renderAnalyzeError(message) {
         <p class="empty-state">${safeMsg}</p>
     `;
     renderAnalyzePeakWeekError(safeMsg);
+    renderAnalyzeMinWeekError(safeMsg);
 }
 
 function renderAnalyzeEmpty() {
@@ -1812,6 +2009,7 @@ function renderAnalyzeEmpty() {
         <p class="empty-state">No submissions found yet.</p>
     `;
     renderAnalyzePeakWeekEmpty();
+    renderAnalyzeMinWeekEmpty();
 }
 
 function renderAnalyzeTotals(stats) {
@@ -2036,6 +2234,7 @@ async function loadAnalyze() {
 
         renderAnalyzeTotals(stats);
         renderAnalyzePeakWeek(computeWeeklyPeakStats(sorted));
+        renderAnalyzeMinWeek(computeWeeklyMinimumStats(sorted));
     } catch (error) {
         console.error('Error loading analyze statistics:', error);
         renderAnalyzeError('Failed to load statistics');
@@ -2116,6 +2315,7 @@ if (typeof module !== 'undefined' && module.exports) {
         computeInclusiveDays,
         computeYtdTotals,
         computeWeeklyPeakStats,
+        computeWeeklyMinimumStats,
         getIsoWeekPartsFromUtcDate,
         formatIsoWeekDdMmRange,
         normalizeSettingsConfig,
