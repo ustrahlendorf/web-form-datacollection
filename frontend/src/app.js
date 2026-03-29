@@ -1310,6 +1310,125 @@ function computeYtdTotals(earliestSubmission, latestSubmission, submissionsInRan
     };
 }
 
+/**
+ * ISO-8601 week (Monday first; week 1 is the week with the year's first Thursday).
+ * @param {Date} utcMidnight - calendar day at UTC midnight
+ * @returns {{ isoWeekYear: number, isoWeek: number } | null}
+ */
+function getIsoWeekPartsFromUtcDate(utcMidnight) {
+    if (!utcMidnight || !(utcMidnight instanceof Date) || Number.isNaN(utcMidnight.getTime())) {
+        return null;
+    }
+    const d = new Date(utcMidnight.getTime());
+    const dow = d.getUTCDay();
+    const isoDow = dow === 0 ? 7 : dow;
+    d.setUTCDate(d.getUTCDate() + 4 - isoDow);
+    const isoWeekYear = d.getUTCFullYear();
+    const yearStart = new Date(Date.UTC(isoWeekYear, 0, 1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return { isoWeekYear, isoWeek: weekNo };
+}
+
+function compareIsoWeekOrder(yearA, weekA, yearB, weekB) {
+    if (yearA !== yearB) {
+        return yearA - yearB;
+    }
+    return weekA - weekB;
+}
+
+/**
+ * Weekly sums over the same submission list as YTD (typically sorted by calendar day).
+ * Per ISO week: sum of delta_betriebsstunden, delta_starts, and verbrauch_qm.
+ * Each metric’s peak week is the maximum sum; ties break to lexicographically earlier (isoWeekYear, isoWeek).
+ *
+ * @param {object[]} sortedSubmissions
+ * @returns {{
+ *   peakBetriebsstunden: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   peakStarts: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   peakVerbrauchQm: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ * }}
+ */
+function computeWeeklyPeakStats(sortedSubmissions) {
+    const empty = {
+        peakBetriebsstunden: null,
+        peakStarts: null,
+        peakVerbrauchQm: null,
+    };
+    if (!Array.isArray(sortedSubmissions) || sortedSubmissions.length === 0) {
+        return empty;
+    }
+
+    const map = new Map();
+    for (const submission of sortedSubmissions) {
+        const day = getSubmissionUtcDay(submission);
+        if (!day) {
+            continue;
+        }
+
+        const parts = getIsoWeekPartsFromUtcDate(day);
+        if (!parts) {
+            continue;
+        }
+
+        const key = `${parts.isoWeekYear}:${parts.isoWeek}`;
+        let bucket = map.get(key);
+        if (!bucket) {
+            bucket = {
+                isoWeekYear: parts.isoWeekYear,
+                isoWeek: parts.isoWeek,
+                sumDeltaBetriebsstunden: 0,
+                sumDeltaStarts: 0,
+                sumVerbrauchQm: 0,
+            };
+            map.set(key, bucket);
+        }
+
+        const dBh = normalizeNumber(getDeltaValue(submission, 'delta_betriebsstunden', 'betriebsstunden_delta'));
+        if (dBh !== null) {
+            bucket.sumDeltaBetriebsstunden += dBh;
+        }
+        const dSt = normalizeNumber(getDeltaValue(submission, 'delta_starts', 'starts_delta'));
+        if (dSt !== null) {
+            bucket.sumDeltaStarts += dSt;
+        }
+        const v = normalizeNumber(submission && submission.verbrauch_qm);
+        if (v !== null) {
+            bucket.sumVerbrauchQm += v;
+        }
+    }
+
+    if (map.size === 0) {
+        return empty;
+    }
+
+    const aggregates = Array.from(map.values());
+
+    function pickPeak(pickSum) {
+        let best = null;
+        for (const agg of aggregates) {
+            const sum = pickSum(agg);
+            if (best === null) {
+                best = { sum, isoWeekYear: agg.isoWeekYear, isoWeek: agg.isoWeek };
+                continue;
+            }
+            const betterSum = sum > best.sum;
+            const tieEarlier =
+                sum === best.sum &&
+                compareIsoWeekOrder(agg.isoWeekYear, agg.isoWeek, best.isoWeekYear, best.isoWeek) < 0;
+            if (betterSum || tieEarlier) {
+                best = { sum, isoWeekYear: agg.isoWeekYear, isoWeek: agg.isoWeek };
+            }
+        }
+        return best;
+    }
+
+    return {
+        peakBetriebsstunden: pickPeak((a) => a.sumDeltaBetriebsstunden),
+        peakStarts: pickPeak((a) => a.sumDeltaStarts),
+        peakVerbrauchQm: pickPeak((a) => a.sumVerbrauchQm),
+    };
+}
+
 function formatMetricValue(value, opts = {}) {
     const { kind = 'int', decimals = 2 } = opts;
     const n = normalizeNumber(value);
@@ -1420,6 +1539,86 @@ function getAnalyzeTotalsContainer() {
            null;
 }
 
+function getAnalyzePeakWeekContainer() {
+    return document.getElementById('analyze-peak-week-col');
+}
+
+function formatIsoWeekLabel(isoWeekYear, isoWeek) {
+    if (!Number.isFinite(isoWeekYear) || !Number.isFinite(isoWeek)) {
+        return '';
+    }
+    return `KW ${isoWeek}/${isoWeekYear}`;
+}
+
+function renderAnalyzePeakWeekLoading() {
+    const container = getAnalyzePeakWeekContainer();
+    if (!container) return;
+    container.innerHTML = `
+        <h3>Stärkste Kalenderwoche</h3>
+        <p class="empty-state">Loading statistics...</p>
+    `;
+}
+
+function renderAnalyzePeakWeekError(message) {
+    const container = getAnalyzePeakWeekContainer();
+    if (!container) return;
+    const safeMsg = (typeof message === 'string' && message.trim() !== '') ? message.trim() : 'Failed to load statistics';
+    container.innerHTML = `
+        <h3>Stärkste Kalenderwoche</h3>
+        <p class="empty-state">${safeMsg}</p>
+    `;
+}
+
+function renderAnalyzePeakWeekEmpty() {
+    const container = getAnalyzePeakWeekContainer();
+    if (!container) return;
+    container.innerHTML = `
+        <h3>Stärkste Kalenderwoche</h3>
+        <p class="empty-state">No submissions found yet.</p>
+    `;
+}
+
+/**
+ * @param {{ peakBetriebsstunden, peakStarts, peakVerbrauchQm }} peaks - from computeWeeklyPeakStats
+ */
+function renderAnalyzePeakWeek(peaks) {
+    const container = getAnalyzePeakWeekContainer();
+    if (!container) return;
+
+    const p = peaks && typeof peaks === 'object' ? peaks : {};
+    const formatPeakLine = (peak, valueOpts) => {
+        if (!peak || typeof peak !== 'object') {
+            return '—';
+        }
+        const val = formatMetricValue(peak.sum, valueOpts);
+        const kw = formatIsoWeekLabel(peak.isoWeekYear, peak.isoWeek);
+        if (!kw) {
+            return val;
+        }
+        return `${val} (${kw})`;
+    };
+
+    container.innerHTML = `
+        <div class="analyze-card">
+            <div class="analyze-card-title">Stärkste Kalenderwoche</div>
+            <div class="analyze-metrics">
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Betriebsstunden</span>
+                    <span class="analyze-metric-value">${formatPeakLine(p.peakBetriebsstunden, { kind: 'int' })}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Starts</span>
+                    <span class="analyze-metric-value">${formatPeakLine(p.peakStarts, { kind: 'int' })}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Verbrauch (m³)</span>
+                    <span class="analyze-metric-value">${formatPeakLine(p.peakVerbrauchQm, { kind: 'decimal', decimals: 2 })}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function renderAnalyzeLoading() {
     const container = getAnalyzeTotalsContainer();
     if (!container) return;
@@ -1427,6 +1626,7 @@ function renderAnalyzeLoading() {
         <h3>Totals</h3>
         <p class="empty-state">Loading statistics...</p>
     `;
+    renderAnalyzePeakWeekLoading();
 }
 
 function renderAnalyzeError(message) {
@@ -1437,6 +1637,7 @@ function renderAnalyzeError(message) {
         <h3>Totals</h3>
         <p class="empty-state">${safeMsg}</p>
     `;
+    renderAnalyzePeakWeekError(safeMsg);
 }
 
 function renderAnalyzeEmpty() {
@@ -1446,6 +1647,7 @@ function renderAnalyzeEmpty() {
         <h3>Totals</h3>
         <p class="empty-state">No submissions found yet.</p>
     `;
+    renderAnalyzePeakWeekEmpty();
 }
 
 function renderAnalyzeTotals(stats) {
@@ -1666,6 +1868,7 @@ async function loadAnalyze() {
         }
 
         renderAnalyzeTotals(stats);
+        renderAnalyzePeakWeek(computeWeeklyPeakStats(sorted));
     } catch (error) {
         console.error('Error loading analyze statistics:', error);
         renderAnalyzeError('Failed to load statistics');
@@ -1745,6 +1948,8 @@ if (typeof module !== 'undefined' && module.exports) {
         getSubmissionUtcDay,
         computeInclusiveDays,
         computeYtdTotals,
+        computeWeeklyPeakStats,
+        getIsoWeekPartsFromUtcDate,
         normalizeSettingsConfig,
         validateSettingsPayload,
         normalizeSettingsSchedulerMetadata,
