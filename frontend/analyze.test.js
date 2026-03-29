@@ -169,16 +169,8 @@ describe('Analyze helpers', () => {
         isoWeekYear: 2025,
         isoWeek: 7,
       });
-      expect(peaks.peakVorlaufTemp).toEqual({
-        sum: 0,
-        isoWeekYear: 2025,
-        isoWeek: 7,
-      });
-      expect(peaks.peakOutsideTemp).toEqual({
-        sum: 0,
-        isoWeekYear: 2025,
-        isoWeek: 7,
-      });
+      expect(peaks.peakVorlaufTemp).toBeNull();
+      expect(peaks.peakOutsideTemp).toBeNull();
     });
 
     test('empty submissions array returns null peaks for all metrics', () => {
@@ -219,16 +211,8 @@ describe('Analyze helpers', () => {
         isoWeekYear: 2025,
         isoWeek: 1,
       });
-      expect(peaks.peakVorlaufTemp).toEqual({
-        sum: 0,
-        isoWeekYear: 2025,
-        isoWeek: 1,
-      });
-      expect(peaks.peakOutsideTemp).toEqual({
-        sum: 0,
-        isoWeekYear: 2025,
-        isoWeek: 1,
-      });
+      expect(peaks.peakVorlaufTemp).toBeNull();
+      expect(peaks.peakOutsideTemp).toBeNull();
       expect(peaks.consumptionPeakTied).toBe(false);
     });
 
@@ -271,16 +255,8 @@ describe('Analyze helpers', () => {
         isoWeekYear: pEarlier.isoWeekYear,
         isoWeek: pEarlier.isoWeek,
       });
-      expect(peaks.peakVorlaufTemp).toEqual({
-        sum: 0,
-        isoWeekYear: pEarlier.isoWeekYear,
-        isoWeek: pEarlier.isoWeek,
-      });
-      expect(peaks.peakOutsideTemp).toEqual({
-        sum: 0,
-        isoWeekYear: pEarlier.isoWeekYear,
-        isoWeek: pEarlier.isoWeek,
-      });
+      expect(peaks.peakVorlaufTemp).toBeNull();
+      expect(peaks.peakOutsideTemp).toBeNull();
     });
 
     test('returns null peaks when no valid calendar day', () => {
@@ -324,6 +300,33 @@ describe('Analyze helpers', () => {
         isoWeekYear: 2025,
         isoWeek: 1,
       });
+    });
+
+    test('null peak temperature metrics when peak week has no chained temp deltas', () => {
+      const w1a = {
+        datum: '01.01.2025',
+        verbrauch_qm: 1,
+        vorlauf_temp: 40,
+        aussentemp: 5,
+      };
+      const w1b = {
+        datum: '02.01.2025',
+        verbrauch_qm: 1,
+        vorlauf_temp: 41,
+        aussentemp: 6,
+      };
+      const w2a = {
+        datum: '08.01.2025',
+        verbrauch_qm: 10,
+      };
+      const w2b = {
+        datum: '09.01.2025',
+        verbrauch_qm: 5,
+      };
+      const peaks = computeWeeklyPeakStats([w1a, w1b, w2a, w2b]);
+      expect(peaks.peakVerbrauchQm && peaks.peakVerbrauchQm.isoWeek).toBeGreaterThan(1);
+      expect(peaks.peakVorlaufTemp).toBeNull();
+      expect(peaks.peakOutsideTemp).toBeNull();
     });
   });
 

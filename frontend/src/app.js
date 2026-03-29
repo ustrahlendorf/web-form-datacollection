@@ -1400,6 +1400,7 @@ function chainedReadingDelta(submission, prevSubmission, key) {
  * Peak week is the week with maximum sum verbrauch_qm; ties break to lexicographically
  * earlier (isoWeekYear, isoWeek). Operating hours and starts shown are sums for that week.
  * consumptionPeakTied is true when more than one week shares that maximum consumption sum.
+ * peakVorlaufTemp / peakOutsideTemp are null when no chained temperature delta contributed in that ISO week.
  *
  * @param {object[]} sortedSubmissions
  * @returns {{
@@ -1449,6 +1450,8 @@ function computeWeeklyPeakStats(sortedSubmissions) {
                 sumVerbrauchQm: 0,
                 sumDeltaVorlauf: 0,
                 sumDeltaAussen: 0,
+                vorlaufDeltaCount: 0,
+                aussenDeltaCount: 0,
             };
             map.set(key, bucket);
         }
@@ -1469,10 +1472,12 @@ function computeWeeklyPeakStats(sortedSubmissions) {
         const dVl = chainedReadingDelta(submission, prevSubmission, 'vorlauf_temp');
         if (dVl !== null) {
             bucket.sumDeltaVorlauf += dVl;
+            bucket.vorlaufDeltaCount += 1;
         }
         const dAu = chainedReadingDelta(submission, prevSubmission, 'aussentemp');
         if (dAu !== null) {
             bucket.sumDeltaAussen += dAu;
+            bucket.aussenDeltaCount += 1;
         }
     }
 
@@ -1524,16 +1529,20 @@ function computeWeeklyPeakStats(sortedSubmissions) {
             isoWeekYear,
             isoWeek,
         },
-        peakVorlaufTemp: {
-            sum: bestAgg.sumDeltaVorlauf,
-            isoWeekYear,
-            isoWeek,
-        },
-        peakOutsideTemp: {
-            sum: bestAgg.sumDeltaAussen,
-            isoWeekYear,
-            isoWeek,
-        },
+        peakVorlaufTemp: bestAgg.vorlaufDeltaCount > 0
+            ? {
+                sum: bestAgg.sumDeltaVorlauf,
+                isoWeekYear,
+                isoWeek,
+            }
+            : null,
+        peakOutsideTemp: bestAgg.aussenDeltaCount > 0
+            ? {
+                sum: bestAgg.sumDeltaAussen,
+                isoWeekYear,
+                isoWeek,
+            }
+            : null,
         consumptionPeakTied,
     };
 }
@@ -1693,6 +1702,35 @@ function renderAnalyzePeakWeekEmpty() {
 }
 
 /**
+ * @param {{ isoWeekYear: number, isoWeek: number } | null | undefined} peak - e.g. peakVerbrauchQm
+ * @returns {string} e.g. "CW 12 – 29.12-04.01", or "" if not representable
+ */
+function formatPeakWeekContextLine(peak) {
+    if (!peak || typeof peak !== 'object' || !Number.isFinite(peak.isoWeek)) {
+        return '';
+    }
+    const range = formatIsoWeekDdMmRange(peak.isoWeekYear, peak.isoWeek);
+    if (!range) {
+        return '';
+    }
+    return `CW ${peak.isoWeek} – ${range}`;
+}
+
+function formatPeakScalarValue(peak, valueOpts) {
+    if (!peak || typeof peak !== 'object') {
+        return '—';
+    }
+    return formatMetricValue(peak.sum, valueOpts);
+}
+
+function formatPeakTempValue(peak, valueOpts) {
+    if (!peak || typeof peak !== 'object') {
+        return '---';
+    }
+    return formatMetricValue(peak.sum, valueOpts);
+}
+
+/**
  * @param {{ peakBetriebsstunden, peakStarts, peakVerbrauchQm, peakVorlaufTemp, peakOutsideTemp, consumptionPeakTied }} peaks - from computeWeeklyPeakStats
  */
 function renderAnalyzePeakWeek(peaks) {
@@ -1706,42 +1744,36 @@ function renderAnalyzePeakWeek(peaks) {
         ? '<p class="analyze-peak-tie-banner" role="status">⚠ Multiple weeks share this peak consumption; showing the lexicographically earlier week.</p>'
         : '';
 
-    const formatPeakLine = (peak, valueOpts) => {
-        if (!peak || typeof peak !== 'object') {
-            return '—';
-        }
-        const val = formatMetricValue(peak.sum, valueOpts);
-        const range = formatIsoWeekDdMmRange(peak.isoWeekYear, peak.isoWeek);
-        if (!range || !Number.isFinite(peak.isoWeek)) {
-            return val;
-        }
-        return `${val} (CW ${peak.isoWeek} - ${range})`;
-    };
+    const cwLine = formatPeakWeekContextLine(p.peakVerbrauchQm);
+    const cwLineHtml = cwLine
+        ? `<div class="analyze-peak-week-range-line" role="note">${cwLine}</div>`
+        : '';
 
     container.innerHTML = `
         <div class="${cardClass}">
             <div class="analyze-card-title">Peak week (consumption)</div>
             ${tieBanner}
             <div class="analyze-metrics">
+                ${cwLineHtml}
                 <div class="analyze-metric">
                     <span class="analyze-metric-label">Consumption (m³)</span>
-                    <span class="analyze-metric-value">${formatPeakLine(p.peakVerbrauchQm, { kind: 'decimal', decimals: 2 })}</span>
+                    <span class="analyze-metric-value">${formatPeakScalarValue(p.peakVerbrauchQm, { kind: 'decimal', decimals: 2 })}</span>
                 </div>
                 <div class="analyze-metric">
                     <span class="analyze-metric-label">Operating hours</span>
-                    <span class="analyze-metric-value">${formatPeakLine(p.peakBetriebsstunden, { kind: 'int' })}</span>
+                    <span class="analyze-metric-value">${formatPeakScalarValue(p.peakBetriebsstunden, { kind: 'int' })}</span>
                 </div>
                 <div class="analyze-metric">
                     <span class="analyze-metric-label">Starts</span>
-                    <span class="analyze-metric-value">${formatPeakLine(p.peakStarts, { kind: 'int' })}</span>
+                    <span class="analyze-metric-value">${formatPeakScalarValue(p.peakStarts, { kind: 'int' })}</span>
                 </div>
                 <div class="analyze-metric">
                     <span class="analyze-metric-label">Supply Temp. (°C)</span>
-                    <span class="analyze-metric-value">${formatPeakLine(p.peakVorlaufTemp, { kind: 'decimal', decimals: 1 })}</span>
+                    <span class="analyze-metric-value">${formatPeakTempValue(p.peakVorlaufTemp, { kind: 'decimal', decimals: 1 })}</span>
                 </div>
                 <div class="analyze-metric">
                     <span class="analyze-metric-label">Outside Temp Sensor (°C)</span>
-                    <span class="analyze-metric-value">${formatPeakLine(p.peakOutsideTemp, { kind: 'decimal', decimals: 1 })}</span>
+                    <span class="analyze-metric-value">${formatPeakTempValue(p.peakOutsideTemp, { kind: 'decimal', decimals: 1 })}</span>
                 </div>
             </div>
         </div>

@@ -385,6 +385,16 @@ input[type="number"].error {
     gap: 0.75rem;
 }
 
+.analyze-peak-week-range-line {
+    text-align: right;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #7f8c8d;
+    margin: -0.15rem 0 0.35rem;
+    white-space: nowrap;
+    overflow-x: auto;
+}
+
 .analyze-metric {
     display: flex;
     justify-content: space-between;
