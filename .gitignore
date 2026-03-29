@@ -131,7 +131,8 @@ cdk.out/
 !jest.config.js
 !frontend/src/app.js
 !frontend/src/auth.js
-!frontend/app.settings.test.js
+!frontend/*.test.js
+!frontend/*.pbt.js
 *.metadata.json
 
 # IDE
