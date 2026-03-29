@@ -362,6 +362,24 @@ input[type="number"].error {
     font-weight: 600;
 }
 
+.analyze-card--consumption-tied {
+    border: 2px solid #e67e22;
+    background-color: #fef5e7;
+    box-shadow: 0 0 0 1px rgba(230, 126, 34, 0.2);
+}
+
+.analyze-peak-tie-banner {
+    margin: -0.25rem 0 1rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 6px;
+    background: rgba(230, 126, 34, 0.18);
+    border-left: 4px solid #e67e22;
+    color: #7e3415;
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.35;
+}
+
 .analyze-metrics {
     display: grid;
     gap: 0.75rem;

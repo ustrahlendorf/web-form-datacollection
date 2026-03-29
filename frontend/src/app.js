@@ -1339,13 +1339,16 @@ function compareIsoWeekOrder(yearA, weekA, yearB, weekB) {
 /**
  * Weekly sums over the same submission list as YTD (typically sorted by calendar day).
  * Per ISO week: sum of delta_betriebsstunden, delta_starts, and verbrauch_qm.
- * Each metric’s peak week is the maximum sum; ties break to lexicographically earlier (isoWeekYear, isoWeek).
+ * Peak week is the week with maximum sum verbrauch_qm; ties break to lexicographically
+ * earlier (isoWeekYear, isoWeek). Operating hours and starts shown are sums for that week.
+ * consumptionPeakTied is true when more than one week shares that maximum consumption sum.
  *
  * @param {object[]} sortedSubmissions
  * @returns {{
  *   peakBetriebsstunden: { sum: number, isoWeekYear: number, isoWeek: number } | null,
  *   peakStarts: { sum: number, isoWeekYear: number, isoWeek: number } | null,
  *   peakVerbrauchQm: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   consumptionPeakTied: boolean,
  * }}
  */
 function computeWeeklyPeakStats(sortedSubmissions) {
@@ -1353,6 +1356,7 @@ function computeWeeklyPeakStats(sortedSubmissions) {
         peakBetriebsstunden: null,
         peakStarts: null,
         peakVerbrauchQm: null,
+        consumptionPeakTied: false,
     };
     if (!Array.isArray(sortedSubmissions) || sortedSubmissions.length === 0) {
         return empty;
@@ -1403,29 +1407,49 @@ function computeWeeklyPeakStats(sortedSubmissions) {
 
     const aggregates = Array.from(map.values());
 
-    function pickPeak(pickSum) {
-        let best = null;
-        for (const agg of aggregates) {
-            const sum = pickSum(agg);
-            if (best === null) {
-                best = { sum, isoWeekYear: agg.isoWeekYear, isoWeek: agg.isoWeek };
-                continue;
-            }
-            const betterSum = sum > best.sum;
-            const tieEarlier =
-                sum === best.sum &&
-                compareIsoWeekOrder(agg.isoWeekYear, agg.isoWeek, best.isoWeekYear, best.isoWeek) < 0;
-            if (betterSum || tieEarlier) {
-                best = { sum, isoWeekYear: agg.isoWeekYear, isoWeek: agg.isoWeek };
-            }
+    let bestAgg = null;
+    for (const agg of aggregates) {
+        if (bestAgg === null) {
+            bestAgg = agg;
+            continue;
         }
-        return best;
+        const sum = agg.sumVerbrauchQm;
+        const betterSum = sum > bestAgg.sumVerbrauchQm;
+        const tieEarlier =
+            sum === bestAgg.sumVerbrauchQm &&
+            compareIsoWeekOrder(agg.isoWeekYear, agg.isoWeek, bestAgg.isoWeekYear, bestAgg.isoWeek) < 0;
+        if (betterSum || tieEarlier) {
+            bestAgg = agg;
+        }
     }
 
+    const maxConsumption = bestAgg.sumVerbrauchQm;
+    let weeksAtMax = 0;
+    for (const agg of aggregates) {
+        if (agg.sumVerbrauchQm === maxConsumption) {
+            weeksAtMax += 1;
+        }
+    }
+    const consumptionPeakTied = weeksAtMax > 1;
+
+    const { isoWeekYear, isoWeek } = bestAgg;
     return {
-        peakBetriebsstunden: pickPeak((a) => a.sumDeltaBetriebsstunden),
-        peakStarts: pickPeak((a) => a.sumDeltaStarts),
-        peakVerbrauchQm: pickPeak((a) => a.sumVerbrauchQm),
+        peakBetriebsstunden: {
+            sum: bestAgg.sumDeltaBetriebsstunden,
+            isoWeekYear,
+            isoWeek,
+        },
+        peakStarts: {
+            sum: bestAgg.sumDeltaStarts,
+            isoWeekYear,
+            isoWeek,
+        },
+        peakVerbrauchQm: {
+            sum: bestAgg.sumVerbrauchQm,
+            isoWeekYear,
+            isoWeek,
+        },
+        consumptionPeakTied,
     };
 }
 
@@ -1547,14 +1571,14 @@ function formatIsoWeekLabel(isoWeekYear, isoWeek) {
     if (!Number.isFinite(isoWeekYear) || !Number.isFinite(isoWeek)) {
         return '';
     }
-    return `KW ${isoWeek}/${isoWeekYear}`;
+    return `CW ${isoWeek}/${isoWeekYear}`;
 }
 
 function renderAnalyzePeakWeekLoading() {
     const container = getAnalyzePeakWeekContainer();
     if (!container) return;
     container.innerHTML = `
-        <h3>Stärkste Kalenderwoche</h3>
+        <h3>Peak week (consumption)</h3>
         <p class="empty-state">Loading statistics...</p>
     `;
 }
@@ -1564,7 +1588,7 @@ function renderAnalyzePeakWeekError(message) {
     if (!container) return;
     const safeMsg = (typeof message === 'string' && message.trim() !== '') ? message.trim() : 'Failed to load statistics';
     container.innerHTML = `
-        <h3>Stärkste Kalenderwoche</h3>
+        <h3>Peak week (consumption)</h3>
         <p class="empty-state">${safeMsg}</p>
     `;
 }
@@ -1573,19 +1597,25 @@ function renderAnalyzePeakWeekEmpty() {
     const container = getAnalyzePeakWeekContainer();
     if (!container) return;
     container.innerHTML = `
-        <h3>Stärkste Kalenderwoche</h3>
+        <h3>Peak week (consumption)</h3>
         <p class="empty-state">No submissions found yet.</p>
     `;
 }
 
 /**
- * @param {{ peakBetriebsstunden, peakStarts, peakVerbrauchQm }} peaks - from computeWeeklyPeakStats
+ * @param {{ peakBetriebsstunden, peakStarts, peakVerbrauchQm, consumptionPeakTied }} peaks - from computeWeeklyPeakStats
  */
 function renderAnalyzePeakWeek(peaks) {
     const container = getAnalyzePeakWeekContainer();
     if (!container) return;
 
     const p = peaks && typeof peaks === 'object' ? peaks : {};
+    const tied = Boolean(p.consumptionPeakTied);
+    const cardClass = tied ? 'analyze-card analyze-card--consumption-tied' : 'analyze-card';
+    const tieBanner = tied
+        ? '<p class="analyze-peak-tie-banner" role="status">⚠ Multiple weeks share this peak consumption; showing the lexicographically earlier week.</p>'
+        : '';
+
     const formatPeakLine = (peak, valueOpts) => {
         if (!peak || typeof peak !== 'object') {
             return '—';
@@ -1599,20 +1629,21 @@ function renderAnalyzePeakWeek(peaks) {
     };
 
     container.innerHTML = `
-        <div class="analyze-card">
-            <div class="analyze-card-title">Stärkste Kalenderwoche</div>
+        <div class="${cardClass}">
+            <div class="analyze-card-title">Peak week (consumption)</div>
+            ${tieBanner}
             <div class="analyze-metrics">
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Betriebsstunden</span>
+                    <span class="analyze-metric-label">Consumption (m³)</span>
+                    <span class="analyze-metric-value">${formatPeakLine(p.peakVerbrauchQm, { kind: 'decimal', decimals: 2 })}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Operating hours</span>
                     <span class="analyze-metric-value">${formatPeakLine(p.peakBetriebsstunden, { kind: 'int' })}</span>
                 </div>
                 <div class="analyze-metric">
                     <span class="analyze-metric-label">Starts</span>
                     <span class="analyze-metric-value">${formatPeakLine(p.peakStarts, { kind: 'int' })}</span>
-                </div>
-                <div class="analyze-metric">
-                    <span class="analyze-metric-label">Verbrauch (m³)</span>
-                    <span class="analyze-metric-value">${formatPeakLine(p.peakVerbrauchQm, { kind: 'decimal', decimals: 2 })}</span>
                 </div>
             </div>
         </div>
