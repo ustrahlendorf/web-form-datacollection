@@ -1337,8 +1337,66 @@ function compareIsoWeekOrder(yearA, weekA, yearB, weekB) {
 }
 
 /**
+ * Monday 00:00 UTC of the given ISO week (ISO-8601; week 1 contains Jan 4 of isoWeekYear).
+ * @param {number} isoWeekYear
+ * @param {number} isoWeek
+ * @returns {Date | null}
+ */
+function getMondayUtcOfIsoWeek(isoWeekYear, isoWeek) {
+    if (!Number.isFinite(isoWeekYear) || !Number.isFinite(isoWeek)) {
+        return null;
+    }
+    const jan4 = new Date(Date.UTC(isoWeekYear, 0, 4));
+    const dow = jan4.getUTCDay();
+    const isoDow = dow === 0 ? 7 : dow;
+    const monday = new Date(jan4);
+    monday.setUTCDate(jan4.getUTCDate() - (isoDow - 1) + (isoWeek - 1) * 7);
+    return monday;
+}
+
+/**
+ * @param {number} isoWeekYear
+ * @param {number} isoWeek
+ * @returns {string} e.g. "29.12-04.01" (Monday–Sunday, dd.mm, no calendar year)
+ */
+function formatIsoWeekDdMmRange(isoWeekYear, isoWeek) {
+    const monday = getMondayUtcOfIsoWeek(isoWeekYear, isoWeek);
+    if (!monday) {
+        return '';
+    }
+    const sunday = new Date(monday.getTime());
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    const fmt = (d) => `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    return `${fmt(monday)}-${fmt(sunday)}`;
+}
+
+/**
+ * Chained delta vs. previous submission in sort order (temperatures have no stored deltas).
+ * First row contributes 0; missing predecessor or missing value yields no contribution.
+ * @param {object} submission
+ * @param {object | null} prevSubmission
+ * @param {string} key - e.g. vorlauf_temp, aussentemp
+ * @returns {number | null} null = skip adding to weekly sum
+ */
+function chainedReadingDelta(submission, prevSubmission, key) {
+    if (!submission || typeof submission !== 'object') {
+        return null;
+    }
+    if (!prevSubmission) {
+        return 0;
+    }
+    const c = normalizeNumber(submission[key]);
+    const p = normalizeNumber(prevSubmission[key]);
+    if (c === null || p === null) {
+        return null;
+    }
+    return c - p;
+}
+
+/**
  * Weekly sums over the same submission list as YTD (typically sorted by calendar day).
- * Per ISO week: sum of delta_betriebsstunden, delta_starts, and verbrauch_qm.
+ * Per ISO week: sum of delta_betriebsstunden, delta_starts, verbrauch_qm, and chained
+ * vorlauf_temp / aussentemp deltas vs. the prior list entry.
  * Peak week is the week with maximum sum verbrauch_qm; ties break to lexicographically
  * earlier (isoWeekYear, isoWeek). Operating hours and starts shown are sums for that week.
  * consumptionPeakTied is true when more than one week shares that maximum consumption sum.
@@ -1348,6 +1406,8 @@ function compareIsoWeekOrder(yearA, weekA, yearB, weekB) {
  *   peakBetriebsstunden: { sum: number, isoWeekYear: number, isoWeek: number } | null,
  *   peakStarts: { sum: number, isoWeekYear: number, isoWeek: number } | null,
  *   peakVerbrauchQm: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   peakVorlaufTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   peakOutsideTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
  *   consumptionPeakTied: boolean,
  * }}
  */
@@ -1356,6 +1416,8 @@ function computeWeeklyPeakStats(sortedSubmissions) {
         peakBetriebsstunden: null,
         peakStarts: null,
         peakVerbrauchQm: null,
+        peakVorlaufTemp: null,
+        peakOutsideTemp: null,
         consumptionPeakTied: false,
     };
     if (!Array.isArray(sortedSubmissions) || sortedSubmissions.length === 0) {
@@ -1363,7 +1425,9 @@ function computeWeeklyPeakStats(sortedSubmissions) {
     }
 
     const map = new Map();
-    for (const submission of sortedSubmissions) {
+    for (let i = 0; i < sortedSubmissions.length; i++) {
+        const submission = sortedSubmissions[i];
+        const prevSubmission = i > 0 ? sortedSubmissions[i - 1] : null;
         const day = getSubmissionUtcDay(submission);
         if (!day) {
             continue;
@@ -1383,6 +1447,8 @@ function computeWeeklyPeakStats(sortedSubmissions) {
                 sumDeltaBetriebsstunden: 0,
                 sumDeltaStarts: 0,
                 sumVerbrauchQm: 0,
+                sumDeltaVorlauf: 0,
+                sumDeltaAussen: 0,
             };
             map.set(key, bucket);
         }
@@ -1398,6 +1464,15 @@ function computeWeeklyPeakStats(sortedSubmissions) {
         const v = normalizeNumber(submission && submission.verbrauch_qm);
         if (v !== null) {
             bucket.sumVerbrauchQm += v;
+        }
+
+        const dVl = chainedReadingDelta(submission, prevSubmission, 'vorlauf_temp');
+        if (dVl !== null) {
+            bucket.sumDeltaVorlauf += dVl;
+        }
+        const dAu = chainedReadingDelta(submission, prevSubmission, 'aussentemp');
+        if (dAu !== null) {
+            bucket.sumDeltaAussen += dAu;
         }
     }
 
@@ -1446,6 +1521,16 @@ function computeWeeklyPeakStats(sortedSubmissions) {
         },
         peakVerbrauchQm: {
             sum: bestAgg.sumVerbrauchQm,
+            isoWeekYear,
+            isoWeek,
+        },
+        peakVorlaufTemp: {
+            sum: bestAgg.sumDeltaVorlauf,
+            isoWeekYear,
+            isoWeek,
+        },
+        peakOutsideTemp: {
+            sum: bestAgg.sumDeltaAussen,
             isoWeekYear,
             isoWeek,
         },
@@ -1567,11 +1652,16 @@ function getAnalyzePeakWeekContainer() {
     return document.getElementById('analyze-peak-week-col');
 }
 
-function formatIsoWeekLabel(isoWeekYear, isoWeek) {
-    if (!Number.isFinite(isoWeekYear) || !Number.isFinite(isoWeek)) {
-        return '';
+function setAnalyzePageTitle(year) {
+    const el = document.getElementById('analyze-page-title');
+    if (!el) {
+        return;
     }
-    return `CW ${isoWeek}/${isoWeekYear}`;
+    if (year != null && Number.isFinite(year)) {
+        el.textContent = `Statistics Year to Date - ${year}`;
+    } else {
+        el.textContent = 'Statistics Year to Date';
+    }
 }
 
 function renderAnalyzePeakWeekLoading() {
@@ -1603,7 +1693,7 @@ function renderAnalyzePeakWeekEmpty() {
 }
 
 /**
- * @param {{ peakBetriebsstunden, peakStarts, peakVerbrauchQm, consumptionPeakTied }} peaks - from computeWeeklyPeakStats
+ * @param {{ peakBetriebsstunden, peakStarts, peakVerbrauchQm, peakVorlaufTemp, peakOutsideTemp, consumptionPeakTied }} peaks - from computeWeeklyPeakStats
  */
 function renderAnalyzePeakWeek(peaks) {
     const container = getAnalyzePeakWeekContainer();
@@ -1621,11 +1711,11 @@ function renderAnalyzePeakWeek(peaks) {
             return '—';
         }
         const val = formatMetricValue(peak.sum, valueOpts);
-        const kw = formatIsoWeekLabel(peak.isoWeekYear, peak.isoWeek);
-        if (!kw) {
+        const range = formatIsoWeekDdMmRange(peak.isoWeekYear, peak.isoWeek);
+        if (!range || !Number.isFinite(peak.isoWeek)) {
             return val;
         }
-        return `${val} (${kw})`;
+        return `${val} (CW ${peak.isoWeek} - ${range})`;
     };
 
     container.innerHTML = `
@@ -1645,12 +1735,21 @@ function renderAnalyzePeakWeek(peaks) {
                     <span class="analyze-metric-label">Starts</span>
                     <span class="analyze-metric-value">${formatPeakLine(p.peakStarts, { kind: 'int' })}</span>
                 </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Supply Temp. (°C)</span>
+                    <span class="analyze-metric-value">${formatPeakLine(p.peakVorlaufTemp, { kind: 'decimal', decimals: 1 })}</span>
+                </div>
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Outside Temp Sensor (°C)</span>
+                    <span class="analyze-metric-value">${formatPeakLine(p.peakOutsideTemp, { kind: 'decimal', decimals: 1 })}</span>
+                </div>
             </div>
         </div>
     `;
 }
 
 function renderAnalyzeLoading() {
+    setAnalyzePageTitle(null);
     const container = getAnalyzeTotalsContainer();
     if (!container) return;
     container.innerHTML = `
@@ -1661,6 +1760,7 @@ function renderAnalyzeLoading() {
 }
 
 function renderAnalyzeError(message) {
+    setAnalyzePageTitle(null);
     const container = getAnalyzeTotalsContainer();
     if (!container) return;
     const safeMsg = (typeof message === 'string' && message.trim() !== '') ? message.trim() : 'Failed to load statistics';
@@ -1672,6 +1772,7 @@ function renderAnalyzeError(message) {
 }
 
 function renderAnalyzeEmpty() {
+    setAnalyzePageTitle(null);
     const container = getAnalyzeTotalsContainer();
     if (!container) return;
     container.innerHTML = `
@@ -1704,7 +1805,7 @@ function renderAnalyzeTotals(stats) {
                     <span class="analyze-metric-value">${formatMetricValue(stats.totalStarts, { kind: 'int' })}</span>
                 </div>
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Consumption</span>
+                    <span class="analyze-metric-label">Consumption (m³)</span>
                     <span class="analyze-metric-value">${formatMetricValue(stats.totalConsumption, { kind: 'decimal', decimals: 2 })}</span>
                 </div>
                 <div class="analyze-metric">
@@ -1898,6 +1999,9 @@ async function loadAnalyze() {
             return;
         }
 
+        const latestDay = getSubmissionUtcDay(latest);
+        setAnalyzePageTitle(latestDay ? latestDay.getUTCFullYear() : null);
+
         renderAnalyzeTotals(stats);
         renderAnalyzePeakWeek(computeWeeklyPeakStats(sorted));
     } catch (error) {
@@ -1981,6 +2085,7 @@ if (typeof module !== 'undefined' && module.exports) {
         computeYtdTotals,
         computeWeeklyPeakStats,
         getIsoWeekPartsFromUtcDate,
+        formatIsoWeekDdMmRange,
         normalizeSettingsConfig,
         validateSettingsPayload,
         normalizeSettingsSchedulerMetadata,
