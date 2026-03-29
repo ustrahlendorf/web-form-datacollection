@@ -484,6 +484,64 @@ describe('Analyze helpers', () => {
         isoWeek: 1,
       });
     });
+
+    test('excludes the current UTC ISO week so partial-week data is not the minimum', () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(Date.UTC(2025, 0, 15, 12, 0, 0)));
+      try {
+        const priorWeek = {
+          datum: '08.01.2025',
+          delta_betriebsstunden: 10,
+          delta_starts: 2,
+          verbrauch_qm: 100,
+        };
+        const currentWeekLow = {
+          datum: '14.01.2025',
+          delta_betriebsstunden: 1,
+          delta_starts: 1,
+          verbrauch_qm: 1,
+        };
+        const mins = computeWeeklyMinimumStats([priorWeek, currentWeekLow]);
+        expect(mins.minVerbrauchQm).toEqual({
+          sum: 100,
+          isoWeekYear: 2025,
+          isoWeek: 2,
+        });
+        expect(mins.minBetriebsstunden).toEqual({
+          sum: 10,
+          isoWeekYear: 2025,
+          isoWeek: 2,
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    test('returns empty minimum stats when only the current UTC ISO week has data', () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(Date.UTC(2025, 0, 15, 12, 0, 0)));
+      try {
+        expect(
+          computeWeeklyMinimumStats([
+            {
+              datum: '14.01.2025',
+              delta_betriebsstunden: 1,
+              delta_starts: 1,
+              verbrauch_qm: 5,
+            },
+          ]),
+        ).toEqual({
+          minBetriebsstunden: null,
+          minStarts: null,
+          minVerbrauchQm: null,
+          minVorlaufTemp: null,
+          minOutsideTemp: null,
+          consumptionMinimumTied: false,
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe('formatIsoWeekDdMmRange', () => {

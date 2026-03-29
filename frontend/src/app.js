@@ -1329,6 +1329,13 @@ function getIsoWeekPartsFromUtcDate(utcMidnight) {
     return { isoWeekYear, isoWeek: weekNo };
 }
 
+/** Today’s calendar day in UTC, as ISO week (same basis as submission days). */
+function getCurrentUtcIsoWeekParts() {
+    const now = new Date();
+    const utcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    return getIsoWeekPartsFromUtcDate(utcMidnight);
+}
+
 function compareIsoWeekOrder(yearA, weekA, yearB, weekB) {
     if (yearA !== yearB) {
         return yearA - yearB;
@@ -1584,6 +1591,7 @@ function computeWeeklyPeakStats(sortedSubmissions) {
 
 /**
  * Same weekly aggregation as peak; selects the ISO week with minimum sum verbrauch_qm.
+ * The current UTC ISO week is omitted from the candidate set (incomplete partial week).
  * Ties break to lexicographically earlier (isoWeekYear, isoWeek).
  *
  * @param {object[]} sortedSubmissions
@@ -1606,7 +1614,13 @@ function computeWeeklyMinimumStats(sortedSubmissions) {
         consumptionMinimumTied: false,
     };
 
-    const aggregates = buildWeeklyConsumptionBuckets(sortedSubmissions);
+    const aggregatesAll = buildWeeklyConsumptionBuckets(sortedSubmissions);
+    const currentIso = getCurrentUtcIsoWeekParts();
+    const aggregates = currentIso
+        ? aggregatesAll.filter(
+            (a) => a.isoWeekYear !== currentIso.isoWeekYear || a.isoWeek !== currentIso.isoWeek,
+        )
+        : aggregatesAll;
     if (aggregates.length === 0) {
         return empty;
     }
