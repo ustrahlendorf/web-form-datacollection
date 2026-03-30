@@ -2038,8 +2038,13 @@ function renderAnalyzeTotals(stats) {
 
     container.innerHTML = `
         <div class="analyze-card">
+            <div class="analyze-totals-range">${rangeText}</div>
             <div class="analyze-card-title">Totals</div>
             <div class="analyze-metrics">
+                <div class="analyze-metric">
+                    <span class="analyze-metric-label">Consumption (m³)</span>
+                    <span class="analyze-metric-value">${formatMetricValue(stats.totalConsumption, { kind: 'decimal', decimals: 2 })}</span>
+                </div>
                 <div class="analyze-metric">
                     <span class="analyze-metric-label">Operating hours</span>
                     <span class="analyze-metric-value">${formatMetricValue(stats.totalOperatingHours, { kind: 'int' })}</span>
@@ -2049,16 +2054,9 @@ function renderAnalyzeTotals(stats) {
                     <span class="analyze-metric-value">${formatMetricValue(stats.totalStarts, { kind: 'int' })}</span>
                 </div>
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Consumption (m³)</span>
-                    <span class="analyze-metric-value">${formatMetricValue(stats.totalConsumption, { kind: 'decimal', decimals: 2 })}</span>
-                </div>
-                <div class="analyze-metric">
                     <span class="analyze-metric-label">Days</span>
                     <span class="analyze-metric-value">${stats.days === null ? '—' : String(stats.days)}</span>
                 </div>
-            </div>
-            <div style="margin-top: 1rem; color: #7f8c8d; font-size: 0.95rem;">
-                ${rangeText}
             </div>
         </div>
     `;
