@@ -7,7 +7,7 @@ For AppConfig Agent adoption analysis and migration scope, see `docs/runbooks/ap
 ## Overview
 
 The auto-retrieval feature:
-- Runs once per 24 hours at a configurable time (default: 06:00 UTC)
+- Runs once per 24 hours at a configurable local wall time (default: 07:00 in `Europe/Berlin`, DST-aware via EventBridge Scheduler)
 - Fetches heating data from the Viessmann IoT API
 - Stores the data in DynamoDB (same schema as manual submissions)
 - Retries on connection failure (configurable attempts and delay)
@@ -19,6 +19,26 @@ The auto-retrieval feature:
 - All base stacks deployed (Init, DynamoDB, API, Frontend)
 - `VIESSMANN_CREDENTIALS_SECRET_ARN` set in `taskfile.env` (required for Viessmann API)
 - Cognito user registered (you need the user's `sub` claim for configuration)
+
+## Migration: Daily schedule to EventBridge Scheduler (timezone-aware)
+
+Use this checklist when upgrading from a **UTC-only EventBridge Rule** to **EventBridge Scheduler** with `ScheduleCron` evaluated in `ScheduleTimezone` (IANA id, e.g. `Europe/Berlin`). Existing environments keep their current SSM **values** until you change them; new InitStack defaults are `0 7 * * ? *` and `Europe/Berlin`.
+
+1. **Prerequisites:** AWS account/region set, `task doctor` clean, `SSM_NAMESPACE_PREFIX` and table-name env vars as in [docs/getting-started.md](../getting-started.md).
+2. **Merge and test locally:** `task test` and `task cdk:synth` with the same non-secret inputs as for normal CDK work.
+3. **Deploy InitStack:** `task deploy-init` — creates `${PFX}/AutoRetrieval/ScheduleTimezone` if missing and updates parameter descriptions. Existing `ScheduleCron` values are only overwritten if CloudFormation replaces the parameter (new stacks get `0 7 * * ? *`).
+4. **Adjust SSM (optional):** Set `${PFX}/AutoRetrieval/ScheduleCron` to the desired daily time (six-field Scheduler cron: minutes hours day-of-month month day-of-week year) and `${PFX}/AutoRetrieval/ScheduleTimezone` to your IANA zone. Example Berlin morning 07:30:
+   ```bash
+   aws ssm put-parameter --name "${PFX}/AutoRetrieval/ScheduleCron" --value "30 7 * * ? *" --type String --overwrite --region eu-central-1
+   aws ssm put-parameter --name "${PFX}/AutoRetrieval/ScheduleTimezone" --value "Europe/Berlin" --type String --overwrite --region eu-central-1
+   ```
+5. **Deploy the daily scheduler stack:** `task deploy-scheduler-daily` — removes the old EventBridge **rule** `heating-auto-retrieval-<env>` and creates a **schedule** with the same name in the default schedule group.
+6. **Verify:** CloudFormation output `DailyAutoRetrievalScheduleName` lists the schedule name. Then:
+   ```bash
+   aws scheduler get-schedule --name "heating-auto-retrieval-<env>" --group-name default --region eu-central-1
+   ```
+   Confirm `ScheduleExpression`, `ScheduleExpressionTimezone`, and `Target.Arn` (daily Lambda).
+7. **Rollback:** Redeploy a previous app revision that still used the EventBridge Rule, or use the EventBridge Scheduler console to **disable** the schedule. Avoid leaving both a rule and a schedule invoking the same Lambda.
 
 ## AppConfig Change Test + Deploy Checklist
 
@@ -205,18 +225,19 @@ Deploy-time schedule values remain in SSM. Runtime values are managed in AppConf
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `${PFX}/AutoRetrieval/ScheduleCron` | `0 6 * * ? *` | EventBridge cron (06:00 UTC daily), deploy-time |
-| `${PFX}/AutoRetrieval/FrequentScheduleCron` | `0/15 * * * ? *` | EventBridge cron for frequent scheduler (every 15 min), deploy-time |
+| `${PFX}/AutoRetrieval/ScheduleCron` | `0 7 * * ? *` | EventBridge Scheduler cron (six fields), evaluated in `ScheduleTimezone`, deploy-time |
+| `${PFX}/AutoRetrieval/ScheduleTimezone` | `Europe/Berlin` | IANA timezone for daily `ScheduleCron` (DST handled by Scheduler), deploy-time |
+| `${PFX}/AutoRetrieval/FrequentScheduleCron` | `0/15 * * * ? *` | EventBridge **Rule** cron for frequent scheduler (every 15 min), deploy-time |
 | AppConfig `frequentActiveWindows` | `[{"start":"00:00","stop":"24:00"}]` | Runtime active windows (`HH:MM`, max 5 windows) interpreted in Lambda timezone (`AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE`) |
 | AppConfig `maxRetries` | `5` | Runtime max retry attempts on API failure |
 | AppConfig `retryDelaySeconds` | `300` | Runtime seconds between retries |
 | AppConfig `userId` | `SET_ME` | Runtime Cognito user `sub` |
 
 **Active-window behavior by scheduler type:**
-- Daily scheduler sets `ONCE_DAILY=true`; it always executes on its EventBridge schedule and ignores `ACTIVE_WINDOWS_PARAM` / `frequentActiveWindows`.
+- Daily scheduler sets `ONCE_DAILY=true`; it always executes on its EventBridge **Scheduler** schedule and ignores `ACTIVE_WINDOWS_PARAM` / `frequentActiveWindows`.
 - Frequent scheduler sets `ONCE_DAILY=false`; it evaluates active windows and may skip runs outside configured windows.
 
-Example: change schedule to 07:30 UTC:
+Example: change daily schedule to 07:30 **local time** in `ScheduleTimezone` (here `Europe/Berlin`):
 
 ```bash
 aws ssm put-parameter \
@@ -227,7 +248,7 @@ aws ssm put-parameter \
   --region eu-central-1
 ```
 
-**Note:** Changing `ScheduleCron` or `FrequentScheduleCron` in SSM requires redeploying the respective stack for the EventBridge Rule to pick up the new value (rules are created at deploy time from SSM values). AppConfig runtime changes do **not** require redeploy. The Settings read-only scheduler block updates only after the EventBridge rule is changed and redeployed.
+**Note:** Changing `ScheduleCron`, `ScheduleTimezone`, or `FrequentScheduleCron` in SSM requires redeploying the **respective** stack so CloudFormation refreshes the schedule/rule definition (values are resolved at deploy time). AppConfig runtime changes do **not** require redeploy. The Settings read-only scheduler block reflects the **frequent** EventBridge rule only; it does not show the daily Scheduler expression.
 
 **Example: Restrict frequent scheduler to 08:00–12:00 and 14:00–18:00 in the configured active-window timezone**
 
@@ -248,8 +269,11 @@ task deploy-scheduler-daily
 
 This creates:
 - Lambda function for auto-retrieval
-- EventBridge Rule (cron schedule)
+- EventBridge **Scheduler** schedule (cron + `ScheduleTimezone` from SSM)
+- IAM role assumed by Scheduler to invoke the Lambda
 - SNS topic for failure alerts
+
+Stack output `DailyAutoRetrievalScheduleName` matches the schedule name (e.g. `heating-auto-retrieval-dev`).
 
 ## Step 6: Subscribe to SNS for Failure Alerts
 
@@ -278,7 +302,7 @@ Run these commands in order. Do **not** skip the InitStack deploy if `FrequentSc
 
 | Step | Command | Purpose |
 |------|---------|---------|
-| 1 | `task deploy-init` | Deploy InitStack (if new param names require migration — creates `FrequentScheduleCron`, `FrequentActiveWindows`) |
+| 1 | `task deploy-init` | Deploy InitStack (if new param names require migration — creates `FrequentScheduleCron`, `FrequentActiveWindows`, `ScheduleTimezone`, …) |
 | 2 | `task deploy-scheduler-frequent` | Deploy frequent scheduler stack (Lambda, EventBridge, SNS, DynamoDB) |
 | 3a | `aws cloudformation describe-stacks --stack-name DataCollectionSchedulerFrequent-dev --region eu-central-1` | Verify stack deployed |
 | 3b | `aws lambda get-function --function-name $(aws cloudformation describe-stacks --stack-name DataCollectionSchedulerFrequent-dev --query "Stacks[0].Outputs[?OutputKey=='FrequentLambdaFunctionName'].OutputValue" --output text --region eu-central-1) --region eu-central-1` | Verify Lambda |
@@ -310,10 +334,7 @@ Check CloudWatch Logs for the Lambda to confirm success or failure.
 
 To disable auto-retrieval without deleting the stack:
 
-1. Disable the EventBridge Rule:
-   ```bash
-   aws events disable-rule --name heating-auto-retrieval-dev --region eu-central-1
-   ```
+1. Disable the EventBridge **Scheduler** schedule (console: EventBridge → Scheduler → Schedules → select `heating-auto-retrieval-<env>` → Edit → **Disabled**). The AWS CLI `scheduler update-schedule` call must repeat the full schedule configuration; the console is usually faster for a one-off disable.
 
 To fully remove:
 

@@ -316,6 +316,7 @@ tasks:
         get_param "${pfx}/FeatureFlags/EnablePassiveReads"
         get_param "${pfx}/Operations/Rollover/RunbookVersion"
         get_param "${pfx}/AutoRetrieval/ScheduleCron"
+        get_param "${pfx}/AutoRetrieval/ScheduleTimezone"
         get_param "${pfx}/AutoRetrieval/FrequentScheduleCron"
         get_param "${pfx}/AutoRetrieval/FrequentActiveWindows"
         get_param "${pfx}/AutoRetrieval/MaxRetries"

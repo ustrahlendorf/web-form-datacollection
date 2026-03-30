@@ -38,7 +38,7 @@ def main() -> None:
         "outside_temp": 5.0,
     }
 
-    # Call with retrieval_time to simulate Lambda run at 06:00 UTC
+    # Call with retrieval_time to simulate a scheduled Lambda run (UTC wall clock).
     mapped = _viessmann_to_submission_values(values, retrieval_time=RETRIEVAL_TIME)
     print(f"mapped datum={mapped['datum']} uhrzeit={mapped['uhrzeit']}")
 

@@ -32,7 +32,7 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
 
     template = Template.from_stack(stack)
 
-    template.resource_count_is("AWS::SSM::Parameter", 9)
+    template.resource_count_is("AWS::SSM::Parameter", 10)
     expected_prefix = DEFAULT_SSM_NAMESPACE_PREFIX
 
     template.has_resource_properties(
@@ -69,7 +69,16 @@ def test_init_stack_creates_static_ssm_parameters() -> None:
         {
             "Name": ssm_parameter_name(expected_prefix, "AutoRetrieval", "ScheduleCron"),
             "Type": "String",
-            "Value": "0 6 * * ? *",
+            "Value": "0 7 * * ? *",
+        },
+    )
+
+    template.has_resource_properties(
+        "AWS::SSM::Parameter",
+        {
+            "Name": ssm_parameter_name(expected_prefix, "AutoRetrieval", "ScheduleTimezone"),
+            "Type": "String",
+            "Value": "Europe/Berlin",
         },
     )
 

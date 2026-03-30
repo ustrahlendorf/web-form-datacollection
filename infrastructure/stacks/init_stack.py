@@ -79,8 +79,22 @@ class InitStack(Stack):
             self,
             "AutoRetrievalScheduleCron",
             parameter_name=_param_name("AutoRetrieval", "ScheduleCron"),
-            string_value="0 6 * * ? *",
-            description="EventBridge cron expression for daily retrieval (default: 06:00 UTC).",
+            string_value="0 7 * * ? *",
+            description=(
+                "EventBridge Scheduler cron fields for daily retrieval (minutes hours day-of-month month "
+                "day-of-week year), evaluated in ScheduleTimezone (default: 07:00 local wall time)."
+            ),
+        )
+
+        self.auto_retrieval_schedule_timezone_param = ssm.StringParameter(
+            self,
+            "AutoRetrievalScheduleTimezone",
+            parameter_name=_param_name("AutoRetrieval", "ScheduleTimezone"),
+            string_value="Europe/Berlin",
+            description=(
+                "IANA timezone for daily ScheduleCron (EventBridge Scheduler). "
+                "DST transitions apply automatically (static contract owned by InitStack)."
+            ),
         )
 
         self.auto_retrieval_frequent_schedule_param = ssm.StringParameter(

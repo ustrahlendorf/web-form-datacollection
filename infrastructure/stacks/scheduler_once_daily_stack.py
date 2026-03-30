@@ -2,11 +2,11 @@
 
 from aws_cdk import (
     Stack,
-    aws_events as events,
-    aws_events_targets as targets,
+    Fn,
     aws_iam as iam,
     aws_lambda as lambda_,
     aws_logs as logs,
+    aws_scheduler as scheduler,
     aws_sns as sns,
     aws_ssm as ssm,
     CfnOutput,
@@ -35,7 +35,7 @@ from infrastructure.stacks.ssm_contract import (
 
 
 class SchedulerOnceDailyStack(Stack):
-    """Stack for EventBridge Rule and Lambda for daily Viessmann auto-retrieval."""
+    """Stack for EventBridge Scheduler and Lambda for daily Viessmann auto-retrieval."""
 
     DEFAULT_SSM_PREFIX = DEFAULT_SSM_NAMESPACE_PREFIX
 
@@ -52,7 +52,7 @@ class SchedulerOnceDailyStack(Stack):
         **kwargs,
     ) -> None:
         """
-        Initialize the Scheduler stack.
+        Initialize the once-daily scheduler stack (EventBridge Scheduler → Lambda).
 
         Args:
             scope: The parent construct
@@ -76,6 +76,9 @@ class SchedulerOnceDailyStack(Stack):
         # Read config from SSM (parameters created by InitStack)
         schedule_cron = ssm.StringParameter.value_for_string_parameter(
             self, ssm_parameter_name(self.ssm_prefix, *AUTO_RETRIEVAL_SEGMENTS, "ScheduleCron")
+        )
+        schedule_timezone = ssm.StringParameter.value_for_string_parameter(
+            self, ssm_parameter_name(self.ssm_prefix, *AUTO_RETRIEVAL_SEGMENTS, "ScheduleTimezone")
         )
 
         submissions_table_name = ssm.StringParameter.value_for_string_parameter(
@@ -213,16 +216,32 @@ class SchedulerOnceDailyStack(Stack):
             )
             auto_retrieval_fn.add_layers(appconfig_agent_layer)
 
-        # EventBridge Rule
-        rule = events.Rule(
+        scheduler_invoke_role = iam.Role(
+            self,
+            "AutoRetrievalSchedulerInvokeRole",
+            assumed_by=iam.ServicePrincipal("scheduler.amazonaws.com"),
+            description="EventBridge Scheduler assumes this role to invoke the daily auto-retrieval Lambda.",
+        )
+        auto_retrieval_fn.grant_invoke(scheduler_invoke_role)
+
+        schedule_name = f"heating-auto-retrieval-{environment_name}"
+        schedule_expression = Fn.join("", ["cron(", schedule_cron, ")"])
+
+        scheduler.CfnSchedule(
             self,
             "AutoRetrievalSchedule",
-            rule_name=f"heating-auto-retrieval-{environment_name}",
-            description="Triggers daily Viessmann data retrieval",
-            schedule=events.Schedule.expression(f"cron({schedule_cron})"),
+            name=schedule_name,
+            description="Triggers daily Viessmann data retrieval (cron evaluated in ScheduleTimezone from SSM).",
+            schedule_expression=schedule_expression,
+            schedule_expression_timezone=schedule_timezone,
+            flexible_time_window=scheduler.CfnSchedule.FlexibleTimeWindowProperty(mode="OFF"),
+            target=scheduler.CfnSchedule.TargetProperty(
+                arn=auto_retrieval_fn.function_arn,
+                role_arn=scheduler_invoke_role.role_arn,
+                retry_policy=scheduler.CfnSchedule.RetryPolicyProperty(maximum_retry_attempts=0),
+            ),
+            state="ENABLED",
         )
-
-        rule.add_target(targets.LambdaFunction(auto_retrieval_fn))
 
         # Outputs
         CfnOutput(
@@ -231,4 +250,10 @@ class SchedulerOnceDailyStack(Stack):
             value=failure_topic.topic_arn,
             export_name=f"HeatingAutoRetrievalFailureTopicArn-{environment_name}",
             description="SNS topic ARN for failure alerts. Subscribe with email for notifications.",
+        )
+        CfnOutput(
+            self,
+            "DailyAutoRetrievalScheduleName",
+            value=schedule_name,
+            description="EventBridge Scheduler schedule name for daily auto-retrieval (verify with aws scheduler get-schedule).",
         )
