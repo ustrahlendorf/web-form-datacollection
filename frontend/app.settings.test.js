@@ -2,6 +2,7 @@
 
 const {
     normalizeSettingsConfig,
+    normalizeSettingsSchedulerMetadata,
     validateSettingsPayload,
     renderSettingsSchedulerMetadata,
     loadSettings,
@@ -87,6 +88,30 @@ describe('settings payload validation', () => {
     });
 });
 
+describe('normalizeSettingsSchedulerMetadata', () => {
+    test('applies daily defaults when payload is missing', () => {
+        const normalized = normalizeSettingsSchedulerMetadata(null);
+        expect(normalized.dailyAvailable).toBe(false);
+        expect(normalized.dailySource).toBe('scheduler');
+        expect(normalized.dailyScheduleCron).toBe(null);
+        expect(normalized.dailyScheduleTimezone).toBe(null);
+    });
+
+    test('accepts valid daily fields from API shape', () => {
+        const normalized = normalizeSettingsSchedulerMetadata({
+            dailyAvailable: true,
+            dailyScheduleCron: '0 7 * * ? *',
+            dailyScheduleTimezone: 'Europe/Berlin',
+            dailyScheduleName: 'heating-auto-retrieval-dev',
+            dailyScheduleGroupName: 'default',
+            dailyState: 'ENABLED',
+        });
+        expect(normalized.dailyAvailable).toBe(true);
+        expect(normalized.dailyScheduleCron).toBe('0 7 * * ? *');
+        expect(normalized.dailyScheduleTimezone).toBe('Europe/Berlin');
+    });
+});
+
 describe('settings config normalization', () => {
     test('uses fallback user id and default window when missing', () => {
         const normalized = normalizeSettingsConfig(
@@ -130,6 +155,9 @@ function renderSchedulerFixture() {
             <span id="settings-scheduler-frequent-cron"></span>
             <span id="settings-scheduler-frequent-interval"></span>
             <p id="settings-scheduler-note"></p>
+            <span id="settings-scheduler-daily-cron"></span>
+            <span id="settings-scheduler-daily-timezone"></span>
+            <p id="settings-scheduler-daily-note"></p>
             <div id="settings-message"></div>
         </div>
     `;
@@ -155,6 +183,32 @@ describe('settings scheduler metadata rendering', () => {
         expect(document.getElementById('settings-scheduler-note').textContent).toBe(
             'Source: eventbridge (available, rule heating-auto-retrieval-frequent-dev)'
         );
+        expect(document.getElementById('settings-scheduler-daily-cron').textContent).toBe('Not available');
+        expect(document.getElementById('settings-scheduler-daily-timezone').textContent).toBe('Not available');
+        expect(document.getElementById('settings-scheduler-daily-note').textContent).toBe('Source: scheduler (unavailable)');
+    });
+
+    test('renders daily scheduler metadata when present', () => {
+        renderSettingsSchedulerMetadata({
+            available: true,
+            source: 'eventbridge',
+            frequentScheduleCron: '0/15 * * * ? *',
+            frequentIntervalMinutes: 15,
+            frequentRuleName: 'heating-auto-retrieval-frequent-dev',
+            dailyAvailable: true,
+            dailySource: 'scheduler',
+            dailyScheduleCron: '0 7 * * ? *',
+            dailyScheduleTimezone: 'Europe/Berlin',
+            dailyScheduleName: 'heating-auto-retrieval-dev',
+            dailyScheduleGroupName: 'default',
+            dailyState: 'ENABLED',
+        });
+
+        expect(document.getElementById('settings-scheduler-daily-cron').textContent).toBe('0 7 * * ? *');
+        expect(document.getElementById('settings-scheduler-daily-timezone').textContent).toBe('Europe/Berlin');
+        expect(document.getElementById('settings-scheduler-daily-note').textContent).toBe(
+            'Source: scheduler (available, schedule heating-auto-retrieval-dev, group default, state ENABLED)'
+        );
     });
 
     test('renders placeholders for malformed scheduler metadata', () => {
@@ -170,6 +224,9 @@ describe('settings scheduler metadata rendering', () => {
         expect(document.getElementById('settings-scheduler-frequent-cron').textContent).toBe('Not available');
         expect(document.getElementById('settings-scheduler-frequent-interval').textContent).toBe('Not available');
         expect(document.getElementById('settings-scheduler-note').textContent).toBe('Source: eventbridge (unavailable)');
+        expect(document.getElementById('settings-scheduler-daily-cron').textContent).toBe('Not available');
+        expect(document.getElementById('settings-scheduler-daily-timezone').textContent).toBe('Not available');
+        expect(document.getElementById('settings-scheduler-daily-note').textContent).toBe('Source: scheduler (unavailable)');
     });
 
     test('loadSettings keeps scheduler placeholders when metadata fetch fails', async () => {
@@ -192,6 +249,9 @@ describe('settings scheduler metadata rendering', () => {
             expect(document.getElementById('settings-scheduler-frequent-cron').textContent).toBe('Not available');
             expect(document.getElementById('settings-scheduler-frequent-interval').textContent).toBe('Not available');
             expect(document.getElementById('settings-scheduler-note').textContent).toBe('Source: eventbridge (unavailable)');
+            expect(document.getElementById('settings-scheduler-daily-cron').textContent).toBe('Not available');
+            expect(document.getElementById('settings-scheduler-daily-timezone').textContent).toBe('Not available');
+            expect(document.getElementById('settings-scheduler-daily-note').textContent).toBe('Source: scheduler (unavailable)');
             expect(document.getElementById('settings-message').textContent).toBe('network down');
             expect(document.getElementById('settings-message').classList.contains('error')).toBe(true);
         } finally {

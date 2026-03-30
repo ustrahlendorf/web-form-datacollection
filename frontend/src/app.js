@@ -718,6 +718,17 @@ function renderSettingsDeploymentStatus(deployment, note = '') {
 }
 
 function normalizeSettingsSchedulerMetadata(rawScheduler) {
+    const dailyDefaults = {
+        dailyAvailable: false,
+        dailySource: 'scheduler',
+        dailyScheduleCron: null,
+        dailyScheduleExpression: null,
+        dailyScheduleTimezone: null,
+        dailyScheduleName: null,
+        dailyScheduleGroupName: null,
+        dailyState: null,
+    };
+
     if (!rawScheduler || typeof rawScheduler !== 'object') {
         return {
             available: false,
@@ -726,6 +737,7 @@ function normalizeSettingsSchedulerMetadata(rawScheduler) {
             frequentScheduleExpression: null,
             frequentIntervalMinutes: null,
             frequentRuleName: null,
+            ...dailyDefaults,
         };
     }
 
@@ -746,6 +758,28 @@ function normalizeSettingsSchedulerMetadata(rawScheduler) {
         frequentRuleName: (typeof rawScheduler.frequentRuleName === 'string' && rawScheduler.frequentRuleName.trim() !== '')
             ? rawScheduler.frequentRuleName.trim()
             : null,
+        dailyAvailable: rawScheduler.dailyAvailable === true,
+        dailySource: (typeof rawScheduler.dailySource === 'string' && rawScheduler.dailySource.trim() !== '')
+            ? rawScheduler.dailySource.trim()
+            : 'scheduler',
+        dailyScheduleCron: (typeof rawScheduler.dailyScheduleCron === 'string' && rawScheduler.dailyScheduleCron.trim() !== '')
+            ? rawScheduler.dailyScheduleCron.trim()
+            : null,
+        dailyScheduleExpression: (typeof rawScheduler.dailyScheduleExpression === 'string' && rawScheduler.dailyScheduleExpression.trim() !== '')
+            ? rawScheduler.dailyScheduleExpression.trim()
+            : null,
+        dailyScheduleTimezone: (typeof rawScheduler.dailyScheduleTimezone === 'string' && rawScheduler.dailyScheduleTimezone.trim() !== '')
+            ? rawScheduler.dailyScheduleTimezone.trim()
+            : null,
+        dailyScheduleName: (typeof rawScheduler.dailyScheduleName === 'string' && rawScheduler.dailyScheduleName.trim() !== '')
+            ? rawScheduler.dailyScheduleName.trim()
+            : null,
+        dailyScheduleGroupName: (typeof rawScheduler.dailyScheduleGroupName === 'string' && rawScheduler.dailyScheduleGroupName.trim() !== '')
+            ? rawScheduler.dailyScheduleGroupName.trim()
+            : null,
+        dailyState: (typeof rawScheduler.dailyState === 'string' && rawScheduler.dailyState.trim() !== '')
+            ? rawScheduler.dailyState.trim()
+            : null,
     };
 }
 
@@ -753,6 +787,9 @@ function renderSettingsSchedulerMetadata(rawScheduler) {
     const cronEl = document.getElementById('settings-scheduler-frequent-cron');
     const intervalEl = document.getElementById('settings-scheduler-frequent-interval');
     const noteEl = document.getElementById('settings-scheduler-note');
+    const dailyCronEl = document.getElementById('settings-scheduler-daily-cron');
+    const dailyTzEl = document.getElementById('settings-scheduler-daily-timezone');
+    const dailyNoteEl = document.getElementById('settings-scheduler-daily-note');
     const scheduler = normalizeSettingsSchedulerMetadata(rawScheduler);
 
     const cronText = scheduler.frequentScheduleCron || scheduler.frequentScheduleExpression || SETTINGS_SCHEDULER_PLACEHOLDER;
@@ -771,6 +808,28 @@ function renderSettingsSchedulerMetadata(rawScheduler) {
     }
     if (noteEl) {
         noteEl.textContent = `Source: ${sourceText} (${availabilityText}${ruleText})`;
+    }
+
+    const dailyCronText = scheduler.dailyScheduleCron || scheduler.dailyScheduleExpression || SETTINGS_SCHEDULER_PLACEHOLDER;
+    const dailyTzText = scheduler.dailyScheduleTimezone || SETTINGS_SCHEDULER_PLACEHOLDER;
+    const dailyAvailabilityText = scheduler.dailyAvailable ? 'available' : 'unavailable';
+    const dailySourceText = scheduler.dailySource || 'scheduler';
+    const dailyScheduleText = scheduler.dailyScheduleName
+        ? `, schedule ${scheduler.dailyScheduleName}`
+        : '';
+    const dailyGroupText = scheduler.dailyScheduleGroupName
+        ? `, group ${scheduler.dailyScheduleGroupName}`
+        : '';
+    const dailyStateText = scheduler.dailyState ? `, state ${scheduler.dailyState}` : '';
+
+    if (dailyCronEl) {
+        dailyCronEl.textContent = dailyCronText;
+    }
+    if (dailyTzEl) {
+        dailyTzEl.textContent = dailyTzText;
+    }
+    if (dailyNoteEl) {
+        dailyNoteEl.textContent = `Source: ${dailySourceText} (${dailyAvailabilityText}${dailyScheduleText}${dailyGroupText}${dailyStateText})`;
     }
 }
 

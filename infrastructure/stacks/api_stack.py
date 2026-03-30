@@ -49,6 +49,7 @@ class APIStack(Stack):
         appconfig_profile_id: str,
         appconfig_deployment_strategy_id: str,
         auto_retrieval_frequent_rule_name: str | None = None,
+        auto_retrieval_daily_schedule_name: str | None = None,
         ssm_namespace_prefix: str = DEFAULT_SSM_PREFIX,
         cloudfront_domain: str | None = None,
         viessmann_credentials_secret_arn: str | None = None,
@@ -68,6 +69,8 @@ class APIStack(Stack):
             appconfig_profile_id: AppConfig profile id for auto-retrieval config
             appconfig_deployment_strategy_id: AppConfig deployment strategy id
             auto_retrieval_frequent_rule_name: EventBridge rule name for frequent scheduler
+            auto_retrieval_daily_schedule_name: EventBridge Scheduler schedule name for daily
+                auto-retrieval (default schedule group); when set, config Lambda may call GetSchedule
             ssm_namespace_prefix: Root SSM namespace prefix (for example /HeatingDataCollection)
             cloudfront_domain: CloudFront distribution domain name for CORS (e.g. dxxxx.cloudfront.net)
             viessmann_credentials_secret_arn: ARN of Secrets Manager secret with VIESSMANN_CLIENT_ID,
@@ -190,6 +193,20 @@ class APIStack(Stack):
                 )
             )
 
+        # Read-only EventBridge Scheduler for effective daily schedule (matches SchedulerOnceDailyStack).
+        if auto_retrieval_daily_schedule_name:
+            daily_schedule_group = "default"
+            lambda_execution_role.add_to_policy(
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=["scheduler:GetSchedule"],
+                    resources=[
+                        f"arn:aws:scheduler:{self.region}:{self.account}:schedule/"
+                        f"{daily_schedule_group}/{auto_retrieval_daily_schedule_name}"
+                    ],
+                )
+            )
+
         # Read active DynamoDB table name from SSM Parameter Store pointer (owned by DynamoDBStack).
         submissions_table_name = ssm.StringParameter.value_for_string_parameter(
             self, ssm_parameter_name(self.ssm_prefix, *SUBMISSIONS_ACTIVE_TABLE_NAME_SEGMENTS)
@@ -219,6 +236,7 @@ class APIStack(Stack):
             appconfig_profile_id=appconfig_profile_id,
             appconfig_deployment_strategy_id=appconfig_deployment_strategy_id,
             frequent_rule_name=auto_retrieval_frequent_rule_name,
+            daily_schedule_name=auto_retrieval_daily_schedule_name,
         )
 
         # Wire Lambda functions to API Gateway routes with JWT authorization
@@ -506,6 +524,7 @@ class APIStack(Stack):
         appconfig_profile_id: str,
         appconfig_deployment_strategy_id: str,
         frequent_rule_name: str | None = None,
+        daily_schedule_name: str | None = None,
     ) -> lambda_.Function:
         """Create Lambda function for GET/PUT /config/auto-retrieval endpoint."""
         return lambda_.Function(
@@ -523,6 +542,11 @@ class APIStack(Stack):
                 **(
                     {"AUTO_RETRIEVAL_FREQUENT_RULE_NAME": frequent_rule_name}
                     if frequent_rule_name
+                    else {}
+                ),
+                **(
+                    {"AUTO_RETRIEVAL_DAILY_SCHEDULE_NAME": daily_schedule_name}
+                    if daily_schedule_name
                     else {}
                 ),
             },

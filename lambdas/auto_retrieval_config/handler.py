@@ -18,6 +18,7 @@ from lambdas.auto_retrieval_config_validator.handler import _validate_config
 _appconfig_client = None
 _appconfig_data_client = None
 _events_client = None
+_scheduler_client = None
 
 
 def _get_appconfig_client():
@@ -48,6 +49,16 @@ def _get_events_client():
 
         _events_client = boto3.client("events")
     return _events_client
+
+
+def _get_scheduler_client():
+    """Get boto3 EventBridge Scheduler client (lazy init for tests)."""
+    global _scheduler_client
+    if _scheduler_client is None:
+        import boto3
+
+        _scheduler_client = boto3.client("scheduler")
+    return _scheduler_client
 
 
 def _extract_user_id(event: dict[str, Any]) -> str:
@@ -223,7 +234,20 @@ def _derive_frequent_interval_minutes(cron_expression: str | None) -> int | None
     return interval
 
 
-def _default_scheduler_payload(frequent_rule_name: str | None) -> dict[str, Any]:
+def _default_daily_scheduler_fields() -> dict[str, Any]:
+    return {
+        "dailyScheduleName": None,
+        "dailyScheduleGroupName": None,
+        "dailyScheduleExpression": None,
+        "dailyScheduleCron": None,
+        "dailyScheduleTimezone": None,
+        "dailyState": None,
+        "dailyAvailable": False,
+        "dailySource": "scheduler",
+    }
+
+
+def _default_frequent_scheduler_fields(frequent_rule_name: str | None) -> dict[str, Any]:
     return {
         "frequentRuleName": frequent_rule_name,
         "frequentScheduleCron": None,
@@ -234,30 +258,74 @@ def _default_scheduler_payload(frequent_rule_name: str | None) -> dict[str, Any]
     }
 
 
-def _get_scheduler_metadata() -> dict[str, Any]:
-    frequent_rule_name = os.environ.get("AUTO_RETRIEVAL_FREQUENT_RULE_NAME", "").strip() or None
-    if not frequent_rule_name:
-        return _default_scheduler_payload(None)
-
-    scheduler_payload = _default_scheduler_payload(frequent_rule_name)
+def _merge_frequent_rule_metadata(payload: dict[str, Any], frequent_rule_name: str) -> None:
     try:
         describe_response = _get_events_client().describe_rule(Name=frequent_rule_name)
     except Exception as exc:  # pragma: no cover - defensive catch for AWS runtime failures
         print(f"Scheduler metadata unavailable for rule '{frequent_rule_name}': {exc}")
-        return scheduler_payload
+        return
 
     schedule_expression = describe_response.get("ScheduleExpression")
     if not isinstance(schedule_expression, str) or not schedule_expression.strip():
-        return scheduler_payload
+        return
 
-    scheduler_payload["frequentScheduleExpression"] = schedule_expression
+    payload["frequentScheduleExpression"] = schedule_expression
     cron_expression = _extract_cron_expression(schedule_expression)
-    scheduler_payload["frequentScheduleCron"] = cron_expression
-    scheduler_payload["frequentIntervalMinutes"] = _derive_frequent_interval_minutes(
-        cron_expression
-    )
-    scheduler_payload["available"] = True
-    return scheduler_payload
+    payload["frequentScheduleCron"] = cron_expression
+    payload["frequentIntervalMinutes"] = _derive_frequent_interval_minutes(cron_expression)
+    payload["available"] = True
+
+
+def _merge_daily_schedule_metadata(payload: dict[str, Any]) -> None:
+    daily_name = os.environ.get("AUTO_RETRIEVAL_DAILY_SCHEDULE_NAME", "").strip() or None
+    if not daily_name:
+        return
+
+    group_raw = os.environ.get("AUTO_RETRIEVAL_DAILY_SCHEDULE_GROUP_NAME", "").strip()
+    group_name = group_raw if group_raw else "default"
+
+    payload["dailyScheduleName"] = daily_name
+    payload["dailyScheduleGroupName"] = group_name
+
+    try:
+        describe_response = _get_scheduler_client().get_schedule(
+            Name=daily_name,
+            GroupName=group_name,
+        )
+    except Exception as exc:  # pragma: no cover - defensive catch for AWS runtime failures
+        print(f"Daily scheduler metadata unavailable for schedule '{group_name}/{daily_name}': {exc}")
+        return
+
+    schedule_expression = describe_response.get("ScheduleExpression")
+    if not isinstance(schedule_expression, str) or not schedule_expression.strip():
+        return
+
+    payload["dailyScheduleExpression"] = schedule_expression
+    payload["dailyScheduleCron"] = _extract_cron_expression(schedule_expression)
+
+    tz = describe_response.get("ScheduleExpressionTimezone")
+    if isinstance(tz, str) and tz.strip():
+        payload["dailyScheduleTimezone"] = tz.strip()
+
+    state = describe_response.get("State")
+    if isinstance(state, str) and state.strip():
+        payload["dailyState"] = state.strip()
+
+    payload["dailyAvailable"] = True
+
+
+def _get_scheduler_metadata() -> dict[str, Any]:
+    frequent_rule_name = os.environ.get("AUTO_RETRIEVAL_FREQUENT_RULE_NAME", "").strip() or None
+    payload: dict[str, Any] = {
+        **_default_frequent_scheduler_fields(frequent_rule_name),
+        **_default_daily_scheduler_fields(),
+    }
+
+    if frequent_rule_name:
+        _merge_frequent_rule_metadata(payload, frequent_rule_name)
+
+    _merge_daily_schedule_metadata(payload)
+    return payload
 
 
 def _handle_get(_event: dict[str, Any]) -> dict[str, Any]:

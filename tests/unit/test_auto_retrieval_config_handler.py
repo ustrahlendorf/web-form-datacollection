@@ -7,6 +7,17 @@ from unittest.mock import MagicMock, patch
 
 from lambdas.auto_retrieval_config.handler import lambda_handler
 
+_SCHEDULER_DAILY_DEFAULTS = {
+    "dailyScheduleName": None,
+    "dailyScheduleGroupName": None,
+    "dailyScheduleExpression": None,
+    "dailyScheduleCron": None,
+    "dailyScheduleTimezone": None,
+    "dailyState": None,
+    "dailyAvailable": False,
+    "dailySource": "scheduler",
+}
+
 
 def _authorized_event(
     method: str,
@@ -28,11 +39,13 @@ def _authorized_event(
     return event
 
 
+@patch("lambdas.auto_retrieval_config.handler._get_scheduler_client")
 @patch("lambdas.auto_retrieval_config.handler._get_events_client")
 @patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_returns_current_payload(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
+    mock_get_scheduler_client: MagicMock,
 ) -> None:
     payload = {
         "schemaVersion": 1,
@@ -58,6 +71,8 @@ def test_get_auto_retrieval_config_returns_current_payload(
         "ScheduleExpression": "cron(0/15 * * * ? *)",
     }
     mock_get_events_client.return_value = events_client
+    scheduler_client = MagicMock()
+    mock_get_scheduler_client.return_value = scheduler_client
 
     with patch.dict(
         "os.environ",
@@ -83,14 +98,18 @@ def test_get_auto_retrieval_config_returns_current_payload(
         "frequentIntervalMinutes": 15,
         "source": "eventbridge",
         "available": True,
+        **_SCHEDULER_DAILY_DEFAULTS,
     }
+    scheduler_client.get_schedule.assert_not_called()
 
 
+@patch("lambdas.auto_retrieval_config.handler._get_scheduler_client")
 @patch("lambdas.auto_retrieval_config.handler._get_events_client")
 @patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_scheduler_unavailable_when_describe_rule_fails(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
+    mock_get_scheduler_client: MagicMock,
 ) -> None:
     payload = {
         "schemaVersion": 1,
@@ -113,6 +132,7 @@ def test_get_auto_retrieval_config_scheduler_unavailable_when_describe_rule_fail
     events_client = MagicMock()
     events_client.describe_rule.side_effect = RuntimeError("boom")
     mock_get_events_client.return_value = events_client
+    mock_get_scheduler_client.return_value = MagicMock()
 
     with patch.dict(
         "os.environ",
@@ -137,14 +157,17 @@ def test_get_auto_retrieval_config_scheduler_unavailable_when_describe_rule_fail
         "frequentIntervalMinutes": None,
         "source": "eventbridge",
         "available": False,
+        **_SCHEDULER_DAILY_DEFAULTS,
     }
 
 
+@patch("lambdas.auto_retrieval_config.handler._get_scheduler_client")
 @patch("lambdas.auto_retrieval_config.handler._get_events_client")
 @patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_includes_scheduler_metadata_when_available(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
+    mock_get_scheduler_client: MagicMock,
 ) -> None:
     payload = {
         "schemaVersion": 1,
@@ -171,6 +194,7 @@ def test_get_auto_retrieval_config_includes_scheduler_metadata_when_available(
         "ScheduleExpression": "cron(0/15 * * * ? *)"
     }
     mock_get_events_client.return_value = events_client
+    mock_get_scheduler_client.return_value = MagicMock()
 
     with patch.dict(
         "os.environ",
@@ -194,17 +218,20 @@ def test_get_auto_retrieval_config_includes_scheduler_metadata_when_available(
         "frequentIntervalMinutes": 15,
         "source": "eventbridge",
         "available": True,
+        **_SCHEDULER_DAILY_DEFAULTS,
     }
     events_client.describe_rule.assert_called_once_with(
         Name="heating-auto-retrieval-frequent-dev"
     )
 
 
+@patch("lambdas.auto_retrieval_config.handler._get_scheduler_client")
 @patch("lambdas.auto_retrieval_config.handler._get_events_client")
 @patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_keeps_success_response_when_scheduler_unavailable(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
+    mock_get_scheduler_client: MagicMock,
 ) -> None:
     appconfig_data_client = MagicMock()
     appconfig_data_client.start_configuration_session.return_value = {
@@ -219,6 +246,7 @@ def test_get_auto_retrieval_config_keeps_success_response_when_scheduler_unavail
     events_client = MagicMock()
     events_client.describe_rule.side_effect = RuntimeError("EventBridge unavailable")
     mock_get_events_client.return_value = events_client
+    mock_get_scheduler_client.return_value = MagicMock()
 
     with patch.dict(
         "os.environ",
@@ -242,14 +270,17 @@ def test_get_auto_retrieval_config_keeps_success_response_when_scheduler_unavail
         "frequentIntervalMinutes": None,
         "source": "eventbridge",
         "available": False,
+        **_SCHEDULER_DAILY_DEFAULTS,
     }
 
 
+@patch("lambdas.auto_retrieval_config.handler._get_scheduler_client")
 @patch("lambdas.auto_retrieval_config.handler._get_events_client")
 @patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_scheduler_unavailable_when_rule_env_missing(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
+    mock_get_scheduler_client: MagicMock,
 ) -> None:
     appconfig_data_client = MagicMock()
     appconfig_data_client.start_configuration_session.return_value = {
@@ -283,15 +314,19 @@ def test_get_auto_retrieval_config_scheduler_unavailable_when_rule_env_missing(
         "frequentIntervalMinutes": None,
         "source": "eventbridge",
         "available": False,
+        **_SCHEDULER_DAILY_DEFAULTS,
     }
     mock_get_events_client.assert_not_called()
+    mock_get_scheduler_client.return_value.get_schedule.assert_not_called()
 
 
+@patch("lambdas.auto_retrieval_config.handler._get_scheduler_client")
 @patch("lambdas.auto_retrieval_config.handler._get_events_client")
 @patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
 def test_get_auto_retrieval_config_scheduler_interval_null_for_non_derivable_cron(
     mock_get_appconfig_data_client: MagicMock,
     mock_get_events_client: MagicMock,
+    mock_get_scheduler_client: MagicMock,
 ) -> None:
     appconfig_data_client = MagicMock()
     appconfig_data_client.start_configuration_session.return_value = {
@@ -308,6 +343,7 @@ def test_get_auto_retrieval_config_scheduler_interval_null_for_non_derivable_cro
         "ScheduleExpression": "cron(5 6 * * ? *)",
     }
     mock_get_events_client.return_value = events_client
+    mock_get_scheduler_client.return_value = MagicMock()
 
     with patch.dict(
         "os.environ",
@@ -331,7 +367,115 @@ def test_get_auto_retrieval_config_scheduler_interval_null_for_non_derivable_cro
         "frequentIntervalMinutes": None,
         "source": "eventbridge",
         "available": True,
+        **_SCHEDULER_DAILY_DEFAULTS,
     }
+
+
+@patch("lambdas.auto_retrieval_config.handler._get_scheduler_client")
+@patch("lambdas.auto_retrieval_config.handler._get_events_client")
+@patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
+def test_get_auto_retrieval_config_daily_schedule_from_get_schedule(
+    mock_get_appconfig_data_client: MagicMock,
+    mock_get_events_client: MagicMock,
+    mock_get_scheduler_client: MagicMock,
+) -> None:
+    appconfig_data_client = MagicMock()
+    appconfig_data_client.start_configuration_session.return_value = {
+        "InitialConfigurationToken": "token"
+    }
+    appconfig_data_client.get_latest_configuration.return_value = {
+        "Configuration": MagicMock(read=MagicMock(return_value=b"{}")),
+        "VersionLabel": "1",
+    }
+    mock_get_appconfig_data_client.return_value = appconfig_data_client
+
+    events_client = MagicMock()
+    events_client.describe_rule.return_value = {
+        "ScheduleExpression": "cron(0/15 * * * ? *)",
+    }
+    mock_get_events_client.return_value = events_client
+
+    scheduler_client = MagicMock()
+    scheduler_client.get_schedule.return_value = {
+        "ScheduleExpression": "cron(0 7 * * ? *)",
+        "ScheduleExpressionTimezone": "Europe/Berlin",
+        "State": "ENABLED",
+    }
+    mock_get_scheduler_client.return_value = scheduler_client
+
+    with patch.dict(
+        "os.environ",
+        {
+            "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": "app-id",
+            "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": "env-id",
+            "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": "profile-id",
+            "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": "strategy-id",
+            "AUTO_RETRIEVAL_FREQUENT_RULE_NAME": "heating-auto-retrieval-frequent-dev",
+            "AUTO_RETRIEVAL_DAILY_SCHEDULE_NAME": "heating-auto-retrieval-dev",
+        },
+        clear=False,
+    ):
+        response = lambda_handler(_authorized_event("GET"), None)
+
+    assert response["statusCode"] == 200
+    response_body = json.loads(response["body"])
+    assert response_body["scheduler"]["dailyScheduleName"] == "heating-auto-retrieval-dev"
+    assert response_body["scheduler"]["dailyScheduleGroupName"] == "default"
+    assert response_body["scheduler"]["dailyScheduleExpression"] == "cron(0 7 * * ? *)"
+    assert response_body["scheduler"]["dailyScheduleCron"] == "0 7 * * ? *"
+    assert response_body["scheduler"]["dailyScheduleTimezone"] == "Europe/Berlin"
+    assert response_body["scheduler"]["dailyState"] == "ENABLED"
+    assert response_body["scheduler"]["dailyAvailable"] is True
+    assert response_body["scheduler"]["dailySource"] == "scheduler"
+    scheduler_client.get_schedule.assert_called_once_with(
+        Name="heating-auto-retrieval-dev",
+        GroupName="default",
+    )
+
+
+@patch("lambdas.auto_retrieval_config.handler._get_scheduler_client")
+@patch("lambdas.auto_retrieval_config.handler._get_events_client")
+@patch("lambdas.auto_retrieval_config.handler._get_appconfig_data_client")
+def test_get_auto_retrieval_config_daily_unavailable_when_get_schedule_fails(
+    mock_get_appconfig_data_client: MagicMock,
+    mock_get_events_client: MagicMock,
+    mock_get_scheduler_client: MagicMock,
+) -> None:
+    appconfig_data_client = MagicMock()
+    appconfig_data_client.start_configuration_session.return_value = {
+        "InitialConfigurationToken": "token"
+    }
+    appconfig_data_client.get_latest_configuration.return_value = {
+        "Configuration": MagicMock(read=MagicMock(return_value=b"{}")),
+        "VersionLabel": "1",
+    }
+    mock_get_appconfig_data_client.return_value = appconfig_data_client
+
+    mock_get_events_client.return_value = MagicMock()
+    scheduler_client = MagicMock()
+    scheduler_client.get_schedule.side_effect = RuntimeError("scheduler down")
+    mock_get_scheduler_client.return_value = scheduler_client
+
+    with patch.dict(
+        "os.environ",
+        {
+            "AUTO_RETRIEVAL_APPCONFIG_APPLICATION_ID": "app-id",
+            "AUTO_RETRIEVAL_APPCONFIG_ENVIRONMENT_ID": "env-id",
+            "AUTO_RETRIEVAL_APPCONFIG_PROFILE_ID": "profile-id",
+            "AUTO_RETRIEVAL_APPCONFIG_DEPLOYMENT_STRATEGY_ID": "strategy-id",
+            "AUTO_RETRIEVAL_DAILY_SCHEDULE_NAME": "heating-auto-retrieval-dev",
+        },
+        clear=False,
+    ):
+        response = lambda_handler(_authorized_event("GET"), None)
+
+    assert response["statusCode"] == 200
+    response_body = json.loads(response["body"])
+    assert response_body["scheduler"]["frequentRuleName"] is None
+    assert response_body["scheduler"]["dailyScheduleName"] == "heating-auto-retrieval-dev"
+    assert response_body["scheduler"]["dailyScheduleGroupName"] == "default"
+    assert response_body["scheduler"]["dailyScheduleExpression"] is None
+    assert response_body["scheduler"]["dailyAvailable"] is False
 
 
 @patch("lambdas.auto_retrieval_config.handler._get_appconfig_client")
