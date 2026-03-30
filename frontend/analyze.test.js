@@ -128,16 +128,8 @@ describe('Analyze helpers', () => {
         isoWeekYear: 2025,
         isoWeek: 1,
       });
-      expect(peaks.peakVorlaufTemp).toEqual({
-        sum: 0,
-        isoWeekYear: 2025,
-        isoWeek: 1,
-      });
-      expect(peaks.peakOutsideTemp).toEqual({
-        sum: 0,
-        isoWeekYear: 2025,
-        isoWeek: 1,
-      });
+      expect(peaks.peakVorlaufTemp).toBeNull();
+      expect(peaks.peakOutsideTemp).toBeNull();
     });
 
     test('on equal consumption across weeks picks lexicographically earlier week and sets consumptionPeakTied', () => {
@@ -273,7 +265,7 @@ describe('Analyze helpers', () => {
       });
     });
 
-    test('sums chained vorlauf_temp and aussentemp deltas within ISO week', () => {
+    test('averages vorlauf_temp and aussentemp readings within peak consumption ISO week', () => {
       const a = {
         datum: '01.01.2025',
         delta_betriebsstunden: 0,
@@ -292,18 +284,18 @@ describe('Analyze helpers', () => {
       };
       const peaks = computeWeeklyPeakStats([a, b]);
       expect(peaks.peakVorlaufTemp).toEqual({
-        sum: 2,
+        mean: 41,
         isoWeekYear: 2025,
         isoWeek: 1,
       });
       expect(peaks.peakOutsideTemp).toEqual({
-        sum: -3,
+        mean: 8.5,
         isoWeekYear: 2025,
         isoWeek: 1,
       });
     });
 
-    test('null peak temperature metrics when peak week has no chained temp deltas', () => {
+    test('null peak temperature metrics when peak week has no temperature readings', () => {
       const w1a = {
         datum: '01.01.2025',
         verbrauch_qm: 1,
@@ -442,7 +434,7 @@ describe('Analyze helpers', () => {
       });
     });
 
-    test('sums chained vorlauf_temp and aussentemp deltas in the minimum-consumption ISO week', () => {
+    test('averages vorlauf_temp and aussentemp in the minimum-consumption ISO week', () => {
       const lowA = {
         datum: '01.01.2025',
         delta_betriebsstunden: 0,
@@ -474,12 +466,12 @@ describe('Analyze helpers', () => {
       const mins = computeWeeklyMinimumStats([lowA, lowB, highA, highB]);
       expect(mins.minVerbrauchQm && mins.minVerbrauchQm.isoWeek).toBe(1);
       expect(mins.minVorlaufTemp).toEqual({
-        sum: 1,
+        mean: 40.5,
         isoWeekYear: 2025,
         isoWeek: 1,
       });
       expect(mins.minOutsideTemp).toEqual({
-        sum: -1,
+        mean: 9.5,
         isoWeekYear: 2025,
         isoWeek: 1,
       });

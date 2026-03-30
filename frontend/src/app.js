@@ -1378,32 +1378,10 @@ function formatIsoWeekDdMmRange(isoWeekYear, isoWeek) {
 }
 
 /**
- * Chained delta vs. previous submission in sort order (temperatures have no stored deltas).
- * First row contributes 0; missing predecessor or missing value yields no contribution.
- * @param {object} submission
- * @param {object | null} prevSubmission
- * @param {string} key - e.g. vorlauf_temp, aussentemp
- * @returns {number | null} null = skip adding to weekly sum
- */
-function chainedReadingDelta(submission, prevSubmission, key) {
-    if (!submission || typeof submission !== 'object') {
-        return null;
-    }
-    if (!prevSubmission) {
-        return 0;
-    }
-    const c = normalizeNumber(submission[key]);
-    const p = normalizeNumber(prevSubmission[key]);
-    if (c === null || p === null) {
-        return null;
-    }
-    return c - p;
-}
-
-/**
  * Per-ISO-week aggregates for consumption-related stats (same rules as peak/min week cards).
+ * Temperatures: sum and count of present vorlauf_temp / aussentemp readings per week (same fields as history table).
  * @param {object[]} sortedSubmissions
- * @returns {Array<{ isoWeekYear: number, isoWeek: number, sumDeltaBetriebsstunden: number, sumDeltaStarts: number, sumVerbrauchQm: number, sumDeltaVorlauf: number, sumDeltaAussen: number, vorlaufDeltaCount: number, aussenDeltaCount: number }>}
+ * @returns {Array<{ isoWeekYear: number, isoWeek: number, sumDeltaBetriebsstunden: number, sumDeltaStarts: number, sumVerbrauchQm: number, sumVorlaufTemp: number, sumAussentemp: number, vorlaufTempCount: number, aussentempCount: number }>}
  */
 function buildWeeklyConsumptionBuckets(sortedSubmissions) {
     if (!Array.isArray(sortedSubmissions) || sortedSubmissions.length === 0) {
@@ -1411,9 +1389,7 @@ function buildWeeklyConsumptionBuckets(sortedSubmissions) {
     }
 
     const map = new Map();
-    for (let i = 0; i < sortedSubmissions.length; i++) {
-        const submission = sortedSubmissions[i];
-        const prevSubmission = i > 0 ? sortedSubmissions[i - 1] : null;
+    for (const submission of sortedSubmissions) {
         const day = getSubmissionUtcDay(submission);
         if (!day) {
             continue;
@@ -1433,10 +1409,10 @@ function buildWeeklyConsumptionBuckets(sortedSubmissions) {
                 sumDeltaBetriebsstunden: 0,
                 sumDeltaStarts: 0,
                 sumVerbrauchQm: 0,
-                sumDeltaVorlauf: 0,
-                sumDeltaAussen: 0,
-                vorlaufDeltaCount: 0,
-                aussenDeltaCount: 0,
+                sumVorlaufTemp: 0,
+                sumAussentemp: 0,
+                vorlaufTempCount: 0,
+                aussentempCount: 0,
             };
             map.set(key, bucket);
         }
@@ -1454,15 +1430,15 @@ function buildWeeklyConsumptionBuckets(sortedSubmissions) {
             bucket.sumVerbrauchQm += v;
         }
 
-        const dVl = chainedReadingDelta(submission, prevSubmission, 'vorlauf_temp');
-        if (dVl !== null) {
-            bucket.sumDeltaVorlauf += dVl;
-            bucket.vorlaufDeltaCount += 1;
+        const vl = normalizeNumber(submission && submission.vorlauf_temp);
+        if (vl !== null) {
+            bucket.sumVorlaufTemp += vl;
+            bucket.vorlaufTempCount += 1;
         }
-        const dAu = chainedReadingDelta(submission, prevSubmission, 'aussentemp');
-        if (dAu !== null) {
-            bucket.sumDeltaAussen += dAu;
-            bucket.aussenDeltaCount += 1;
+        const au = normalizeNumber(submission && submission.aussentemp);
+        if (au !== null) {
+            bucket.sumAussentemp += au;
+            bucket.aussentempCount += 1;
         }
     }
 
@@ -1508,20 +1484,20 @@ function pickWeeklyBucketByConsumptionExtreme(aggregates, mode) {
 
 /**
  * Weekly sums over the same submission list as YTD (typically sorted by calendar day).
- * Per ISO week: sum of delta_betriebsstunden, delta_starts, verbrauch_qm, and chained
- * vorlauf_temp / aussentemp deltas vs. the prior list entry.
+ * Per ISO week: sum of delta_betriebsstunden, delta_starts, verbrauch_qm; vorlauf_temp /
+ * aussentemp as arithmetic mean of present readings in that week (same fields as history).
  * Peak week is the week with maximum sum verbrauch_qm; ties break to lexicographically
  * earlier (isoWeekYear, isoWeek). Operating hours and starts shown are sums for that week.
  * consumptionPeakTied is true when more than one week shares that maximum consumption sum.
- * peakVorlaufTemp / peakOutsideTemp are null when no chained temperature delta contributed in that ISO week.
+ * peakVorlaufTemp / peakOutsideTemp are null when no temperature reading exists in that ISO week.
  *
  * @param {object[]} sortedSubmissions
  * @returns {{
  *   peakBetriebsstunden: { sum: number, isoWeekYear: number, isoWeek: number } | null,
  *   peakStarts: { sum: number, isoWeekYear: number, isoWeek: number } | null,
  *   peakVerbrauchQm: { sum: number, isoWeekYear: number, isoWeek: number } | null,
- *   peakVorlaufTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
- *   peakOutsideTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   peakVorlaufTemp: { mean: number, isoWeekYear: number, isoWeek: number } | null,
+ *   peakOutsideTemp: { mean: number, isoWeekYear: number, isoWeek: number } | null,
  *   consumptionPeakTied: boolean,
  * }}
  */
@@ -1571,16 +1547,16 @@ function computeWeeklyPeakStats(sortedSubmissions) {
             isoWeekYear,
             isoWeek,
         },
-        peakVorlaufTemp: bestAgg.vorlaufDeltaCount > 0
+        peakVorlaufTemp: bestAgg.vorlaufTempCount > 0
             ? {
-                sum: bestAgg.sumDeltaVorlauf,
+                mean: bestAgg.sumVorlaufTemp / bestAgg.vorlaufTempCount,
                 isoWeekYear,
                 isoWeek,
             }
             : null,
-        peakOutsideTemp: bestAgg.aussenDeltaCount > 0
+        peakOutsideTemp: bestAgg.aussentempCount > 0
             ? {
-                sum: bestAgg.sumDeltaAussen,
+                mean: bestAgg.sumAussentemp / bestAgg.aussentempCount,
                 isoWeekYear,
                 isoWeek,
             }
@@ -1591,6 +1567,7 @@ function computeWeeklyPeakStats(sortedSubmissions) {
 
 /**
  * Same weekly aggregation as peak; selects the ISO week with minimum sum verbrauch_qm.
+ * Temperatures for that week are means of present vorlauf_temp / aussentemp (as for peak).
  * The current UTC ISO week is omitted from the candidate set (incomplete partial week).
  * Ties break to lexicographically earlier (isoWeekYear, isoWeek).
  *
@@ -1599,8 +1576,8 @@ function computeWeeklyPeakStats(sortedSubmissions) {
  *   minBetriebsstunden: { sum: number, isoWeekYear: number, isoWeek: number } | null,
  *   minStarts: { sum: number, isoWeekYear: number, isoWeek: number } | null,
  *   minVerbrauchQm: { sum: number, isoWeekYear: number, isoWeek: number } | null,
- *   minVorlaufTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
- *   minOutsideTemp: { sum: number, isoWeekYear: number, isoWeek: number } | null,
+ *   minVorlaufTemp: { mean: number, isoWeekYear: number, isoWeek: number } | null,
+ *   minOutsideTemp: { mean: number, isoWeekYear: number, isoWeek: number } | null,
  *   consumptionMinimumTied: boolean,
  * }}
  */
@@ -1656,16 +1633,16 @@ function computeWeeklyMinimumStats(sortedSubmissions) {
             isoWeekYear,
             isoWeek,
         },
-        minVorlaufTemp: bestAgg.vorlaufDeltaCount > 0
+        minVorlaufTemp: bestAgg.vorlaufTempCount > 0
             ? {
-                sum: bestAgg.sumDeltaVorlauf,
+                mean: bestAgg.sumVorlaufTemp / bestAgg.vorlaufTempCount,
                 isoWeekYear,
                 isoWeek,
             }
             : null,
-        minOutsideTemp: bestAgg.aussenDeltaCount > 0
+        minOutsideTemp: bestAgg.aussentempCount > 0
             ? {
-                sum: bestAgg.sumDeltaAussen,
+                mean: bestAgg.sumAussentemp / bestAgg.aussentempCount,
                 isoWeekYear,
                 isoWeek,
             }
@@ -1886,7 +1863,7 @@ function formatPeakTempValue(peak, valueOpts) {
     if (!peak || typeof peak !== 'object') {
         return '---';
     }
-    return formatMetricValue(peak.sum, valueOpts);
+    return formatMetricValue(peak.mean, valueOpts);
 }
 
 /**
