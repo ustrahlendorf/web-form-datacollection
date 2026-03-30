@@ -1079,11 +1079,11 @@ function displayRecentSubmissions(submissions) {
                     <span class="recent-item-value">${submission.verbrauch_qm} m³ <span class="delta">${formatDelta(getDeltaValue(submission, 'delta_verbrauch_qm', 'verbrauch_qm_delta'), { kind: 'decimal', decimals: 2 })}</span></span>
                 </div>
                 <div class="recent-item-field">
-                    <span class="recent-item-label">Supply Temp:</span>
+                    <span class="recent-item-label">Supply-Temp. (°C):</span>
                     <span class="recent-item-value">${submission.vorlauf_temp != null ? Number(submission.vorlauf_temp).toFixed(1) + ' °C' : '—'}</span>
                 </div>
                 <div class="recent-item-field">
-                    <span class="recent-item-label">Outside-Temp. Sensor:</span>
+                    <span class="recent-item-label">Out-Temp. Sensor (°C):</span>
                     <span class="recent-item-value">${submission.aussentemp != null ? Number(submission.aussentemp).toFixed(1) + ' °C' : '—'}</span>
                 </div>
             </div>
@@ -1138,8 +1138,8 @@ function displayHistory(submissions) {
                     <th>Δ Starts</th>
                     <th>Consumption (m³)</th>
                     <th>Δ Consumption (m³)</th>
-                    <th>Supply Temp (°C)</th>
-                    <th>Outside-Temp. Sensor (°C)</th>
+                    <th>Supply-Temp. (°C)</th>
+                    <th>Out-Temp. Sensor (°C)</th>
                     <th>Submitted (Local)</th>
                 </tr>
             </thead>
@@ -1904,11 +1904,11 @@ function renderAnalyzePeakWeek(peaks) {
                     <span class="analyze-metric-value">${formatPeakScalarValue(p.peakStarts, { kind: 'int' })}</span>
                 </div>
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Supply Temp. (°C)</span>
+                    <span class="analyze-metric-label">Supply-Temp. (°C)</span>
                     <span class="analyze-metric-value">${formatPeakTempValue(p.peakVorlaufTemp, { kind: 'decimal', decimals: 1 })}</span>
                 </div>
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Outside Temp Sensor (°C)</span>
+                    <span class="analyze-metric-label">Out-Temp. Sensor (°C)</span>
                     <span class="analyze-metric-value">${formatPeakTempValue(p.peakOutsideTemp, { kind: 'decimal', decimals: 1 })}</span>
                 </div>
             </div>
@@ -1954,11 +1954,11 @@ function renderAnalyzeMinWeek(mins) {
                     <span class="analyze-metric-value">${formatPeakScalarValue(m.minStarts, { kind: 'int' })}</span>
                 </div>
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Supply Temp. (°C)</span>
+                    <span class="analyze-metric-label">Supply-Temp. (°C)</span>
                     <span class="analyze-metric-value">${formatPeakTempValue(m.minVorlaufTemp, { kind: 'decimal', decimals: 1 })}</span>
                 </div>
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Outside Temp Sensor (°C)</span>
+                    <span class="analyze-metric-label">Out-Temp. Sensor (°C)</span>
                     <span class="analyze-metric-value">${formatPeakTempValue(m.minOutsideTemp, { kind: 'decimal', decimals: 1 })}</span>
                 </div>
             </div>
@@ -2087,11 +2087,11 @@ function renderLiveData(data) {
                     <span class="analyze-metric-value">${formatVal(data.starts)}</span>
                 </div>
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Supply Temp (°C)</span>
+                    <span class="analyze-metric-label">Supply-Temp. (°C)</span>
                     <span class="analyze-metric-value">${formatVal(data.supply_temp)}</span>
                 </div>
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Outside-Temp. Sensor (°C)</span>
+                    <span class="analyze-metric-label">Out-Temp. Sensor (°C)</span>
                     <span class="analyze-metric-value">${formatVal(data.outside_temp)}</span>
                 </div>
             </div>
