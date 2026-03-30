@@ -355,13 +355,6 @@ input[type="number"].error {
     min-height: 160px;
 }
 
-.analyze-totals-range {
-    margin-bottom: 0.75rem;
-    color: #7f8c8d;
-    font-size: 0.95rem;
-    line-height: 1.35;
-}
-
 .analyze-card-title {
     margin-bottom: 1rem;
     color: #34495e;

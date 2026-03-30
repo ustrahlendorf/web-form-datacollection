@@ -2038,9 +2038,9 @@ function renderAnalyzeTotals(stats) {
 
     container.innerHTML = `
         <div class="analyze-card">
-            <div class="analyze-totals-range">${rangeText}</div>
             <div class="analyze-card-title">Totals</div>
             <div class="analyze-metrics">
+                <div class="analyze-peak-week-range-line" role="note">${rangeText}</div>
                 <div class="analyze-metric">
                     <span class="analyze-metric-label">Consumption (m³)</span>
                     <span class="analyze-metric-value">${formatMetricValue(stats.totalConsumption, { kind: 'decimal', decimals: 2 })}</span>
