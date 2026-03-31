@@ -671,11 +671,9 @@ function formatSettingsDateTime(value) {
 
 function renderSettingsDeploymentStatus(deployment, note = '') {
     const stateEl = document.getElementById('settings-deployment-state');
-    const numberEl = document.getElementById('settings-deployment-number');
     const versionEl = document.getElementById('settings-deployment-config-version');
-    const startedEl = document.getElementById('settings-deployment-started-at');
-    const completedEl = document.getElementById('settings-deployment-completed-at');
-    const progressEl = document.getElementById('settings-deployment-progress');
+    const timeLabelEl = document.getElementById('settings-deployment-time-label');
+    const timeAtEl = document.getElementById('settings-deployment-time-at');
     const noteEl = document.getElementById('settings-deployment-note');
 
     const stateText = deployment && deployment.state ? String(deployment.state) : 'Unknown';
@@ -691,26 +689,24 @@ function renderSettingsDeploymentStatus(deployment, note = '') {
             stateEl.classList.add(stateClass);
         }
     }
-    if (numberEl) {
-        numberEl.textContent = deployment && deployment.deploymentNumber != null
-            ? String(deployment.deploymentNumber)
-            : '-';
-    }
     if (versionEl) {
         versionEl.textContent = deployment && deployment.configurationVersion
             ? String(deployment.configurationVersion)
             : '-';
     }
-    if (startedEl) {
-        startedEl.textContent = formatSettingsDateTime(deployment && deployment.startedAt);
-    }
-    if (completedEl) {
-        completedEl.textContent = formatSettingsDateTime(deployment && deployment.completedAt);
-    }
-    if (progressEl) {
-        progressEl.textContent = deployment && Number.isFinite(Number(deployment.percentageComplete))
-            ? `${Math.round(Number(deployment.percentageComplete))}%`
-            : '-';
+    if (timeLabelEl && timeAtEl) {
+        const completedRaw = deployment && deployment.completedAt;
+        const startedRaw = deployment && deployment.startedAt;
+        if (completedRaw) {
+            timeLabelEl.textContent = 'Completed';
+            timeAtEl.textContent = formatSettingsDateTime(completedRaw);
+        } else if (startedRaw) {
+            timeLabelEl.textContent = 'Started';
+            timeAtEl.textContent = formatSettingsDateTime(startedRaw);
+        } else {
+            timeLabelEl.textContent = 'Last update';
+            timeAtEl.textContent = '-';
+        }
     }
     if (noteEl) {
         noteEl.textContent = note || '';
@@ -858,8 +854,7 @@ async function refreshSettingsDeploymentStatus(deploymentNumber = null, options 
             renderSettingsDeploymentStatus(null, 'No deployment found yet.');
             return null;
         }
-        const stateValue = String(deployment.state || 'UNKNOWN');
-        renderSettingsDeploymentStatus(deployment, `Last update: state is ${stateValue}.`);
+        renderSettingsDeploymentStatus(deployment, '');
         return deployment;
     } catch (error) {
         console.error('Error loading deployment status:', error);
@@ -889,10 +884,7 @@ function startSettingsDeploymentPolling(deploymentNumber) {
         }
 
         if (isSettingsDeploymentTerminal(deployment.state)) {
-            renderSettingsDeploymentStatus(
-                deployment,
-                `Deployment reached terminal state ${deployment.state}.`
-            );
+            renderSettingsDeploymentStatus(deployment, '');
             clearSettingsDeploymentPolling();
             return;
         }
