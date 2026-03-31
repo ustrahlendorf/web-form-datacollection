@@ -41,6 +41,8 @@ Notes:
 - The Taskfile loads `taskfile.env` automatically (default: `SSM_NAMESPACE_PREFIX=/HeatingDataCollection`).
 - Use `PFX="${SSM_NAMESPACE_PREFIX:-/HeatingDataCollection}"` in ad-hoc CLI commands to avoid hardcoded namespace paths.
 - For `deploy-dynamodb`, `deploy-api`, and `deploy-frontend`, set `ACTIVE_SUBMISSIONS_TABLE_NAME` and `PASSIVE_SUBMISSIONS_TABLE_NAME` in `taskfile.env` (e.g. `submissions-2025` / `submissions-2026`). `deploy-init` uses placeholders when these are unset.
+- `task deploy-api` deploys the API stack **exclusively** (good for rollover or when dependencies are already current). Use `task deploy-api-with-deps` when you want CDK to deploy dependency stacks (Init, Cognito, DynamoDB, AppConfig, etc.) in the same run. Run `task deploy:deps` for a static matrix of which stacks each deploy task pulls in.
+- Inspect Init SSM parameters with `task ssm:init:show` or the compact listing `task ssm:init:show-compact`.
 - Frontend asset upload is still performed from `web-form-verbrauch/frontend/` (next section).
 
 ## deploy frontend assets (S3 + CloudFront)
@@ -60,6 +62,9 @@ bash deploy.sh dev
   - submit works (POST `/submit`)
   - recent works (GET `/recent`)
   - history works (GET `/history`, pagination)
+  - **Analyze** tab loads (client-side stats from history; peak/min consumption weeks, totals, live heating block when configured)
+  - **Settings** tab loads and `GET /config/auto-retrieval` returns config (and optional scheduler metadata) when AppConfig is deployed
+  - **Live** tab works when Viessmann credentials and `/heating/live` are available (see `backend/vis-connect.md`)
 
 ## auto-retrieval (Viessmann API → DynamoDB)
 

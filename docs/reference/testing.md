@@ -39,7 +39,7 @@ It checks that `requirements-heating.txt` stays compatible with the library meta
 
 - validators (date/time/number normalization & range checks)
 - handlers (`/submit`, `/recent`, `/history`) including pagination and user isolation
-- auto-retrieval config API semantics (`GET/PUT /config/auto-retrieval`) including deployment trigger metadata
+- auto-retrieval config API semantics (`GET/PUT /config/auto-retrieval`, `GET /config/auto-retrieval/deployment-status`) including scheduler metadata and deployment trigger fields
 - settings tab payload validation and normalization rules (UUID, active window limits, HH:MM ordering)
 - security posture checks (HTTPS, JWT authorizer, CORS, encryption-at-rest, least-privilege IAM)
 

@@ -35,6 +35,16 @@ Likely:
 - API Gateway CORS allowlist missing the CloudFront origin
 - stack deploy order didn’t wire the CloudFront domain into the API CORS config
 
+### Settings shows “Not available” for scheduler lines
+
+Likely:
+- API Lambda missing IAM for `events:DescribeRule` and/or `scheduler:GetSchedule`, or daily schedule name env not set on the config function
+- Scheduler stack not deployed (`VIESSMANN_CREDENTIALS_SECRET_ARN` gating); config and AppConfig can still work while metadata stays unavailable
+
+First actions:
+- confirm `task deploy-api-with-deps` / scheduler stacks per `runbooks/auto-retrieval-deployment.md`
+- check CloudWatch logs for the auto-retrieval config Lambda when loading Settings
+
 ### submit fails (500) after sending numbers
 
 Likely:

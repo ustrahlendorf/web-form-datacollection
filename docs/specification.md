@@ -55,8 +55,26 @@ UI display:
 - Read-only
 - Paginated (default 20 items)
 - Displays delta columns for operating hours, starts, and consumption
+- Column headers indicate timezone where relevant (see frontend History view)
 
-## 5. API Specification
+## 5. Additional authenticated UI (single-page app)
+
+### 5.1 Analyze
+- **Data source:** same records as history, fetched via `GET /history` (and related pagination); all aggregation runs in the browser.
+- **Totals card:** year-to-date (or available range) sums for consumption (m³), operating hours, starts, day count; optional weekly mean supply and outside temperature for the peak-consumption week and the minimum-consumption week.
+- **Peak week (consumption):** ISO week with highest summed `delta_verbrauch_qm` for the selected year; shows consumption, operating hours, starts, supply and outside temperature aggregates for that week. If multiple weeks tie for peak consumption, the lexicographically earlier ISO week label is shown with a tie notice.
+- **Minimum week (consumption):** same structure for the week with lowest summed consumption; the **current** ISO week is excluded from the minimum statistic so partial weeks do not skew the result.
+- **Live heating block:** when live data is available, shows gas consumption (today / yesterday), operating hours, starts, supply and outside temperatures (labels in English in this view).
+
+### 5.2 Live heating
+- Dedicated tab calling `GET /heating/live` when Viessmann integration is enabled (see `GET /heating/live` below).
+
+### 5.3 Settings (auto-retrieval)
+- Loads effective AppConfig via `GET /config/auto-retrieval` and optional `GET /config/auto-retrieval/deployment-status` for rollout progress.
+- Edits validate in the browser (UUID for `userId`, window count, time ordering) before `PUT /config/auto-retrieval`.
+- Surfaces read-only **scheduler metadata** returned on `GET` (frequent EventBridge rule expression / interval when describable; daily EventBridge Scheduler cron, timezone, schedule name, state when `GetSchedule` is configured).
+
+## 6. API Specification
 
 ### POST /submit
 Creates a submission.
@@ -98,7 +116,7 @@ Query params:
 Returns live heating data from the Viessmann IoT API. Requires Viessmann credentials in Secrets Manager. See `backend/vis-connect.md`.
 
 ### GET /config/auto-retrieval
-Returns the current effective AppConfig document for auto-retrieval runtime behavior.
+Returns the current effective AppConfig document for auto-retrieval runtime behavior, plus read-only scheduler metadata for the Settings UI.
 
 Response 200:
 ```json
@@ -110,9 +128,50 @@ Response 200:
     "retryDelaySeconds": 300,
     "userId": "123e4567-e89b-12d3-a456-426614174000"
   },
-  "versionLabel": "7"
+  "versionLabel": "7",
+  "scheduler": {
+    "frequentRuleName": "heating-auto-retrieval-frequent-dev",
+    "frequentScheduleExpression": "cron(0/15 * * * ? *)",
+    "frequentScheduleCron": "0/15 * * * ? *",
+    "frequentIntervalMinutes": 15,
+    "source": "eventbridge",
+    "available": true,
+    "dailyScheduleName": "heating-auto-retrieval-dev",
+    "dailyScheduleGroupName": "default",
+    "dailyScheduleExpression": "cron(0 7 * * ? *)",
+    "dailyScheduleCron": "0 7 * * ? *",
+    "dailyScheduleTimezone": "Europe/Berlin",
+    "dailyState": "ENABLED",
+    "dailyAvailable": true,
+    "dailySource": "scheduler"
+  }
 }
 ```
+
+Scheduler fields are best-effort: if AWS APIs are unavailable or env wiring is missing, boolean `available` / `dailyAvailable` may be false and string fields may be null. Frequent metadata comes from EventBridge `DescribeRule`; daily metadata from EventBridge Scheduler `GetSchedule` when `AUTO_RETRIEVAL_DAILY_SCHEDULE_NAME` is set on the config Lambda.
+
+### GET /config/auto-retrieval/deployment-status
+Returns the latest AppConfig deployment for the auto-retrieval environment, or a specific deployment when queried.
+
+Query params:
+- `deploymentNumber` (optional): when set, fetches that deployment; otherwise returns the most recent deployment from `ListDeployments` (max one item).
+
+Response 200:
+```json
+{
+  "deployment": {
+    "deploymentNumber": 7,
+    "state": "DEPLOYING",
+    "configurationVersion": "11",
+    "configurationName": null,
+    "startedAt": "2025-12-15T10:00:00+00:00",
+    "completedAt": null,
+    "percentageComplete": 35.0
+  }
+}
+```
+
+`deployment` may be `null` if no deployment exists. Field names mirror AppConfig API attributes normalized for JSON.
 
 ### PUT /config/auto-retrieval
 Validates and publishes a new hosted AppConfig version, then starts an AppConfig deployment for that version.
@@ -142,7 +201,7 @@ Operational semantics:
 - A successful `PUT` means deployment started, not necessarily completed.
 - The Settings tab surfaces deployment metadata (`versionNumber`, `deploymentNumber`, `state`) to confirm trigger details.
 
-## 6. Validation Rules
+## 7. Validation Rules
 - Strict date and time parsing
 - Integers >= 0
 - Float range validation
@@ -153,7 +212,7 @@ Operational semantics:
   - `frequentActiveWindows` must contain `1..5` windows with `HH:MM` and `start < stop`
   - `userId` must be a non-empty string (frontend enforces UUID format)
 
-## 7. Data Storage (DynamoDB)
+## 8. Data Storage (DynamoDB)
 Table: submissions-<env>
 
 Primary key:
@@ -172,7 +231,7 @@ Attributes:
 - delta_starts
 - delta_verbrauch_qm
 
-## 8. Architecture
+## 9. Architecture
 - S3 + CloudFront for frontend
 - API Gateway (HTTP API)
 - Lambda (Python)
@@ -180,7 +239,7 @@ Attributes:
 - Cognito User Pool
 - Region: eu-central-1
 
-## 9. Security
+## 10. Security
 - HTTPS everywhere
 - Least-privilege IAM
 - JWT authorizer
@@ -188,16 +247,17 @@ Attributes:
 
 For detailed security controls and where they are enforced, see `reference/security.md`.
 
-## 10. Observability
+## 11. Observability
 - CloudWatch Logs
 - Error and latency monitoring
 
-## 11. Infrastructure as Code
+## 12. Infrastructure as Code
 - AWS CDK (Python)
 - Separate stacks per environment
 
-## 12. Acceptance Criteria
+## 13. Acceptance Criteria
 - Users can self-register and authenticate
 - Valid data is stored
 - Users can view only their own history
+- Authenticated users can open Analyze (statistics derived from their history) and Settings (auto-retrieval config when deployed)
 - Infrastructure deployed via CDK
