@@ -98,7 +98,7 @@ task export-datalake EXPORT_TARGET=submissions EXPORT_YEAR=2025 EXPORT_MONTH=1
 
 Restrictions for the positional form: exactly **three** tokens after `--`; **order** is fixed (`TARGET` then `YEAR` then `MONTH`); values must not contain spaces.
 
-Shorthand for frequent only: **`export-datalake-auto-retrieval-frequent`** runs `export-datalake -- frequent YEAR MONTH` — still pass **`EXPORT_YEAR`** and **`EXPORT_MONTH`** as Task variables, e.g. `task export-datalake-auto-retrieval-frequent EXPORT_YEAR=2025 EXPORT_MONTH=1`.
+Frequent auto-retrieval only: `task export-datalake -- frequent YEAR MONTH` (same three-argument form).
 
 ### Frequent auto-retrieval table export (script)
 
@@ -117,7 +117,7 @@ python scripts/export_dynamodb_to_s3.py \
   --month 1
 ```
 
-Or use Task: `task export-datalake -- frequent 2025 1`, or named `EXPORT_*` vars, or the alias `export-datalake-auto-retrieval-frequent EXPORT_YEAR=2025 EXPORT_MONTH=1`.
+Or use Task: `task export-datalake -- frequent 2025 1`, or `EXPORT_TARGET=frequent` with named year/month.
 
 Month filtering is the same as for submissions: **Scan + `datum_iso` range** for the requested calendar month. Items written by the frequent Lambda include `datum_iso` like the daily auto-retrieval path.
 
