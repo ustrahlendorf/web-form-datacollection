@@ -103,7 +103,7 @@ tasks:
       - npm test
 
   export-datalake:
-    desc: "Export DynamoDB snapshot(s) to S3 DataLake (EXPORT_TARGET=submissions|passive|frequent|all; EXPORT_YEAR; EXPORT_MONTH; env DATALAKE_BUCKET_NAME)"
+    desc: "Export DynamoDB snapshot(s) to S3 DataLake (preferred task export-datalake -- TARGET YEAR MONTH; or EXPORT_* vars; env DATALAKE_BUCKET_NAME)"
     deps: [_python:require-venv]
     dir: "{{.APP_DIR}}"
     cmds:
@@ -112,14 +112,33 @@ tasks:
           echo "ERROR: Set DATALAKE_BUCKET_NAME (CDK output DataLakeBucketName or add to taskfile.env)." >&2
           exit 1
         fi
-        if [ -z "{{.EXPORT_YEAR}}" ] || [ -z "{{.EXPORT_MONTH}}" ]; then
-          echo "ERROR: Pass EXPORT_YEAR and EXPORT_MONTH (example: task export-datalake EXPORT_TARGET=submissions EXPORT_YEAR=2025 EXPORT_MONTH=3)." >&2
+
+        # Positional args after -- (go-task CLI_ARGS): TARGET YEAR MONTH
+        if [ -n '{{.CLI_ARGS}}' ]; then
+          set -- {{.CLI_ARGS}}
+          if [ "$#" -ne 3 ]; then
+            echo "ERROR: After -- pass exactly 3 arguments: TARGET YEAR MONTH" >&2
+            echo "  Example: task export-datalake -- submissions 2025 2" >&2
+            echo "  TARGET is one of: submissions | passive | frequent | all" >&2
+            exit 1
+          fi
+          TARGET="$1"
+          EXPORT_YEAR="$2"
+          EXPORT_MONTH="$3"
+        else
+          TARGET="{{.EXPORT_TARGET}}"
+          EXPORT_YEAR="{{.EXPORT_YEAR}}"
+          EXPORT_MONTH="{{.EXPORT_MONTH}}"
+        fi
+
+        if [ -z "$EXPORT_YEAR" ] || [ -z "$EXPORT_MONTH" ]; then
+          echo "ERROR: Pass year and month via named vars or positionally after --." >&2
+          echo "  Named:  task export-datalake EXPORT_TARGET=submissions EXPORT_YEAR=2025 EXPORT_MONTH=3" >&2
+          echo "  Args:   task export-datalake -- submissions 2025 3" >&2
           exit 1
         fi
-        TARGET="{{.EXPORT_TARGET}}"
         if [ -z "$TARGET" ]; then
-          echo "ERROR: Pass EXPORT_TARGET: submissions | passive | frequent | all" >&2
-          echo "  Example: task export-datalake EXPORT_TARGET=all EXPORT_YEAR=2025 EXPORT_MONTH=1" >&2
+          echo "ERROR: Pass EXPORT_TARGET (named) or TARGET as first arg after -- (submissions|passive|frequent|all)." >&2
           exit 1
         fi
 
@@ -128,8 +147,8 @@ tasks:
             --preset submissions \
             --bucket "$DATALAKE_BUCKET_NAME" \
             --region "{{.AWS_REGION}}" \
-            --year "{{.EXPORT_YEAR}}" \
-            --month "{{.EXPORT_MONTH}}"
+            --year "$EXPORT_YEAR" \
+            --month "$EXPORT_MONTH"
         }
 
         run_passive() {
@@ -142,8 +161,8 @@ tasks:
             --prefix-base exports/submissions-passive \
             --bucket "$DATALAKE_BUCKET_NAME" \
             --region "{{.AWS_REGION}}" \
-            --year "{{.EXPORT_YEAR}}" \
-            --month "{{.EXPORT_MONTH}}"
+            --year "$EXPORT_YEAR" \
+            --month "$EXPORT_MONTH"
         }
 
         run_frequent() {
@@ -152,8 +171,8 @@ tasks:
             --preset auto_retrieval_frequent \
             --bucket "$DATALAKE_BUCKET_NAME" \
             --region "{{.AWS_REGION}}" \
-            --year "{{.EXPORT_YEAR}}" \
-            --month "{{.EXPORT_MONTH}}"
+            --year "$EXPORT_YEAR" \
+            --month "$EXPORT_MONTH"
         }
 
         case "$TARGET" in
@@ -180,10 +199,10 @@ tasks:
         esac
 
   export-datalake-auto-retrieval-frequent:
-    desc: "Alias for export-datalake EXPORT_TARGET=frequent (same EXPORT_YEAR / EXPORT_MONTH task vars)"
+    desc: "Alias: export-datalake -- frequent YEAR MONTH (pass EXPORT_YEAR and EXPORT_MONTH as task vars)"
     dir: "{{.APP_DIR}}"
     cmds:
-      - task export-datalake EXPORT_TARGET=frequent EXPORT_YEAR={{.EXPORT_YEAR}} EXPORT_MONTH={{.EXPORT_MONTH}}
+      - task export-datalake -- frequent {{.EXPORT_YEAR}} {{.EXPORT_MONTH}}
 
   cdk:synth:
     desc: "CDK synth (requires ACTIVE_/PASSIVE_ table env vars)"
