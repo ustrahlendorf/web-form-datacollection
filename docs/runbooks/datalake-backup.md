@@ -23,6 +23,8 @@ Notes:
 - `exports/auto-retrieval-frequent/year=YYYY/month=MM/snapshot_at=.../part-000.jsonl.gz`
 - `exports/auto-retrieval-frequent/year=YYYY/month=MM/snapshot_at=.../manifest.json`
 
+**Passive submissions** (year table, not currently active for writes) exports use **`exports/submissions-passive/`** when you run Task **`export-datalake`** with `EXPORT_TARGET=passive` or `all` — same partition layout, distinct S3 prefix so Athena/Glue stays separate from active submissions.
+
 ### Prerequisites
 
 - **AWS credentials** available to `boto3` (env vars, shared config, SSO, instance profile, …)
@@ -70,7 +72,30 @@ python scripts/export_dynamodb_to_s3.py \
   --dry-run
 ```
 
-### Frequent auto-retrieval table export
+### Taskfile: unified `export-datalake`
+
+From the repo root, with `DATALAKE_BUCKET_NAME` (and for submissions/passive, `ACTIVE_SUBMISSIONS_TABLE_NAME` / `PASSIVE_SUBMISSIONS_TABLE_NAME`) in `taskfile.env` as for CDK:
+
+| `EXPORT_TARGET` | DynamoDB source | S3 prefix base |
+|-----------------|-----------------|----------------|
+| `submissions` | `ACTIVE_SUBMISSIONS_TABLE_NAME` (via `--preset submissions`) | `exports/submissions/` |
+| `passive` | `PASSIVE_SUBMISSIONS_TABLE_NAME` (`--table` + `--prefix-base`) | `exports/submissions-passive/` |
+| `frequent` | `AUTO_RETRIEVAL_FREQUENT_TABLE_NAME` or default `submissions-auto-retrieval-frequent-<env>` | `exports/auto-retrieval-frequent/` |
+| `all` | Runs **submissions**, then **passive**, then **frequent** (fail-fast) | (each prefix above) |
+
+Pass **`EXPORT_YEAR`** and **`EXPORT_MONTH`** as Task variables (same as other Taskfile tasks).
+
+```bash
+# One dataset
+task export-datalake EXPORT_TARGET=submissions EXPORT_YEAR=2025 EXPORT_MONTH=1
+
+# All three (requires PASSIVE_SUBMISSIONS_TABLE_NAME and ACTIVE_SUBMISSIONS_TABLE_NAME set)
+task export-datalake EXPORT_TARGET=all EXPORT_YEAR=2025 EXPORT_MONTH=1
+```
+
+Shorthand for frequent only: **`export-datalake-auto-retrieval-frequent`** is an alias for `EXPORT_TARGET=frequent`.
+
+### Frequent auto-retrieval table export (script)
 
 The DynamoDB table name follows `submissions-auto-retrieval-frequent-<environment>` (for example `submissions-auto-retrieval-frequent-dev` from [scheduler_frequent_stack.py](../../infrastructure/stacks/scheduler_frequent_stack.py)).
 
@@ -87,12 +112,7 @@ python scripts/export_dynamodb_to_s3.py \
   --month 1
 ```
 
-Or use the Taskfile task (set `DATALAKE_BUCKET_NAME` in `taskfile.env` or the environment; **pass `EXPORT_YEAR` and `EXPORT_MONTH` as Task variables**, not only shell exports):
-
-```bash
-export DATALAKE_BUCKET_NAME=data-collection-datalake-dev-123456789012-eu-central-1
-task export-datalake-auto-retrieval-frequent EXPORT_YEAR=2025 EXPORT_MONTH=1
-```
+Or use Task: `task export-datalake EXPORT_TARGET=frequent EXPORT_YEAR=2025 EXPORT_MONTH=1` (or the alias `export-datalake-auto-retrieval-frequent`).
 
 Month filtering is the same as for submissions: **Scan + `datum_iso` range** for the requested calendar month. Items written by the frequent Lambda include `datum_iso` like the daily auto-retrieval path.
 

@@ -102,8 +102,8 @@ tasks:
     cmds:
       - npm test
 
-  export-datalake-auto-retrieval-frequent:
-    desc: "Export frequent auto-retrieval DynamoDB table to S3 DataLake (env DATALAKE_BUCKET_NAME; pass EXPORT_YEAR and EXPORT_MONTH as task vars; optional AUTO_RETRIEVAL_FREQUENT_TABLE_NAME)"
+  export-datalake:
+    desc: "Export DynamoDB snapshot(s) to S3 DataLake (EXPORT_TARGET=submissions|passive|frequent|all; EXPORT_YEAR; EXPORT_MONTH; env DATALAKE_BUCKET_NAME)"
     deps: [_python:require-venv]
     dir: "{{.APP_DIR}}"
     cmds:
@@ -113,16 +113,77 @@ tasks:
           exit 1
         fi
         if [ -z "{{.EXPORT_YEAR}}" ] || [ -z "{{.EXPORT_MONTH}}" ]; then
-          echo "ERROR: Pass task variables EXPORT_YEAR and EXPORT_MONTH (example: task export-datalake-auto-retrieval-frequent EXPORT_YEAR=2025 EXPORT_MONTH=3)." >&2
+          echo "ERROR: Pass EXPORT_YEAR and EXPORT_MONTH (example: task export-datalake EXPORT_TARGET=submissions EXPORT_YEAR=2025 EXPORT_MONTH=3)." >&2
           exit 1
         fi
-        export AUTO_RETRIEVAL_FREQUENT_TABLE_NAME="${AUTO_RETRIEVAL_FREQUENT_TABLE_NAME:-submissions-auto-retrieval-frequent-{{.ENV_NAME}}}"
-        python3 scripts/export_dynamodb_to_s3.py \
-          --preset auto_retrieval_frequent \
-          --bucket "$DATALAKE_BUCKET_NAME" \
-          --region "{{.AWS_REGION}}" \
-          --year "{{.EXPORT_YEAR}}" \
-          --month "{{.EXPORT_MONTH}}"
+        TARGET="{{.EXPORT_TARGET}}"
+        if [ -z "$TARGET" ]; then
+          echo "ERROR: Pass EXPORT_TARGET: submissions | passive | frequent | all" >&2
+          echo "  Example: task export-datalake EXPORT_TARGET=all EXPORT_YEAR=2025 EXPORT_MONTH=1" >&2
+          exit 1
+        fi
+
+        run_submissions() {
+          python3 scripts/export_dynamodb_to_s3.py \
+            --preset submissions \
+            --bucket "$DATALAKE_BUCKET_NAME" \
+            --region "{{.AWS_REGION}}" \
+            --year "{{.EXPORT_YEAR}}" \
+            --month "{{.EXPORT_MONTH}}"
+        }
+
+        run_passive() {
+          if [ -z "${PASSIVE_SUBMISSIONS_TABLE_NAME:-}" ]; then
+            echo "ERROR: PASSIVE_SUBMISSIONS_TABLE_NAME is not set (add to taskfile.env for CDK; required for EXPORT_TARGET=passive or all)." >&2
+            exit 1
+          fi
+          python3 scripts/export_dynamodb_to_s3.py \
+            --table "$PASSIVE_SUBMISSIONS_TABLE_NAME" \
+            --prefix-base exports/submissions-passive \
+            --bucket "$DATALAKE_BUCKET_NAME" \
+            --region "{{.AWS_REGION}}" \
+            --year "{{.EXPORT_YEAR}}" \
+            --month "{{.EXPORT_MONTH}}"
+        }
+
+        run_frequent() {
+          export AUTO_RETRIEVAL_FREQUENT_TABLE_NAME="${AUTO_RETRIEVAL_FREQUENT_TABLE_NAME:-submissions-auto-retrieval-frequent-{{.ENV_NAME}}}"
+          python3 scripts/export_dynamodb_to_s3.py \
+            --preset auto_retrieval_frequent \
+            --bucket "$DATALAKE_BUCKET_NAME" \
+            --region "{{.AWS_REGION}}" \
+            --year "{{.EXPORT_YEAR}}" \
+            --month "{{.EXPORT_MONTH}}"
+        }
+
+        case "$TARGET" in
+          submissions)
+            run_submissions
+            ;;
+          passive)
+            run_passive
+            ;;
+          frequent)
+            run_frequent
+            ;;
+          all)
+            run_submissions || exit $?
+            echo "--- passive submissions ---"
+            run_passive || exit $?
+            echo "--- frequent auto-retrieval ---"
+            run_frequent || exit $?
+            ;;
+          *)
+            echo "ERROR: EXPORT_TARGET must be submissions, passive, frequent, or all (got: $TARGET)" >&2
+            exit 1
+            ;;
+        esac
+
+  export-datalake-auto-retrieval-frequent:
+    desc: "Alias for export-datalake EXPORT_TARGET=frequent (same EXPORT_YEAR / EXPORT_MONTH task vars)"
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - task export-datalake EXPORT_TARGET=frequent EXPORT_YEAR={{.EXPORT_YEAR}} EXPORT_MONTH={{.EXPORT_MONTH}}
 
   cdk:synth:
     desc: "CDK synth (requires ACTIVE_/PASSIVE_ table env vars)"

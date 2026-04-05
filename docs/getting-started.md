@@ -79,7 +79,7 @@ If you are switching active ↔ passive tables via SSM pointers, follow:
 ## backups / exports
 
 Monthly snapshot exports to S3:
-- `runbooks/datalake-backup.md`
+- `runbooks/datalake-backup.md` (includes `task export-datalake` with `EXPORT_TARGET=submissions|passive|frequent|all`)
 
 ## troubleshooting
 
