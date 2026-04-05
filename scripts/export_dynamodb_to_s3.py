@@ -10,10 +10,16 @@ DynamoDB's managed export-to-S3 features, we can do a simple ops-friendly export
 - Gzip the payload
 - Upload to a private, versioned S3 “mini DataLake” bucket
 
-The output layout is designed to be analytics-friendly (Athena/Glue partitions):
+The output layout is designed to be analytics-friendly (Athena/Glue partitions).
+
+Submissions (manual / year tables), default prefix ``exports/submissions/``:
   exports/submissions/year=YYYY/month=MM/snapshot_at=YYYY-MM-DDTHHMMSSZ/
     - part-000.jsonl.gz
     - manifest.json
+
+Frequent auto-retrieval table (``submissions-auto-retrieval-frequent-<env>``), use
+``--preset auto_retrieval_frequent`` → default prefix ``exports/auto-retrieval-frequent/``
+and table name from env ``AUTO_RETRIEVAL_FREQUENT_TABLE_NAME`` unless ``--table`` is set.
 
 Security notes
 --------------
@@ -45,6 +51,7 @@ from typing import Any, Dict, Iterable, Optional, Tuple
 
 DEFAULT_REGION = "eu-central-1"
 DEFAULT_PREFIX_BASE = "exports/submissions"
+DEFAULT_PREFIX_AUTO_RETRIEVAL_FREQUENT = "exports/auto-retrieval-frequent"
 
 
 @dataclass(frozen=True)
@@ -67,6 +74,12 @@ def _default_table_name_from_env() -> Optional[str]:
     - SUBMISSIONS_TABLE (runtime Lambda env var name)
     """
     return os.environ.get("ACTIVE_SUBMISSIONS_TABLE_NAME") or os.environ.get("SUBMISSIONS_TABLE")
+
+
+def _frequent_table_name_from_env() -> Optional[str]:
+    """DynamoDB table for EventBridge frequent auto-retrieval (SchedulerFrequentStack)."""
+    name = os.environ.get("AUTO_RETRIEVAL_FREQUENT_TABLE_NAME")
+    return name.strip() if name else None
 
 
 def _format_iso_utc(dt: datetime) -> str:
@@ -204,9 +217,24 @@ def parse_args(argv: Optional[list[str]] = None) -> ExportConfig:
     parser.add_argument("--table", default=None, help="Source DynamoDB table name")
     parser.add_argument("--region", default=DEFAULT_REGION, help="AWS region")
     parser.add_argument(
+        "--preset",
+        choices=("submissions", "auto_retrieval_frequent"),
+        default="submissions",
+        help=(
+            "submissions: default prefix "
+            f"{DEFAULT_PREFIX_BASE!r}, table from ACTIVE_SUBMISSIONS_TABLE_NAME / SUBMISSIONS_TABLE; "
+            "auto_retrieval_frequent: default prefix "
+            f"{DEFAULT_PREFIX_AUTO_RETRIEVAL_FREQUENT!r}, table from AUTO_RETRIEVAL_FREQUENT_TABLE_NAME. "
+            "--table and --prefix-base always override preset defaults."
+        ),
+    )
+    parser.add_argument(
         "--prefix-base",
-        default=DEFAULT_PREFIX_BASE,
-        help=f"S3 prefix base (default: {DEFAULT_PREFIX_BASE})",
+        default=None,
+        help=(
+            "S3 prefix base (omit to use preset default: "
+            f"{DEFAULT_PREFIX_BASE!r} or {DEFAULT_PREFIX_AUTO_RETRIEVAL_FREQUENT!r})"
+        ),
     )
     parser.add_argument("--year", type=int, required=True, help="Year to export (e.g. 2025)")
     parser.add_argument("--month", type=int, required=True, help="Month to export (1-12)")
@@ -215,14 +243,31 @@ def parse_args(argv: Optional[list[str]] = None) -> ExportConfig:
 
     args = parser.parse_args(argv)
 
-    table_name = str(args.table).strip() if args.table else (_default_table_name_from_env() or "").strip()
-    if not table_name:
-        raise SystemExit(
-            "Missing DynamoDB table name. Provide --table or set ACTIVE_SUBMISSIONS_TABLE_NAME "
-            "(preferred) / SUBMISSIONS_TABLE."
-        )
+    if args.table:
+        table_name = str(args.table).strip()
+    elif args.preset == "auto_retrieval_frequent":
+        table_name = (_frequent_table_name_from_env() or "").strip()
+        if not table_name:
+            raise SystemExit(
+                "Missing DynamoDB table name for preset auto_retrieval_frequent. "
+                "Provide --table or set AUTO_RETRIEVAL_FREQUENT_TABLE_NAME."
+            )
+    else:
+        table_name = (_default_table_name_from_env() or "").strip()
+        if not table_name:
+            raise SystemExit(
+                "Missing DynamoDB table name. Provide --table or set ACTIVE_SUBMISSIONS_TABLE_NAME "
+                "(preferred) / SUBMISSIONS_TABLE."
+            )
 
-    prefix_base = str(args.prefix_base).strip().strip("/")
+    if args.prefix_base is not None:
+        prefix_base = str(args.prefix_base).strip().strip("/")
+    else:
+        prefix_base = (
+            DEFAULT_PREFIX_AUTO_RETRIEVAL_FREQUENT
+            if args.preset == "auto_retrieval_frequent"
+            else DEFAULT_PREFIX_BASE
+        )
     if not prefix_base:
         raise SystemExit("prefix-base must not be empty")
 

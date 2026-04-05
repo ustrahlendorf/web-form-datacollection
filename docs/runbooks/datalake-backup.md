@@ -18,6 +18,11 @@ Notes:
 - `snapshot_at=...` allows multiple snapshots per month without overwriting.
 - The bucket is **versioned**, so even overwrites are recoverable.
 
+**Frequent auto-retrieval** (SchedulerFrequent stack) uses the same file format but a **separate** prefix so Glue/Athena can register a second table without mixing datasets:
+
+- `exports/auto-retrieval-frequent/year=YYYY/month=MM/snapshot_at=.../part-000.jsonl.gz`
+- `exports/auto-retrieval-frequent/year=YYYY/month=MM/snapshot_at=.../manifest.json`
+
 ### Prerequisites
 
 - **AWS credentials** available to `boto3` (env vars, shared config, SSO, instance profile, …)
@@ -64,6 +69,74 @@ python scripts/export_dynamodb_to_s3.py \
   --month 1 \
   --dry-run
 ```
+
+### Frequent auto-retrieval table export
+
+The DynamoDB table name follows `submissions-auto-retrieval-frequent-<environment>` (for example `submissions-auto-retrieval-frequent-dev` from [scheduler_frequent_stack.py](../../infrastructure/stacks/scheduler_frequent_stack.py)).
+
+Use **`--preset auto_retrieval_frequent`**, which sets the S3 prefix to `exports/auto-retrieval-frequent/` and reads the table name from **`AUTO_RETRIEVAL_FREQUENT_TABLE_NAME`** unless you pass **`--table`**.
+
+```bash
+export AUTO_RETRIEVAL_FREQUENT_TABLE_NAME=submissions-auto-retrieval-frequent-dev
+export DATALAKE_BUCKET_NAME=data-collection-datalake-dev-123456789012-eu-central-1
+python scripts/export_dynamodb_to_s3.py \
+  --preset auto_retrieval_frequent \
+  --bucket "$DATALAKE_BUCKET_NAME" \
+  --region eu-central-1 \
+  --year 2025 \
+  --month 1
+```
+
+Or use the Taskfile task (set `DATALAKE_BUCKET_NAME` in `taskfile.env` or the environment; **pass `EXPORT_YEAR` and `EXPORT_MONTH` as Task variables**, not only shell exports):
+
+```bash
+export DATALAKE_BUCKET_NAME=data-collection-datalake-dev-123456789012-eu-central-1
+task export-datalake-auto-retrieval-frequent EXPORT_YEAR=2025 EXPORT_MONTH=1
+```
+
+Month filtering is the same as for submissions: **Scan + `datum_iso` range** for the requested calendar month. Items written by the frequent Lambda include `datum_iso` like the daily auto-retrieval path.
+
+### Athena and AWS Glue
+
+**Partitions:** Hive-style keys in the object path are `year`, `month`, and `snapshot_at`. In Athena, define these as **string** partition columns and point the table `LOCATION` at the dataset prefix (`exports/submissions/` or `exports/auto-retrieval-frequent/`).
+
+**Manifest sidecar:** Each snapshot folder contains `manifest.json` next to `part-000.jsonl.gz`. Glue crawlers should **not** classify that file as data. Prefer either:
+
+- a crawler **exclude pattern** that skips `**/manifest.json`, or
+- a **data path** / classifier that only matches `*.jsonl.gz`.
+
+**Data format:** One JSON object per line, gzip-compressed (`.jsonl.gz`). For Athena, a common choice is the **OpenX JSON SerDe** on a table with `STORED AS TEXTFILE` and data files ending in `.gz` (Athena recognizes gzip by suffix). You will likely need to run **`MSCK REPAIR TABLE`** (or use a Glue crawler) after new partitions appear, unless you configure **partition projection** on the table.
+
+Example external table skeleton (replace bucket, adjust columns to match your items after a sample query):
+
+```sql
+CREATE EXTERNAL TABLE IF NOT EXISTS auto_retrieval_frequent_export (
+  user_id string,
+  timestamp_utc string,
+  datum string,
+  datum_iso string,
+  uhrzeit string,
+  betriebsstunden bigint,
+  starts bigint,
+  verbrauch_qm string,
+  delta_betriebsstunden bigint,
+  delta_starts bigint,
+  delta_verbrauch_qm string
+  -- add optional vorlauf_temp, aussentemp, etc. as needed
+)
+PARTITIONED BY (
+  year string,
+  month string,
+  snapshot_at string
+)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+WITH SERDEPROPERTIES ('ignore.malformed.json' = 'true')
+STORED AS TEXTFILE
+LOCATION 's3://YOUR_DATALAKE_BUCKET/exports/auto-retrieval-frequent/'
+TBLPROPERTIES ('classification'='json');
+```
+
+After uploading new snapshots, run `MSCK REPAIR TABLE auto_retrieval_frequent_export;` so partitions are discovered (or maintain a crawler on that prefix with the manifest excluded).
 
 ### How month filtering works (important)
 

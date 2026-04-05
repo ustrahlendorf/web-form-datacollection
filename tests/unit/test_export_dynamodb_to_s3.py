@@ -3,9 +3,12 @@ from decimal import Decimal
 import pytest
 
 from scripts.export_dynamodb_to_s3 import (
+    DEFAULT_PREFIX_AUTO_RETRIEVAL_FREQUENT,
+    DEFAULT_PREFIX_BASE,
     _build_s3_keys,
     _json_default,
     _month_window_iso_date,
+    parse_args,
 )
 
 
@@ -48,5 +51,89 @@ def test_json_default_decimal() -> None:
 def test_json_default_unsupported_type() -> None:
     with pytest.raises(TypeError):
         _json_default(object())
+
+
+def test_parse_args_submissions_default_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ACTIVE_SUBMISSIONS_TABLE_NAME", "submissions-2025")
+    cfg = parse_args(["--bucket", "b", "--year", "2025", "--month", "1"])
+    assert cfg.table_name == "submissions-2025"
+    assert cfg.prefix_base == DEFAULT_PREFIX_BASE
+
+
+def test_parse_args_preset_auto_retrieval_frequent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ACTIVE_SUBMISSIONS_TABLE_NAME", raising=False)
+    monkeypatch.setenv(
+        "AUTO_RETRIEVAL_FREQUENT_TABLE_NAME",
+        "submissions-auto-retrieval-frequent-dev",
+    )
+    cfg = parse_args(
+        [
+            "--bucket",
+            "b",
+            "--year",
+            "2025",
+            "--month",
+            "1",
+            "--preset",
+            "auto_retrieval_frequent",
+        ]
+    )
+    assert cfg.table_name == "submissions-auto-retrieval-frequent-dev"
+    assert cfg.prefix_base == DEFAULT_PREFIX_AUTO_RETRIEVAL_FREQUENT
+
+
+def test_parse_args_table_overrides_frequent_preset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AUTO_RETRIEVAL_FREQUENT_TABLE_NAME", "frequent-env")
+    cfg = parse_args(
+        [
+            "--bucket",
+            "b",
+            "--year",
+            "2025",
+            "--month",
+            "1",
+            "--preset",
+            "auto_retrieval_frequent",
+            "--table",
+            "other-table",
+        ]
+    )
+    assert cfg.table_name == "other-table"
+
+
+def test_parse_args_prefix_overrides_frequent_preset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AUTO_RETRIEVAL_FREQUENT_TABLE_NAME", "x")
+    cfg = parse_args(
+        [
+            "--bucket",
+            "b",
+            "--year",
+            "2025",
+            "--month",
+            "1",
+            "--preset",
+            "auto_retrieval_frequent",
+            "--prefix-base",
+            "custom/prefix",
+        ]
+    )
+    assert cfg.prefix_base == "custom/prefix"
+
+
+def test_parse_args_frequent_missing_table_exits(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AUTO_RETRIEVAL_FREQUENT_TABLE_NAME", raising=False)
+    with pytest.raises(SystemExit):
+        parse_args(
+            [
+                "--bucket",
+                "b",
+                "--year",
+                "2025",
+                "--month",
+                "1",
+                "--preset",
+                "auto_retrieval_frequent",
+            ]
+        )
 
 
