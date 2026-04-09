@@ -44,11 +44,6 @@ def create_app() -> App:
     """
     app = App()
 
-    # Global tags applied to all stacks in this app
-    Tags.of(app).add("Project", "data-collection")
-    Tags.of(app).add("ManagedBy", "CDK")
-    Tags.of(app).add("Creator", "uwe-strahlendorf")
-
     # Define the environment configuration.
     # CDK requires an account for non-environment-agnostic stacks; the CDK CLI
     # typically provides CDK_DEFAULT_ACCOUNT/CDK_DEFAULT_REGION automatically.
@@ -58,6 +53,22 @@ def create_app() -> App:
     )
 
     environment_name = "dev"
+
+    # Global tags (propagate to taggable resources). Activate keys in AWS Billing
+    # console under Cost allocation tags for Cost Explorer / chargeback.
+    Tags.of(app).add("Project", "data-collection")
+    Tags.of(app).add("Environment", environment_name)
+    Tags.of(app).add("ManagedBy", "CDK")
+    Tags.of(app).add("Creator", "uwe-strahlendorf")
+    _cost_center = os.environ.get("COST_CENTER", "").strip()
+    if _cost_center:
+        Tags.of(app).add("CostCenter", _cost_center)
+    _application = os.environ.get("APPLICATION", "").strip()
+    if _application:
+        Tags.of(app).add("Application", _application)
+    _owner = os.environ.get("OWNER", "").strip()
+    if _owner:
+        Tags.of(app).add("Owner", _owner)
     ssm_namespace_prefix = _normalize_ssm_namespace_prefix(
         os.environ.get("SSM_NAMESPACE_PREFIX", "/HeatingDataCollection")
     )
@@ -92,6 +103,7 @@ def create_app() -> App:
         env=env_config,
         description="Data Collection Web Application - Init (dev)",
     )
+    Tags.of(init_stack).add("Component", "init")
 
     appconfig_stack = AppConfigStack(
         app,
@@ -100,6 +112,7 @@ def create_app() -> App:
         env=env_config,
         description="Data Collection Web Application - AppConfig (dev)",
     )
+    Tags.of(appconfig_stack).add("Component", "appconfig")
 
     cognito_stack = CognitoStack(
         app,
@@ -108,6 +121,7 @@ def create_app() -> App:
         env=env_config,
         description="Data Collection Web Application - Cognito (dev)",
     )
+    Tags.of(cognito_stack).add("Component", "auth")
 
     dynamodb_stack = DynamoDBStack(
         app,
@@ -119,6 +133,7 @@ def create_app() -> App:
         env=env_config,
         description="Data Collection Web Application - DynamoDB (dev)",
     )
+    Tags.of(dynamodb_stack).add("Component", "datastore")
 
     datalake_stack = DataLakeStack(
         app,
@@ -127,6 +142,7 @@ def create_app() -> App:
         env=env_config,
         description="Data Collection Web Application - DataLake (dev)",
     )
+    Tags.of(datalake_stack).add("Component", "datalake")
 
     frontend_stack = FrontendStack(
         app,
@@ -135,6 +151,7 @@ def create_app() -> App:
         env=env_config,
         description="Data Collection Web Application - Frontend (dev)",
     )
+    Tags.of(frontend_stack).add("Component", "frontend")
 
     viessmann_credentials_secret_arn = os.environ.get("VIESSMANN_CREDENTIALS_SECRET_ARN")
     auto_retrieval_frequent_rule_name = (
@@ -164,6 +181,7 @@ def create_app() -> App:
         env=env_config,
         description="Data Collection Web Application - API (dev)",
     )
+    Tags.of(api_stack).add("Component", "api")
 
     if viessmann_credentials_secret_arn:
         scheduler_once_daily_stack = SchedulerOnceDailyStack(
@@ -178,6 +196,7 @@ def create_app() -> App:
             env=env_config,
             description="Data Collection - Auto-retrieval Scheduler (dev)",
         )
+        Tags.of(scheduler_once_daily_stack).add("Component", "scheduler-daily")
         scheduler_once_daily_stack.add_dependency(init_stack)
         scheduler_once_daily_stack.add_dependency(dynamodb_stack)
         scheduler_once_daily_stack.add_dependency(appconfig_stack)
@@ -195,6 +214,7 @@ def create_app() -> App:
             env=env_config,
             description="Data Collection - Auto-retrieval Frequent (dev)",
         )
+        Tags.of(scheduler_frequent_stack).add("Component", "scheduler-frequent")
         scheduler_frequent_stack.add_dependency(init_stack)
         scheduler_frequent_stack.add_dependency(appconfig_stack)
 
