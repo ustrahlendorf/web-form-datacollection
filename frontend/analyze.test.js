@@ -3,6 +3,7 @@ const {
   computeYtdTotals,
   computeWeeklyPeakStats,
   computeWeeklyMinimumStats,
+  computeWeeklyBreakdownStats,
   getIsoWeekPartsFromUtcDate,
   formatIsoWeekDdMmRange,
 } = require('./src/app.js');
@@ -533,6 +534,92 @@ describe('Analyze helpers', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+  });
+
+  describe('computeWeeklyBreakdownStats', () => {
+    test('computes per-week min/max/avg for consumption, supply temp, and sensor temp; newest week first', () => {
+      const w1a = {
+        datum: '01.01.2025', // ISO week 2025-W01
+        verbrauch_qm: 1.0,
+        vorlauf_temp: 40,
+        aussentemp: 2,
+      };
+      const w1b = {
+        datum: '02.01.2025', // ISO week 2025-W01
+        verbrauch_qm: 3.0,
+        vorlauf_temp: 50,
+        aussentemp: 6,
+      };
+      const w2 = {
+        datum: '08.01.2025', // ISO week 2025-W02
+        verbrauch_qm: 2.0,
+        vorlauf_temp: 45,
+        aussentemp: 4,
+      };
+
+      const rows = computeWeeklyBreakdownStats([w1a, w1b, w2]);
+      expect(rows).toEqual([
+        {
+          isoWeekYear: 2025,
+          isoWeek: 2,
+          consumption: { min: 2, max: 2, avg: 2 },
+          vorlaufTemp: { min: 45, max: 45, avg: 45 },
+          sensorTemp: { min: 4, max: 4, avg: 4 },
+        },
+        {
+          isoWeekYear: 2025,
+          isoWeek: 1,
+          consumption: { min: 1, max: 3, avg: 2 },
+          vorlaufTemp: { min: 40, max: 50, avg: 45 },
+          sensorTemp: { min: 2, max: 6, avg: 4 },
+        },
+      ]);
+    });
+
+    test('uses null for min/max/avg when no temperature reading is present in a week', () => {
+      const row = {
+        datum: '01.01.2025',
+        verbrauch_qm: 5,
+        vorlauf_temp: null,
+        aussentemp: null,
+      };
+      const rows = computeWeeklyBreakdownStats([row]);
+      expect(rows).toEqual([
+        {
+          isoWeekYear: 2025,
+          isoWeek: 1,
+          consumption: { min: 5, max: 5, avg: 5 },
+          vorlaufTemp: { min: null, max: null, avg: null },
+          sensorTemp: { min: null, max: null, avg: null },
+        },
+      ]);
+    });
+
+    test('returns empty array for empty submissions', () => {
+      expect(computeWeeklyBreakdownStats([])).toEqual([]);
+    });
+
+    test('skips rows with invalid datum and aggregates the rest', () => {
+      const valid = {
+        datum: '01.01.2025',
+        verbrauch_qm: 4,
+        vorlauf_temp: 30,
+        aussentemp: 1,
+      };
+      const rows = computeWeeklyBreakdownStats([
+        { datum: 'not-a-date', verbrauch_qm: 99 },
+        valid,
+      ]);
+      expect(rows).toEqual([
+        {
+          isoWeekYear: 2025,
+          isoWeek: 1,
+          consumption: { min: 4, max: 4, avg: 4 },
+          vorlaufTemp: { min: 30, max: 30, avg: 30 },
+          sensorTemp: { min: 1, max: 1, avg: 1 },
+        },
+      ]);
     });
   });
 

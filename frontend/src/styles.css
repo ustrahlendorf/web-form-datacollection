@@ -362,6 +362,19 @@ input[type="number"].error {
     font-weight: 600;
 }
 
+.analyze-section-title {
+    margin: 2rem 0 1rem;
+    color: #34495e;
+}
+
+#analyze-weekly-breakdown-container {
+    overflow-x: auto;
+}
+
+#analyze-weekly-breakdown-container .history-table {
+    min-width: 760px;
+}
+
 .analyze-card--consumption-tied {
     border: 2px solid #e67e22;
     background-color: #fef5e7;

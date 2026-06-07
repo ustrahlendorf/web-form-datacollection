@@ -1431,8 +1431,10 @@ function formatIsoWeekDdMmRange(isoWeekYear, isoWeek) {
 /**
  * Per-ISO-week aggregates for consumption-related stats (same rules as peak/min week cards).
  * Temperatures: sum and count of present vorlauf_temp / aussentemp readings per week (same fields as history table).
+ * Also tracks per-week min/max of individual readings for verbrauch_qm, vorlauf_temp, and
+ * aussentemp (null when no reading is present in that week) — used by the weekly breakdown table.
  * @param {object[]} sortedSubmissions
- * @returns {Array<{ isoWeekYear: number, isoWeek: number, sumDeltaBetriebsstunden: number, sumDeltaStarts: number, sumVerbrauchQm: number, sumVorlaufTemp: number, sumAussentemp: number, vorlaufTempCount: number, aussentempCount: number }>}
+ * @returns {Array<{ isoWeekYear: number, isoWeek: number, sumDeltaBetriebsstunden: number, sumDeltaStarts: number, sumVerbrauchQm: number, sumVorlaufTemp: number, sumAussentemp: number, vorlaufTempCount: number, aussentempCount: number, minVerbrauchQm: number | null, maxVerbrauchQm: number | null, minVorlaufTemp: number | null, maxVorlaufTemp: number | null, minAussentemp: number | null, maxAussentemp: number | null }>}
  */
 function buildWeeklyConsumptionBuckets(sortedSubmissions) {
     if (!Array.isArray(sortedSubmissions) || sortedSubmissions.length === 0) {
@@ -1462,8 +1464,15 @@ function buildWeeklyConsumptionBuckets(sortedSubmissions) {
                 sumVerbrauchQm: 0,
                 sumVorlaufTemp: 0,
                 sumAussentemp: 0,
+                verbrauchQmCount: 0,
                 vorlaufTempCount: 0,
                 aussentempCount: 0,
+                minVerbrauchQm: null,
+                maxVerbrauchQm: null,
+                minVorlaufTemp: null,
+                maxVorlaufTemp: null,
+                minAussentemp: null,
+                maxAussentemp: null,
             };
             map.set(key, bucket);
         }
@@ -1479,17 +1488,24 @@ function buildWeeklyConsumptionBuckets(sortedSubmissions) {
         const v = normalizeNumber(submission && submission.verbrauch_qm);
         if (v !== null) {
             bucket.sumVerbrauchQm += v;
+            bucket.verbrauchQmCount += 1;
+            bucket.minVerbrauchQm = bucket.minVerbrauchQm === null ? v : Math.min(bucket.minVerbrauchQm, v);
+            bucket.maxVerbrauchQm = bucket.maxVerbrauchQm === null ? v : Math.max(bucket.maxVerbrauchQm, v);
         }
 
         const vl = normalizeNumber(submission && submission.vorlauf_temp);
         if (vl !== null) {
             bucket.sumVorlaufTemp += vl;
             bucket.vorlaufTempCount += 1;
+            bucket.minVorlaufTemp = bucket.minVorlaufTemp === null ? vl : Math.min(bucket.minVorlaufTemp, vl);
+            bucket.maxVorlaufTemp = bucket.maxVorlaufTemp === null ? vl : Math.max(bucket.maxVorlaufTemp, vl);
         }
         const au = normalizeNumber(submission && submission.aussentemp);
         if (au !== null) {
             bucket.sumAussentemp += au;
             bucket.aussentempCount += 1;
+            bucket.minAussentemp = bucket.minAussentemp === null ? au : Math.min(bucket.minAussentemp, au);
+            bucket.maxAussentemp = bucket.maxAussentemp === null ? au : Math.max(bucket.maxAussentemp, au);
         }
     }
 
@@ -1702,6 +1718,50 @@ function computeWeeklyMinimumStats(sortedSubmissions) {
     };
 }
 
+/**
+ * Per-ISO-week breakdown of min/max/avg for consumption, supply (vorlauf) temperature, and
+ * sensor (outside) temperature — one row per calendar week that has submissions, newest week first.
+ * avg is the arithmetic mean of present readings in that week (null when no reading exists).
+ *
+ * @param {object[]} sortedSubmissions
+ * @returns {Array<{
+ *   isoWeekYear: number,
+ *   isoWeek: number,
+ *   consumption: { min: number | null, max: number | null, avg: number | null },
+ *   vorlaufTemp: { min: number | null, max: number | null, avg: number | null },
+ *   sensorTemp: { min: number | null, max: number | null, avg: number | null },
+ * }>}
+ */
+function computeWeeklyBreakdownStats(sortedSubmissions) {
+    const aggregates = buildWeeklyConsumptionBuckets(sortedSubmissions);
+    if (aggregates.length === 0) {
+        return [];
+    }
+
+    const rows = aggregates.map((agg) => ({
+        isoWeekYear: agg.isoWeekYear,
+        isoWeek: agg.isoWeek,
+        consumption: {
+            min: agg.minVerbrauchQm,
+            max: agg.maxVerbrauchQm,
+            avg: agg.verbrauchQmCount > 0 ? agg.sumVerbrauchQm / agg.verbrauchQmCount : null,
+        },
+        vorlaufTemp: {
+            min: agg.minVorlaufTemp,
+            max: agg.maxVorlaufTemp,
+            avg: agg.vorlaufTempCount > 0 ? agg.sumVorlaufTemp / agg.vorlaufTempCount : null,
+        },
+        sensorTemp: {
+            min: agg.minAussentemp,
+            max: agg.maxAussentemp,
+            avg: agg.aussentempCount > 0 ? agg.sumAussentemp / agg.aussentempCount : null,
+        },
+    }));
+
+    rows.sort((a, b) => compareIsoWeekOrder(b.isoWeekYear, b.isoWeek, a.isoWeekYear, a.isoWeek));
+    return rows;
+}
+
 function formatMetricValue(value, opts = {}) {
     const { kind = 'int', decimals = 2 } = opts;
     const n = normalizeNumber(value);
@@ -1820,6 +1880,10 @@ function getAnalyzeMinimumWeekContainer() {
     return document.getElementById('analyze-min-week-col');
 }
 
+function getAnalyzeWeeklyBreakdownContainer() {
+    return document.getElementById('analyze-weekly-breakdown-container');
+}
+
 function setAnalyzePageTitle(year) {
     const el = document.getElementById('analyze-page-title');
     if (!el) {
@@ -1901,6 +1965,36 @@ function formatPeakWeekContextLine(peak) {
         return '';
     }
     return `CW ${peak.isoWeek} – ${range}`;
+}
+
+/**
+ * Calendar-week label including the ISO week year, for tables that span multiple years.
+ * @param {{ isoWeekYear: number, isoWeek: number }} row
+ * @returns {string} e.g. "2026 · CW 23 (02.06-08.06)", or "" if not representable
+ */
+function formatWeeklyBreakdownWeekLabel(row) {
+    if (!row || typeof row !== 'object' || !Number.isFinite(row.isoWeek) || !Number.isFinite(row.isoWeekYear)) {
+        return '';
+    }
+    const range = formatIsoWeekDdMmRange(row.isoWeekYear, row.isoWeek);
+    if (!range) {
+        return '';
+    }
+    return `${row.isoWeekYear} · CW ${row.isoWeek} (${range})`;
+}
+
+/**
+ * @param {{ min: number | null, max: number | null, avg: number | null } | null | undefined} stat
+ * @param {object} valueOpts - passed through to formatMetricValue
+ * @returns {{ min: string, max: string, avg: string }}
+ */
+function formatWeeklyBreakdownStat(stat, valueOpts) {
+    const s = stat && typeof stat === 'object' ? stat : {};
+    return {
+        min: formatMetricValue(s.min, valueOpts),
+        max: formatMetricValue(s.max, valueOpts),
+        avg: formatMetricValue(s.avg, valueOpts),
+    };
 }
 
 function formatPeakScalarValue(peak, valueOpts) {
@@ -2017,6 +2111,89 @@ function renderAnalyzeMinWeek(mins) {
     `;
 }
 
+function renderAnalyzeWeeklyBreakdownLoading() {
+    const container = getAnalyzeWeeklyBreakdownContainer();
+    if (!container) return;
+    container.innerHTML = '<p class="empty-state">Loading statistics...</p>';
+}
+
+function renderAnalyzeWeeklyBreakdownError(message) {
+    const container = getAnalyzeWeeklyBreakdownContainer();
+    if (!container) return;
+    const safeMsg = (typeof message === 'string' && message.trim() !== '') ? message.trim() : 'Failed to load statistics';
+    container.innerHTML = `<p class="empty-state">${safeMsg}</p>`;
+}
+
+function renderAnalyzeWeeklyBreakdownEmpty() {
+    const container = getAnalyzeWeeklyBreakdownContainer();
+    if (!container) return;
+    container.innerHTML = '<p class="empty-state">No submissions found yet.</p>';
+}
+
+/**
+ * @param {Array<{ isoWeekYear, isoWeek, consumption, vorlaufTemp, sensorTemp }>} rows - from computeWeeklyBreakdownStats
+ */
+function renderAnalyzeWeeklyBreakdown(rows) {
+    const container = getAnalyzeWeeklyBreakdownContainer();
+    if (!container) return;
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+        renderAnalyzeWeeklyBreakdownEmpty();
+        return;
+    }
+
+    const tempOpts = { kind: 'decimal', decimals: 1 };
+    const consumptionOpts = { kind: 'decimal', decimals: 2 };
+
+    const tableRows = rows.map((row) => {
+        const weekLabel = formatWeeklyBreakdownWeekLabel(row) || '—';
+        const consumption = formatWeeklyBreakdownStat(row.consumption, consumptionOpts);
+        const vorlaufTemp = formatWeeklyBreakdownStat(row.vorlaufTemp, tempOpts);
+        const sensorTemp = formatWeeklyBreakdownStat(row.sensorTemp, tempOpts);
+        return `
+            <tr>
+                <td>${weekLabel}</td>
+                <td>${consumption.min}</td>
+                <td>${consumption.max}</td>
+                <td>${consumption.avg}</td>
+                <td>${vorlaufTemp.min}</td>
+                <td>${vorlaufTemp.max}</td>
+                <td>${vorlaufTemp.avg}</td>
+                <td>${sensorTemp.min}</td>
+                <td>${sensorTemp.max}</td>
+                <td>${sensorTemp.avg}</td>
+            </tr>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th rowspan="2">Calendar Week</th>
+                    <th colspan="3">Consumption (m³)</th>
+                    <th colspan="3">Supply-Temp. (°C)</th>
+                    <th colspan="3">Out-Temp. Sensor (°C)</th>
+                </tr>
+                <tr>
+                    <th>Min</th>
+                    <th>Max</th>
+                    <th>Avg</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                    <th>Avg</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                    <th>Avg</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${tableRows}
+            </tbody>
+        </table>
+    `;
+}
+
 function renderAnalyzeLoading() {
     setAnalyzePageTitle(null);
     const container = getAnalyzeTotalsContainer();
@@ -2027,6 +2204,7 @@ function renderAnalyzeLoading() {
     `;
     renderAnalyzePeakWeekLoading();
     renderAnalyzeMinWeekLoading();
+    renderAnalyzeWeeklyBreakdownLoading();
 }
 
 function renderAnalyzeError(message) {
@@ -2040,6 +2218,7 @@ function renderAnalyzeError(message) {
     `;
     renderAnalyzePeakWeekError(safeMsg);
     renderAnalyzeMinWeekError(safeMsg);
+    renderAnalyzeWeeklyBreakdownError(safeMsg);
 }
 
 function renderAnalyzeEmpty() {
@@ -2052,6 +2231,7 @@ function renderAnalyzeEmpty() {
     `;
     renderAnalyzePeakWeekEmpty();
     renderAnalyzeMinWeekEmpty();
+    renderAnalyzeWeeklyBreakdownEmpty();
 }
 
 function renderAnalyzeTotals(stats) {
@@ -2275,6 +2455,7 @@ async function loadAnalyze() {
         renderAnalyzeTotals(stats);
         renderAnalyzePeakWeek(computeWeeklyPeakStats(sorted));
         renderAnalyzeMinWeek(computeWeeklyMinimumStats(sorted));
+        renderAnalyzeWeeklyBreakdown(computeWeeklyBreakdownStats(sorted));
     } catch (error) {
         console.error('Error loading analyze statistics:', error);
         renderAnalyzeError('Failed to load statistics');
@@ -2356,6 +2537,7 @@ if (typeof module !== 'undefined' && module.exports) {
         computeYtdTotals,
         computeWeeklyPeakStats,
         computeWeeklyMinimumStats,
+        computeWeeklyBreakdownStats,
         getIsoWeekPartsFromUtcDate,
         formatIsoWeekDdMmRange,
         normalizeSettingsConfig,
