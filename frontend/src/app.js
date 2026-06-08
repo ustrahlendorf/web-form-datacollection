@@ -2133,7 +2133,7 @@ function renderAnalyzeWeeklyBreakdownEmpty() {
 /**
  * @param {Array<{ isoWeekYear, isoWeek, consumption, vorlaufTemp, sensorTemp }>} rows - from computeWeeklyBreakdownStats
  */
-function renderAnalyzeWeeklyBreakdown(rows) {
+function renderAnalyzeWeeklyBreakdown(rows, extremes) {
     const container = getAnalyzeWeeklyBreakdownContainer();
     if (!container) return;
 
@@ -2144,15 +2144,29 @@ function renderAnalyzeWeeklyBreakdown(rows) {
 
     const tempOpts = { kind: 'decimal', decimals: 1 };
     const consumptionOpts = { kind: 'decimal', decimals: 2 };
+    const peakWeek = extremes && extremes.peakWeek ? extremes.peakWeek : null;
+    const minimumWeek = extremes && extremes.minimumWeek ? extremes.minimumWeek : null;
 
     const tableRows = rows.map((row) => {
         const weekLabel = formatWeeklyBreakdownWeekLabel(row) || '—';
         const consumption = formatWeeklyBreakdownStat(row.consumption, consumptionOpts);
         const vorlaufTemp = formatWeeklyBreakdownStat(row.vorlaufTemp, tempOpts);
         const sensorTemp = formatWeeklyBreakdownStat(row.sensorTemp, tempOpts);
+
+        const isPeak = Boolean(peakWeek) && row.isoWeekYear === peakWeek.isoWeekYear && row.isoWeek === peakWeek.isoWeek;
+        const isMinimum = Boolean(minimumWeek) && row.isoWeekYear === minimumWeek.isoWeekYear && row.isoWeek === minimumWeek.isoWeek;
+        const rowClasses = [
+            isPeak ? 'analyze-weekly-row--peak' : '',
+            isMinimum ? 'analyze-weekly-row--minimum' : '',
+        ].filter(Boolean).join(' ');
+        const badges = [
+            isPeak ? '<span class="analyze-weekly-row-badge analyze-weekly-row-badge--peak">Peak</span>' : '',
+            isMinimum ? '<span class="analyze-weekly-row-badge analyze-weekly-row-badge--minimum">Min</span>' : '',
+        ].filter(Boolean).join(' ');
+
         return `
-            <tr>
-                <td>${weekLabel}</td>
+            <tr class="${rowClasses}">
+                <td>${weekLabel}${badges ? ` ${badges}` : ''}</td>
                 <td>${consumption.min}</td>
                 <td>${consumption.max}</td>
                 <td>${consumption.avg}</td>
@@ -2453,9 +2467,14 @@ async function loadAnalyze() {
         setAnalyzePageTitle(latestDay ? latestDay.getUTCFullYear() : null);
 
         renderAnalyzeTotals(stats);
-        renderAnalyzePeakWeek(computeWeeklyPeakStats(sorted));
-        renderAnalyzeMinWeek(computeWeeklyMinimumStats(sorted));
-        renderAnalyzeWeeklyBreakdown(computeWeeklyBreakdownStats(sorted));
+        const peakStats = computeWeeklyPeakStats(sorted);
+        const minStats = computeWeeklyMinimumStats(sorted);
+        renderAnalyzePeakWeek(peakStats);
+        renderAnalyzeMinWeek(minStats);
+        renderAnalyzeWeeklyBreakdown(computeWeeklyBreakdownStats(sorted), {
+            peakWeek: peakStats.peakVerbrauchQm,
+            minimumWeek: minStats.minVerbrauchQm,
+        });
     } catch (error) {
         console.error('Error loading analyze statistics:', error);
         renderAnalyzeError('Failed to load statistics');

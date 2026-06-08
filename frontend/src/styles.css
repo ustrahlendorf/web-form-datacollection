@@ -367,6 +367,16 @@ input[type="number"].error {
     color: #34495e;
 }
 
+.analyze-weekly-legend {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+    margin: -0.5rem 0 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
 #analyze-weekly-breakdown-container {
     max-height: 28rem;
     overflow: auto;
@@ -390,6 +400,42 @@ input[type="number"].error {
     border: 2px solid #e67e22;
     background-color: #fef5e7;
     box-shadow: 0 0 0 1px rgba(230, 126, 34, 0.2);
+}
+
+.analyze-weekly-row--peak {
+    background-color: #fef5e7;
+}
+
+.analyze-weekly-row--minimum {
+    background-color: #eaf3fb;
+}
+
+.analyze-weekly-row--peak.analyze-weekly-row--minimum {
+    background: linear-gradient(90deg, #fef5e7 50%, #eaf3fb 50%);
+}
+
+.analyze-weekly-row--peak:hover,
+.analyze-weekly-row--minimum:hover {
+    filter: brightness(0.97);
+}
+
+.analyze-weekly-row-badge {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.analyze-weekly-row-badge--peak {
+    background-color: #e67e22;
+    color: #ffffff;
+}
+
+.analyze-weekly-row-badge--minimum {
+    background-color: #3498db;
+    color: #ffffff;
 }
 
 .analyze-peak-tie-banner {
