@@ -2167,7 +2167,7 @@ function renderAnalyzeWeeklyBreakdown(rows) {
     }).join('');
 
     container.innerHTML = `
-        <table class="history-table">
+        <table class="history-table analyze-weekly-table">
             <thead>
                 <tr>
                     <th rowspan="2">Calendar Week</th>

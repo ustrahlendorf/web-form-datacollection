@@ -368,11 +368,22 @@ input[type="number"].error {
 }
 
 #analyze-weekly-breakdown-container {
-    overflow-x: auto;
+    max-height: 28rem;
+    overflow: auto;
 }
 
 #analyze-weekly-breakdown-container .history-table {
     min-width: 760px;
+}
+
+.analyze-weekly-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.analyze-weekly-table thead th {
+    background-color: #ecf0f1;
 }
 
 .analyze-card--consumption-tied {
