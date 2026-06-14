@@ -1744,6 +1744,7 @@ function computeWeeklyBreakdownStats(sortedSubmissions) {
         consumption: {
             min: agg.minVerbrauchQm,
             max: agg.maxVerbrauchQm,
+            sum: agg.verbrauchQmCount > 0 ? agg.sumVerbrauchQm : null,
             avg: agg.verbrauchQmCount > 0 ? agg.sumVerbrauchQm / agg.verbrauchQmCount : null,
         },
         vorlaufTemp: {
@@ -1984,15 +1985,16 @@ function formatWeeklyBreakdownWeekLabel(row) {
 }
 
 /**
- * @param {{ min: number | null, max: number | null, avg: number | null } | null | undefined} stat
+ * @param {{ min: number | null, max: number | null, sum?: number | null, avg: number | null } | null | undefined} stat
  * @param {object} valueOpts - passed through to formatMetricValue
- * @returns {{ min: string, max: string, avg: string }}
+ * @returns {{ min: string, max: string, sum: string, avg: string }}
  */
 function formatWeeklyBreakdownStat(stat, valueOpts) {
     const s = stat && typeof stat === 'object' ? stat : {};
     return {
         min: formatMetricValue(s.min, valueOpts),
         max: formatMetricValue(s.max, valueOpts),
+        sum: formatMetricValue(s.sum, valueOpts),
         avg: formatMetricValue(s.avg, valueOpts),
     };
 }
@@ -2169,6 +2171,7 @@ function renderAnalyzeWeeklyBreakdown(rows, extremes) {
                 <td>${weekLabel}${badges ? ` ${badges}` : ''}</td>
                 <td>${consumption.min}</td>
                 <td>${consumption.max}</td>
+                <td>${consumption.sum}</td>
                 <td>${consumption.avg}</td>
                 <td>${vorlaufTemp.min}</td>
                 <td>${vorlaufTemp.max}</td>
@@ -2185,13 +2188,14 @@ function renderAnalyzeWeeklyBreakdown(rows, extremes) {
             <thead>
                 <tr>
                     <th rowspan="2">Calendar Week</th>
-                    <th colspan="3">Consumption (m³)</th>
+                    <th colspan="4">Consumption (m³)</th>
                     <th colspan="3">Supply-Temp. (°C)</th>
                     <th colspan="3">Out-Temp. Sensor (°C)</th>
                 </tr>
                 <tr>
                     <th>Min</th>
                     <th>Max</th>
+                    <th>Sum</th>
                     <th>Avg</th>
                     <th>Min</th>
                     <th>Max</th>

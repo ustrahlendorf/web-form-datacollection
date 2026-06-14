@@ -563,14 +563,14 @@ describe('Analyze helpers', () => {
         {
           isoWeekYear: 2025,
           isoWeek: 2,
-          consumption: { min: 2, max: 2, avg: 2 },
+          consumption: { min: 2, max: 2, sum: 2, avg: 2 },
           vorlaufTemp: { min: 45, max: 45, avg: 45 },
           sensorTemp: { min: 4, max: 4, avg: 4 },
         },
         {
           isoWeekYear: 2025,
           isoWeek: 1,
-          consumption: { min: 1, max: 3, avg: 2 },
+          consumption: { min: 1, max: 3, sum: 4, avg: 2 },
           vorlaufTemp: { min: 40, max: 50, avg: 45 },
           sensorTemp: { min: 2, max: 6, avg: 4 },
         },
@@ -589,7 +589,7 @@ describe('Analyze helpers', () => {
         {
           isoWeekYear: 2025,
           isoWeek: 1,
-          consumption: { min: 5, max: 5, avg: 5 },
+          consumption: { min: 5, max: 5, sum: 5, avg: 5 },
           vorlaufTemp: { min: null, max: null, avg: null },
           sensorTemp: { min: null, max: null, avg: null },
         },
@@ -615,7 +615,7 @@ describe('Analyze helpers', () => {
         {
           isoWeekYear: 2025,
           isoWeek: 1,
-          consumption: { min: 4, max: 4, avg: 4 },
+          consumption: { min: 4, max: 4, sum: 4, avg: 4 },
           vorlaufTemp: { min: 30, max: 30, avg: 30 },
           sensorTemp: { min: 1, max: 1, avg: 1 },
         },
