@@ -1,0 +1,28 @@
+{
+  "env": {
+    "AWS_PROFILE": "uwes_priv",
+    "AWS_REGION": "eu-central-1"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(aws sts get-caller-identity:*)",
+      "Bash(aws cloudformation describe-stacks:*)",
+      "Bash(aws cloudformation describe-stack-events:*)",
+      "Bash(aws cloudformation list-stacks:*)",
+      "Bash(aws s3 ls:*)",
+      "Bash(aws cloudfront get-invalidation:*)",
+      "Bash(aws logs tail:*)",
+      "Bash(aws logs describe-log-groups:*)",
+      "Bash(cdk synth:*)",
+      "Bash(cdk diff:*)",
+      "Bash(cdk list:*)",
+      "Bash(task -l)",
+      "Bash(task doctor*)",
+      "Bash(npx jest:*)",
+      "Bash(pytest:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ]
+  }
+}
