@@ -21,6 +21,7 @@ HEATING_FEATURE_PATHS = [
     "heating.burners.0.statistics",
     "heating.circuits.0.sensors.temperature.supply",
     "heating.sensors.temperature.outside",
+    "heating.circuits.0.operating.modes.active",
 ]
 
 
@@ -120,6 +121,21 @@ def get_heating_values(
     if outside_temp is not None and not isinstance(outside_temp, (int, float)):
         outside_temp = None
 
+    operating_mode_props = get_feature_value(
+        "heating.circuits.0.operating.modes.active",
+        iot_config,
+        features_data=features,
+        timeout_seconds=timeout_seconds,
+        ssl_verify=ssl_verify,
+    )
+    operating_mode: Optional[str] = None
+    if isinstance(operating_mode_props, dict):
+        val = operating_mode_props.get("value")
+        if isinstance(val, dict):
+            operating_mode = val.get("value")
+        elif isinstance(val, str):
+            operating_mode = val
+
     return {
         "gas_consumption_m3_today": float(gas_today) if gas_today is not None else None,
         "gas_consumption_m3_yesterday": float(gas_yesterday) if gas_yesterday is not None else None,
@@ -127,6 +143,7 @@ def get_heating_values(
         "starts": int(starts) if starts is not None else None,
         "supply_temp": float(supply_temp) if supply_temp is not None else None,
         "outside_temp": float(outside_temp) if outside_temp is not None else None,
+        "operating_mode": operating_mode,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
 

@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -52,16 +53,51 @@ def test_viessmann_to_submission_values_verbrauch_exceeds_20() -> None:
     assert mapped["verbrauch_qm"] == Decimal("25.5")
 
 
-def test_viessmann_to_submission_values_fallback_to_today() -> None:
-    """When yesterday is None, fall back to today."""
+def test_viessmann_to_submission_values_yesterday_none_standby_no_warning(caplog: Any) -> None:
+    """When yesterday is None and operating_mode is standby, store 0 without warning."""
+    import logging
     values = {
         "gas_consumption_m3_today": 1.0,
+        "gas_consumption_m3_yesterday": None,
+        "operating_mode": "standby",
+        "betriebsstunden": 0,
+        "starts": 0,
+    }
+    with caplog.at_level(logging.WARNING, logger="backend.viessmann.viessmann_submit"):
+        mapped = _viessmann_to_submission_values(values)
+    assert mapped["verbrauch_qm"] == Decimal("0")
+    assert caplog.records == []
+
+
+def test_viessmann_to_submission_values_yesterday_none_heating_warns(caplog: Any) -> None:
+    """When yesterday is None but operating_mode is heating, a WARNING is logged."""
+    import logging
+    values = {
+        "gas_consumption_m3_today": 1.0,
+        "gas_consumption_m3_yesterday": None,
+        "operating_mode": "heating",
+        "betriebsstunden": 0,
+        "starts": 0,
+    }
+    with caplog.at_level(logging.WARNING, logger="backend.viessmann.viessmann_submit"):
+        mapped = _viessmann_to_submission_values(values)
+    assert mapped["verbrauch_qm"] == Decimal("0")
+    assert len(caplog.records) == 1
+    assert "operating_mode='heating'" in caplog.records[0].message
+
+
+def test_viessmann_to_submission_values_yesterday_none_mode_unknown_no_warning(caplog: Any) -> None:
+    """When yesterday is None and operating_mode is absent, store 0 without warning."""
+    import logging
+    values = {
         "gas_consumption_m3_yesterday": None,
         "betriebsstunden": 0,
         "starts": 0,
     }
-    mapped = _viessmann_to_submission_values(values)
-    assert mapped["verbrauch_qm"] == Decimal("1.0")
+    with caplog.at_level(logging.WARNING, logger="backend.viessmann.viessmann_submit"):
+        mapped = _viessmann_to_submission_values(values)
+    assert mapped["verbrauch_qm"] == Decimal("0")
+    assert caplog.records == []
 
 
 def test_datum_to_iso() -> None:

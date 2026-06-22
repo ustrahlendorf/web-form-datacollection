@@ -12,6 +12,10 @@
         <nav class="navbar">
             <div class="nav-container">
                 <h1 class="nav-title">Data Collection</h1>
+                <div id="heating-status-indicator" class="heating-status heating-status--loading" aria-live="polite" aria-label="Heizungsstatus">
+                    <span class="heating-status__dot"></span>
+                    <span class="heating-status__label">…</span>
+                </div>
                 <div class="nav-links">
                     <a href="#form" class="nav-link active" data-page="form">Init</a>
                     <a href="#analyze" class="nav-link" data-page="analyze">Analyze</a>

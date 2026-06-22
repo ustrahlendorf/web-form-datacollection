@@ -6,11 +6,14 @@ compute deltas, check for duplicates, and store. Validation is relaxed for
 auto-retrieved data (verbrauch_qm may exceed 20 m³).
 """
 
+import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
 from backend.shared.models import create_submission
+
+logger = logging.getLogger(__name__)
 
 
 def _format_datum(dt: datetime) -> str:
@@ -38,7 +41,8 @@ def _viessmann_to_submission_values(
     Args:
         values: Dict from get_heating_values() with keys:
             gas_consumption_m3_today, gas_consumption_m3_yesterday,
-            betriebsstunden, starts, supply_temp, outside_temp, fetched_at
+            betriebsstunden, starts, supply_temp, outside_temp,
+            operating_mode, fetched_at
         retrieval_time: Optional override for datum/uhrzeit (default: now UTC)
 
     Returns:
@@ -52,7 +56,15 @@ def _viessmann_to_submission_values(
 
     verbrauch_raw = values.get("gas_consumption_m3_yesterday")
     if verbrauch_raw is None:
-        verbrauch_raw = values.get("gas_consumption_m3_today") or 0
+        operating_mode = values.get("operating_mode")
+        if operating_mode == "heating":
+            logger.warning(
+                "gas_consumption_m3_yesterday is None but operating_mode='heating'"
+                " (retrieval_time=%s) — Viessmann API returned no yesterday value"
+                " despite active heating; requires investigation",
+                now.isoformat(),
+            )
+        verbrauch_raw = 0
     verbrauch_qm = Decimal(str(verbrauch_raw))
 
     betriebsstunden = values.get("betriebsstunden")

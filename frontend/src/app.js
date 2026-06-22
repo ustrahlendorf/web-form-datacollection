@@ -15,6 +15,7 @@ const state = {
     currentPage: 'form',
     historyNextToken: null,
     settingsStatusPollTimer: null,
+    heatingStatusTimer: null,
 };
 
 // Initialize AuthManager
@@ -226,11 +227,19 @@ function navigateToPage(page) {
 function showMainApp() {
     document.getElementById('app').style.display = 'block';
     document.getElementById('login-section').style.display = 'none';
+    loadHeatingStatus();
+    if (state.heatingStatusTimer) clearInterval(state.heatingStatusTimer);
+    state.heatingStatusTimer = setInterval(loadHeatingStatus, 5 * 60 * 1000);
 }
 
 function showLoginPage() {
     document.getElementById('app').style.display = 'none';
     document.getElementById('login-section').style.display = 'flex';
+    if (state.heatingStatusTimer) {
+        clearInterval(state.heatingStatusTimer);
+        state.heatingStatusTimer = null;
+    }
+    renderHeatingStatus('loading');
 }
 
 // Form Page Functions
@@ -2288,6 +2297,49 @@ function renderAnalyzeTotals(stats) {
     `;
 }
 
+// Heating Status Indicator
+const HEATING_STATUS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+
+function renderHeatingStatus(mode) {
+    const el = document.getElementById('heating-status-indicator');
+    if (!el) return;
+    const dot = el.querySelector('.heating-status__dot');
+    const label = el.querySelector('.heating-status__label');
+    if (!dot || !label) return;
+
+    el.classList.remove('heating-status--loading', 'heating-status--on', 'heating-status--off');
+
+    if (mode === 'loading') {
+        el.classList.add('heating-status--loading');
+        label.textContent = '…';
+    } else if (mode === 'heating' || mode === 'dhwAndHeating') {
+        el.classList.add('heating-status--on');
+        label.textContent = 'Heizung AN';
+    } else if (!mode || mode === 'unknown') {
+        el.classList.add('heating-status--off');
+        label.textContent = '?';
+    } else {
+        el.classList.add('heating-status--off');
+        label.textContent = 'Heizung AUS';
+    }
+}
+
+async function loadHeatingStatus() {
+    if (typeof authenticatedFetch !== 'function') return;
+    renderHeatingStatus('loading');
+    try {
+        const response = await authenticatedFetch(`${CONFIG.API_ENDPOINT}/heating/live`);
+        if (!response.ok) {
+            renderHeatingStatus('unknown');
+            return;
+        }
+        const data = await response.json();
+        renderHeatingStatus(data.operating_mode || 'unknown');
+    } catch (_) {
+        renderHeatingStatus('unknown');
+    }
+}
+
 // Live Page Functions
 function getLiveContentContainer() {
     return document.getElementById('live-content');
@@ -2554,6 +2606,7 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         initializeFormPage,
         prefillFromLatestSubmission,
+        renderHeatingStatus,
         parseGermanDateToUtcMidnight,
         getSubmissionUtcDay,
         computeInclusiveDays,
