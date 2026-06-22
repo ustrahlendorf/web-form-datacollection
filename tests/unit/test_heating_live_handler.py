@@ -53,7 +53,7 @@ def test_format_success_response() -> None:
 
 
 def test_lambda_handler_unauthorized_when_no_sub() -> None:
-    event = {"requestContext": {"authorizer": {"claims": {}}}}
+    event = {"routeKey": "GET /heating/live", "requestContext": {"authorizer": {"claims": {}}}}
     result = mod.lambda_handler(event, None)
     assert result["statusCode"] == 401
     body = json.loads(result["body"])
@@ -62,6 +62,7 @@ def test_lambda_handler_unauthorized_when_no_sub() -> None:
 
 def test_lambda_handler_returns_500_when_secret_not_configured() -> None:
     event = {
+        "routeKey": "GET /heating/live",
         "requestContext": {
             "authorizer": {"jwt": {"claims": {"sub": "user-1"}}},
         },
@@ -70,3 +71,21 @@ def test_lambda_handler_returns_500_when_secret_not_configured() -> None:
     with patch.dict(os.environ, {"VIESSMANN_CREDENTIALS_SECRET_ARN": ""}, clear=False):
         result = mod.lambda_handler(event, None)
     assert result["statusCode"] == 500
+
+
+def test_lambda_handler_unknown_route_returns_404() -> None:
+    event = {"routeKey": "DELETE /something", "requestContext": {"authorizer": {"claims": {}}}}
+    result = mod.lambda_handler(event, None)
+    assert result["statusCode"] == 404
+
+
+def test_lambda_handler_post_mode_invalid_mode() -> None:
+    event = {
+        "routeKey": "POST /heating/mode",
+        "requestContext": {"authorizer": {"jwt": {"claims": {"sub": "user-1"}}}},
+        "body": json.dumps({"mode": "turbo"}),
+    }
+    result = mod.lambda_handler(event, None)
+    assert result["statusCode"] == 400
+    body = json.loads(result["body"])
+    assert "Invalid mode" in body["error"]

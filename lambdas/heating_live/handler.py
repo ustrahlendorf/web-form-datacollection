@@ -1,9 +1,11 @@
 """
-Lambda handler for heating live data endpoint.
+Lambda handler for heating live data and mode control endpoints.
 
-Handles GET /heating/live requests. Fetches gas consumption (m³ today so far, m³ yesterday),
-betriebsstunden, starts, supply temperature, and outside temperature from the Viessmann IoT API via the
-backend.heating.iot_data.heating_values module. Credentials are read from AWS Secrets Manager.
+Handles:
+  GET  /heating/live  — fetch current heating values (consumption, temps, operating_mode)
+  POST /heating/mode  — set the operating mode ("heating" or "standby")
+
+Credentials are read from AWS Secrets Manager.
 """
 
 import json
@@ -98,41 +100,78 @@ def format_success_response(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _load_credentials_into_env() -> None:
+    creds = _load_viessmann_credentials()
+    os.environ["VIESSMANN_CLIENT_ID"] = creds["VIESSMANN_CLIENT_ID"]
+    os.environ["VIESSMANN_EMAIL"] = creds["VIESSMANN_EMAIL"]
+    os.environ["VIESSMANN_PASSWORD"] = creds["VIESSMANN_PASSWORD"]
+
+
+def _handle_get_live(event: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        extract_user_id(event)
+    except KeyError:
+        return format_error_response(401, "Unauthorized")
+
+    _load_credentials_into_env()
+
+    from backend.heating.iot_data.get_iot_config import get_iot_config
+    from backend.heating.iot_data.heating_values import get_heating_values
+
+    iot_config = get_iot_config(timeout_seconds=30.0, ssl_verify=True)
+    values = get_heating_values(iot_config, timeout_seconds=30.0, ssl_verify=True)
+    return format_success_response(values)
+
+
+def _handle_post_mode(event: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        extract_user_id(event)
+    except KeyError:
+        return format_error_response(401, "Unauthorized")
+
+    body_raw = event.get("body") or "{}"
+    try:
+        body = json.loads(body_raw)
+    except json.JSONDecodeError:
+        return format_error_response(400, "Invalid JSON body")
+
+    mode = body.get("mode")
+    if mode not in ("heating", "standby"):
+        return format_error_response(400, "Invalid mode; must be 'heating' or 'standby'")
+
+    _load_credentials_into_env()
+
+    from backend.heating.iot_data.get_iot_config import get_iot_config
+    from backend.heating.iot_data.heating_values import set_heating_mode
+
+    iot_config = get_iot_config(timeout_seconds=30.0, ssl_verify=True)
+    set_heating_mode(mode, iot_config, timeout_seconds=30.0, ssl_verify=True)
+    print(f"Heating mode set to '{mode}'")
+    return format_success_response({"mode": mode})
+
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Handle GET /heating/live requests.
-
-    Fetches heating values from Viessmann IoT API and returns them as JSON.
+    Dispatch GET /heating/live and POST /heating/mode requests.
 
     Args:
-        event: Lambda event containing request context
+        event: Lambda event from API Gateway HTTP API (payload format 2.0)
         context: Lambda context object
 
     Returns:
         API Gateway response with statusCode and body
     """
+    route_key = event.get("routeKey", "")
     try:
-        try:
-            extract_user_id(event)
-        except KeyError:
-            return format_error_response(401, "Unauthorized")
-
-        creds = _load_viessmann_credentials()
-        os.environ["VIESSMANN_CLIENT_ID"] = creds["VIESSMANN_CLIENT_ID"]
-        os.environ["VIESSMANN_EMAIL"] = creds["VIESSMANN_EMAIL"]
-        os.environ["VIESSMANN_PASSWORD"] = creds["VIESSMANN_PASSWORD"]
-
-        from backend.heating.iot_data.get_iot_config import get_iot_config
-        from backend.heating.iot_data.heating_values import get_heating_values
-
-        iot_config = get_iot_config(timeout_seconds=30.0, ssl_verify=True)
-        values = get_heating_values(iot_config, timeout_seconds=30.0, ssl_verify=True)
-
-        return format_success_response(values)
-
+        if route_key == "GET /heating/live":
+            return _handle_get_live(event)
+        elif route_key == "POST /heating/mode":
+            return _handle_post_mode(event)
+        else:
+            return format_error_response(404, "Not found")
     except ValueError as e:
-        print(f"Heating live handler error: {e}")
+        print(f"Heating handler error: {e}")
         return format_error_response(500, "Configuration error")
     except Exception as e:
-        print(f"Heating live handler error: {e}")
-        return format_error_response(500, "Failed to retrieve heating data")
+        print(f"Heating handler error: {e}")
+        return format_error_response(500, "Internal server error")

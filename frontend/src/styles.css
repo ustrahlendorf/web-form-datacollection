@@ -694,6 +694,80 @@ input[type="number"].error {
     color: #7f8c8d;
 }
 
+/* Modal overlay */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-box {
+    background: white;
+    border-radius: 8px;
+    padding: 2rem;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.modal-box h3 {
+    margin-bottom: 1rem;
+}
+
+.modal-box p {
+    margin-bottom: 1.5rem;
+    color: #34495e;
+    line-height: 1.5;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+}
+
+/* Heating control (Settings page) */
+.settings-heating-control {
+    margin-top: 1.25rem;
+}
+
+.heating-control-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem;
+    background: white;
+    border: 1px solid #ecf0f1;
+    border-radius: 6px;
+}
+
+.heating-control-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+}
+
+.heating-control-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.heating-control-dot--on { background-color: #2ecc71; }
+.heating-control-dot--off { background-color: #7f8c8d; }
+
+.heating-control-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .nav-container {

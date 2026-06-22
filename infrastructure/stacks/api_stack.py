@@ -452,13 +452,22 @@ class APIStack(Stack):
             authorizer=jwt_authorizer,
         )
 
-        # GET /heating/live route (optional; requires Viessmann credentials secret)
+        # GET /heating/live and POST /heating/mode routes (optional; requires Viessmann credentials secret)
         if heating_live_handler is not None:
             http_api.add_routes(
                 path="/heating/live",
                 methods=[apigw.HttpMethod.GET],
                 integration=apigw_integrations.HttpLambdaIntegration(
                     "HeatingLiveIntegration",
+                    heating_live_handler,
+                ),
+                authorizer=jwt_authorizer,
+            )
+            http_api.add_routes(
+                path="/heating/mode",
+                methods=[apigw.HttpMethod.POST],
+                integration=apigw_integrations.HttpLambdaIntegration(
+                    "HeatingModeIntegration",
                     heating_live_handler,
                 ),
                 authorizer=jwt_authorizer,

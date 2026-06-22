@@ -221,6 +221,7 @@ function navigateToPage(page) {
         loadLive();
     } else if (page === 'settings') {
         loadSettings();
+        loadHeatingControl();
     }
 }
 
@@ -2599,6 +2600,123 @@ function formatDelta(deltaRaw, opts = {}) {
         return `(${valueStr})`;
     }
     return '(0)';
+}
+
+// Heating Control (Settings page)
+function confirmDialog(message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('heating-mode-modal');
+        const msgEl = document.getElementById('modal-message');
+        const confirmBtn = document.getElementById('modal-confirm-btn');
+        const cancelBtn = document.getElementById('modal-cancel-btn');
+        if (!modal || !msgEl || !confirmBtn || !cancelBtn) {
+            resolve(window.confirm(message));
+            return;
+        }
+        msgEl.textContent = message;
+        modal.style.display = 'flex';
+
+        const cleanup = (result) => {
+            modal.style.display = 'none';
+            confirmBtn.removeEventListener('click', onConfirm);
+            cancelBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onOverlay);
+            resolve(result);
+        };
+        const onConfirm = () => cleanup(true);
+        const onCancel = () => cleanup(false);
+        const onOverlay = (e) => { if (e.target === modal) cleanup(false); };
+
+        confirmBtn.addEventListener('click', onConfirm);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.addEventListener('click', onOverlay);
+    });
+}
+
+function renderHeatingControl(mode) {
+    const container = document.getElementById('heating-control-content');
+    if (!container) return;
+
+    if (!mode) {
+        container.innerHTML = '<p class="empty-state">Heizungsstatus nicht verfügbar.</p>';
+        return;
+    }
+
+    const isOn = mode === 'heating' || mode === 'dhwAndHeating';
+    const dotClass = isOn ? 'heating-control-dot--on' : 'heating-control-dot--off';
+    const statusText = isOn ? `Heizung AN (${mode})` : `Heizung AUS (${mode})`;
+    const targetMode = isOn ? 'standby' : 'heating';
+    const btnLabel = isOn ? 'Heizung ausschalten' : 'Heizung einschalten';
+    const btnClass = isOn ? 'btn btn-secondary' : 'btn btn-primary';
+
+    container.innerHTML = `
+        <div class="heating-control-card">
+            <div class="heating-control-status">
+                <span class="heating-control-dot ${dotClass}"></span>
+                <span>${statusText}</span>
+            </div>
+            <div class="heating-control-actions">
+                <button type="button" class="${btnClass}" id="heating-mode-toggle-btn" data-target-mode="${targetMode}">
+                    ${btnLabel}
+                </button>
+            </div>
+        </div>
+    `;
+
+    const toggleBtn = document.getElementById('heating-mode-toggle-btn');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => setHeatingMode(targetMode));
+    }
+}
+
+async function loadHeatingControl() {
+    const container = document.getElementById('heating-control-content');
+    if (!container) return;
+    container.innerHTML = '<p class="empty-state">Lade Heizungsstatus...</p>';
+    try {
+        const data = await fetchLiveHeatingData();
+        renderHeatingControl(data.operating_mode || null);
+    } catch (_) {
+        container.innerHTML = '<p class="empty-state">Heizungsstatus konnte nicht geladen werden.</p>';
+    }
+}
+
+async function setHeatingMode(newMode) {
+    const modeLabel = newMode === 'heating' ? 'AN (heating)' : 'AUS (standby)';
+    const confirmed = await confirmDialog(`Heizungsstatus wirklich auf "${modeLabel}" ändern?`);
+    if (!confirmed) return;
+
+    const toggleBtn = document.getElementById('heating-mode-toggle-btn');
+    if (toggleBtn) {
+        toggleBtn.disabled = true;
+        toggleBtn.textContent = 'Wird geändert…';
+    }
+
+    try {
+        const response = await authenticatedFetch(`${CONFIG.API_ENDPOINT}/heating/mode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: newMode }),
+        });
+        if (!response.ok) {
+            const errBody = await response.json().catch(() => ({}));
+            throw new Error(errBody.error || `Fehler: HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        renderHeatingControl(data.mode || newMode);
+        renderHeatingStatus(data.mode || newMode);
+    } catch (err) {
+        console.error('setHeatingMode error:', err);
+        await loadHeatingControl();
+        const container = document.getElementById('heating-control-content');
+        if (container) {
+            const msgEl = document.createElement('p');
+            msgEl.className = 'message error';
+            msgEl.style.display = 'block';
+            msgEl.textContent = err.message || 'Fehler beim Ändern des Heizungsstatus.';
+            container.appendChild(msgEl);
+        }
+    }
 }
 
 // Exports for Jest tests (Node environment). No impact in browser runtime.

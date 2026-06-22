@@ -376,8 +376,29 @@
                         </div>
                     </div>
                 </div>
+                <div class="settings-section settings-heating-control">
+                    <h3>Heizungssteuerung</h3>
+                    <p class="settings-description">
+                        Betriebsmodus der Heizung direkt ändern (heating / standby).
+                    </p>
+                    <div id="heating-control-content">
+                        <p class="empty-state">Lade Heizungsstatus...</p>
+                    </div>
+                </div>
             </section>
         </main>
+    </div>
+
+    <!-- Heating Mode Confirmation Modal -->
+    <div id="heating-mode-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-box">
+            <h3 id="modal-title">Heizungsstatus ändern</h3>
+            <p id="modal-message"></p>
+            <div class="modal-actions">
+                <button id="modal-confirm-btn" class="btn btn-primary">Bestätigen</button>
+                <button id="modal-cancel-btn" class="btn btn-secondary">Abbrechen</button>
+            </div>
+        </div>
     </div>
 
     <!-- Login Section (shown when not authenticated) -->

@@ -11,9 +11,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+import requests
+
+from ...shared import config as config_mod
 from .feature_data_fetcher import get_device_features
 from .feature_extractors import get_feature_value
 from .get_iot_config import IotConfig
+
+OPERATING_MODE_FEATURE = "heating.circuits.0.operating.modes.active"
+VALID_HEATING_MODES = frozenset({"heating", "standby"})
 
 # Feature paths per plan: heating.gas.consumption.heating, supply temp from sensors
 HEATING_FEATURE_PATHS = [
@@ -148,4 +154,50 @@ def get_heating_values(
     }
 
 
-__all__ = ["get_heating_values"]
+def set_heating_mode(
+    mode: str,
+    iot_config: IotConfig,
+    *,
+    timeout_seconds: float = 30.0,
+    ssl_verify: bool = True,
+) -> None:
+    """
+    Set the heating operating mode via the Viessmann IoT API setMode command.
+
+    Args:
+        mode: Target mode — must be "heating" or "standby".
+        iot_config: IoT configuration from get_iot_config().
+        timeout_seconds: HTTP timeout.
+        ssl_verify: Whether to verify TLS certificates.
+
+    Raises:
+        ValueError: If mode is not a valid value.
+        RuntimeError: If the Viessmann API command returns an error.
+    """
+    if mode not in VALID_HEATING_MODES:
+        raise ValueError(f"Invalid mode {mode!r}; must be one of {sorted(VALID_HEATING_MODES)}")
+
+    tmpl = config_mod.get_iot_single_feature_url_tmpl()
+    feature_url = tmpl.format(
+        installation_id=iot_config.installation_id,
+        gateway_serial=iot_config.gateway_serial,
+        device_id=iot_config.device_id,
+        feature_path=OPERATING_MODE_FEATURE,
+    )
+    command_url = f"{feature_url}/commands/setMode"
+
+    resp = requests.post(
+        command_url,
+        json={"mode": mode},
+        headers={"Authorization": f"Bearer {iot_config.access_token}"},
+        timeout=float(timeout_seconds),
+        verify=bool(ssl_verify),
+    )
+    if resp.status_code >= 400:
+        body = (resp.text or "")[:400]
+        raise RuntimeError(
+            f"setMode command failed: HTTP {resp.status_code}. Body: {body!r}"
+        )
+
+
+__all__ = ["get_heating_values", "set_heating_mode"]
