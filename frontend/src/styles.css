@@ -334,7 +334,7 @@ input[type="number"].error {
 
 /* History Table */
 #history-content {
-    max-height: 32rem;
+    max-height: 60rem;
     overflow: auto;
 }
 
