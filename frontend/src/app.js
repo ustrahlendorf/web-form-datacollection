@@ -1666,6 +1666,8 @@ function computeWeeklyMinimumStats(sortedSubmissions) {
         minVorlaufTemp: null,
         minOutsideTemp: null,
         consumptionMinimumTied: false,
+        zeroWeeksCount: 0,
+        earliestZeroWeek: null,
     };
 
     const aggregatesAll = buildWeeklyConsumptionBuckets(sortedSubmissions);
@@ -1679,9 +1681,20 @@ function computeWeeklyMinimumStats(sortedSubmissions) {
         return empty;
     }
 
+    // Count complete weeks with 0 m³ consumption and find the chronologically earliest one.
+    const zeroAggregates = aggregates.filter((a) => a.sumVerbrauchQm === 0);
+    const zeroWeeksCount = zeroAggregates.length;
+    let earliestZeroWeek = null;
+    if (zeroWeeksCount > 0) {
+        const earliest = zeroAggregates.reduce((best, a) =>
+            compareIsoWeekOrder(a.isoWeekYear, a.isoWeek, best.isoWeekYear, best.isoWeek) < 0 ? a : best
+        );
+        earliestZeroWeek = { isoWeekYear: earliest.isoWeekYear, isoWeek: earliest.isoWeek };
+    }
+
     const bestAgg = pickWeeklyBucketByConsumptionExtreme(aggregates, 'min');
     if (!bestAgg) {
-        return empty;
+        return { ...empty, zeroWeeksCount, earliestZeroWeek };
     }
 
     const minConsumption = bestAgg.sumVerbrauchQm;
@@ -1691,7 +1704,6 @@ function computeWeeklyMinimumStats(sortedSubmissions) {
             weeksAtMin += 1;
         }
     }
-    const consumptionMinimumTied = weeksAtMin > 1;
 
     const { isoWeekYear, isoWeek } = bestAgg;
     return {
@@ -1724,7 +1736,9 @@ function computeWeeklyMinimumStats(sortedSubmissions) {
                 isoWeek,
             }
             : null,
-        consumptionMinimumTied,
+        consumptionMinimumTied: weeksAtMin > 1,
+        zeroWeeksCount,
+        earliestZeroWeek,
     };
 }
 
@@ -2081,26 +2095,27 @@ function renderAnalyzeMinWeek(mins) {
     if (!container) return;
 
     const m = mins && typeof mins === 'object' ? mins : {};
-    const tied = Boolean(m.consumptionMinimumTied);
-    const cardClass = tied ? 'analyze-card analyze-card--consumption-tied' : 'analyze-card';
-    const tieBanner = tied
-        ? '<p class="analyze-peak-tie-banner" role="status">⚠ Multiple weeks share this minimum consumption; showing the lexicographically earlier week.</p>'
-        : '';
+    const zeroCount = typeof m.zeroWeeksCount === 'number' ? m.zeroWeeksCount : 0;
 
-    const cwLine = formatPeakWeekContextLine(m.minVerbrauchQm);
+    // CW context line: earliest zero week if any, else fall back to the min week
+    const refWeek = m.earliestZeroWeek || m.minVerbrauchQm;
+    const cwLine = formatPeakWeekContextLine(refWeek);
     const cwLineHtml = cwLine
         ? `<div class="analyze-peak-week-range-line" role="note">${cwLine}</div>`
         : '';
 
     container.innerHTML = `
-        <div class="${cardClass}">
+        <div class="analyze-card">
             <div class="analyze-card-title">Minimum week (consumption)</div>
-            ${tieBanner}
             <div class="analyze-metrics">
                 ${cwLineHtml}
                 <div class="analyze-metric">
-                    <span class="analyze-metric-label">Consumption (m³)</span>
-                    <span class="analyze-metric-value">${formatPeakScalarValue(m.minVerbrauchQm, { kind: 'decimal', decimals: 2 })}</span>
+                    ${zeroCount > 0
+                        ? `<span class="analyze-metric-label">Weeks with 0 m³ Consumption</span>
+                           <span class="analyze-metric-value">${zeroCount}</span>`
+                        : `<span class="analyze-metric-label">Consumption (m³)</span>
+                           <span class="analyze-metric-value">${formatPeakScalarValue(m.minVerbrauchQm, { kind: 'decimal', decimals: 2 })}</span>`
+                    }
                 </div>
                 <div class="analyze-metric">
                     <span class="analyze-metric-label">Operating hours</span>
@@ -2530,7 +2545,7 @@ async function loadAnalyze() {
         renderAnalyzeMinWeek(minStats);
         renderAnalyzeWeeklyBreakdown(computeWeeklyBreakdownStats(sorted), {
             peakWeek: peakStats.peakVerbrauchQm,
-            minimumWeek: minStats.minVerbrauchQm,
+            minimumWeek: minStats.earliestZeroWeek || minStats.minVerbrauchQm,
         });
     } catch (error) {
         console.error('Error loading analyze statistics:', error);

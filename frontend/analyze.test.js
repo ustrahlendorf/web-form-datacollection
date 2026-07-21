@@ -408,6 +408,8 @@ describe('Analyze helpers', () => {
         minVorlaufTemp: null,
         minOutsideTemp: null,
         consumptionMinimumTied: false,
+        zeroWeeksCount: 0,
+        earliestZeroWeek: null,
       });
     });
 
@@ -433,6 +435,25 @@ describe('Analyze helpers', () => {
         isoWeekYear: pEarlier.isoWeekYear,
         isoWeek: pEarlier.isoWeek,
       });
+    });
+
+    test('counts complete zero-consumption weeks and identifies the earliest one', () => {
+      jest.useFakeTimers();
+      // Fix "today" to a week well after the test data so none of the weeks are current.
+      jest.setSystemTime(new Date(Date.UTC(2025, 5, 1)));
+      try {
+        const zeroA = { datum: '21.01.2025', delta_betriebsstunden: 0, delta_starts: 0, verbrauch_qm: 0 };
+        const zeroB = { datum: '28.01.2025', delta_betriebsstunden: 0, delta_starts: 0, verbrauch_qm: 0 };
+        const nonZero = { datum: '05.02.2025', delta_betriebsstunden: 5, delta_starts: 2, verbrauch_qm: 2.5 };
+        const mins = computeWeeklyMinimumStats([zeroA, zeroB, nonZero]);
+        expect(mins.zeroWeeksCount).toBe(2);
+        // CW 4 of 2025 is the week of 20.01.2025 (Mon) — earlier than CW 5
+        const dA = parseGermanDateToUtcMidnight('21.01.2025');
+        const pA = getIsoWeekPartsFromUtcDate(dA);
+        expect(mins.earliestZeroWeek).toEqual({ isoWeekYear: pA.isoWeekYear, isoWeek: pA.isoWeek });
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     test('averages vorlauf_temp and aussentemp in the minimum-consumption ISO week', () => {
@@ -530,6 +551,8 @@ describe('Analyze helpers', () => {
           minVorlaufTemp: null,
           minOutsideTemp: null,
           consumptionMinimumTied: false,
+          zeroWeeksCount: 0,
+          earliestZeroWeek: null,
         });
       } finally {
         jest.useRealTimers();
