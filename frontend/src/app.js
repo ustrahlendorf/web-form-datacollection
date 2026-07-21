@@ -14,6 +14,8 @@ const state = {
     isAuthenticated: false,
     currentPage: 'form',
     historyNextToken: null,
+    historyCurrentToken: null,   // token used to fetch the currently displayed page
+    historyTokenStack: [],       // stack of start-tokens for back navigation
     settingsStatusPollTimer: null,
     heatingStatusTimer: null,
 };
@@ -212,6 +214,8 @@ function navigateToPage(page) {
 
     // Load page-specific data
     if (page === 'history') {
+        state.historyTokenStack = [];
+        state.historyCurrentToken = null;
         loadHistory();
     } else if (page === 'analyze') {
         loadAnalyze();
@@ -1170,6 +1174,7 @@ async function loadHistory(nextToken = null) {
         displayHistory(data.submissions || []);
         
         // Update pagination
+        state.historyCurrentToken = nextToken;
         state.historyNextToken = data.next_token || null;
         updatePaginationControls(!!data.next_token);
     } catch (error) {
@@ -1232,33 +1237,32 @@ function updatePaginationControls(hasNextPage) {
     if (!controls) {
         return;
     }
-    
-    if (!hasNextPage && !state.historyNextToken) {
+
+    const hasPrev = state.historyTokenStack.length > 0;
+    if (!hasNextPage && !hasPrev) {
         controls.style.display = 'none';
         return;
     }
-    
+
     controls.style.display = 'flex';
-    
+
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
-    
+
     if (prevBtn) {
-        prevBtn.disabled = !state.historyPreviousToken;
-        prevBtn.addEventListener('click', () => {
-            if (state.historyPreviousToken) {
-                loadHistory(state.historyPreviousToken);
-            }
-        });
+        prevBtn.disabled = !hasPrev;
+        prevBtn.onclick = () => {
+            const prevToken = state.historyTokenStack.pop();
+            loadHistory(prevToken);
+        };
     }
-    
+
     if (nextBtn) {
         nextBtn.disabled = !hasNextPage;
-        nextBtn.addEventListener('click', () => {
-            if (state.historyNextToken) {
-                loadHistory(state.historyNextToken);
-            }
-        });
+        nextBtn.onclick = () => {
+            state.historyTokenStack.push(state.historyCurrentToken);
+            loadHistory(state.historyNextToken);
+        };
     }
 }
 
