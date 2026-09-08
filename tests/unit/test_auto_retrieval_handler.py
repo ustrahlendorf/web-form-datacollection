@@ -576,3 +576,154 @@ def test_lambda_handler_no_active_windows_param_proceeds() -> None:
     finally:
         if env_backup is not None:
             os.environ["ACTIVE_WINDOWS_PARAM"] = env_backup
+
+
+# =============================================================================
+# Lambda handler skips storage when heating is off (frequent scheduler)
+# =============================================================================
+
+
+@patch("backend.viessmann.viessmann_submit.store_viessmann_submission")
+@patch("backend.heating.iot_data.heating_values.get_heating_values")
+@patch("backend.heating.iot_data.get_iot_config.get_iot_config")
+@patch("lambdas.auto_retrieval.handler._load_viessmann_credentials")
+@patch("lambdas.auto_retrieval.handler._load_config")
+def test_lambda_handler_skips_when_heating_off(
+    mock_load_config: MagicMock,
+    mock_load_creds: MagicMock,
+    mock_get_iot_config: MagicMock,
+    mock_get_heating_values: MagicMock,
+    mock_store_submission: MagicMock,
+) -> None:
+    """Frequent scheduler (ONCE_DAILY=false) must skip storage when operating_mode is 'standby'."""
+    mock_load_config.return_value = {
+        "max_retries": 1,
+        "retry_delay_seconds": 60,
+        "user_id": "test-user",
+    }
+    mock_load_creds.return_value = {
+        "VIESSMANN_CLIENT_ID": "client",
+        "VIESSMANN_EMAIL": "email",
+        "VIESSMANN_PASSWORD": "password",
+    }
+    mock_get_heating_values.return_value = {
+        "betriebsstunden": 100,
+        "starts": 10,
+        "operating_mode": "standby",
+    }
+
+    with patch.dict(
+        "os.environ",
+        {
+            "ONCE_DAILY": "false",
+            "SUBMISSIONS_TABLE": "test-table",
+            "VIESSMANN_CREDENTIALS_SECRET_ARN": "arn:aws:secretsmanager:eu-central-1:123:secret:test",
+        },
+        clear=False,
+    ):
+        if "ACTIVE_WINDOWS_PARAM" in __import__("os").environ:
+            del __import__("os").environ["ACTIVE_WINDOWS_PARAM"]
+        result = lambda_handler({}, None)
+
+    assert result["statusCode"] == 200
+    body = json.loads(result["body"])
+    assert body == {"skipped": "heating_off", "operating_mode": "standby"}
+    mock_store_submission.assert_not_called()
+
+
+@patch("backend.viessmann.viessmann_submit.store_viessmann_submission")
+@patch("backend.heating.iot_data.heating_values.get_heating_values")
+@patch("backend.heating.iot_data.get_iot_config.get_iot_config")
+@patch("lambdas.auto_retrieval.handler._load_viessmann_credentials")
+@patch("lambdas.auto_retrieval.handler._load_config")
+def test_lambda_handler_stores_when_heating_active(
+    mock_load_config: MagicMock,
+    mock_load_creds: MagicMock,
+    mock_get_iot_config: MagicMock,
+    mock_get_heating_values: MagicMock,
+    mock_store_submission: MagicMock,
+) -> None:
+    """Frequent scheduler must proceed with storage when operating_mode is an active mode."""
+    mock_load_config.return_value = {
+        "max_retries": 1,
+        "retry_delay_seconds": 60,
+        "user_id": "test-user",
+    }
+    mock_load_creds.return_value = {
+        "VIESSMANN_CLIENT_ID": "client",
+        "VIESSMANN_EMAIL": "email",
+        "VIESSMANN_PASSWORD": "password",
+    }
+    mock_get_heating_values.return_value = {
+        "betriebsstunden": 100,
+        "starts": 10,
+        "operating_mode": "heating",
+    }
+    mock_store_submission.return_value = (True, "submission-1")
+
+    with patch.dict(
+        "os.environ",
+        {
+            "ONCE_DAILY": "false",
+            "SUBMISSIONS_TABLE": "test-table",
+            "VIESSMANN_CREDENTIALS_SECRET_ARN": "arn:aws:secretsmanager:eu-central-1:123:secret:test",
+        },
+        clear=False,
+    ):
+        if "ACTIVE_WINDOWS_PARAM" in __import__("os").environ:
+            del __import__("os").environ["ACTIVE_WINDOWS_PARAM"]
+        result = lambda_handler({}, None)
+
+    assert result["statusCode"] == 200
+    body = json.loads(result["body"])
+    assert body == {"submission_id": "submission-1"}
+    mock_store_submission.assert_called_once()
+
+
+@patch("backend.viessmann.viessmann_submit.store_viessmann_submission")
+@patch("backend.heating.iot_data.heating_values.get_heating_values")
+@patch("backend.heating.iot_data.get_iot_config.get_iot_config")
+@patch("lambdas.auto_retrieval.handler._load_viessmann_credentials")
+@patch("lambdas.auto_retrieval.handler._load_config")
+def test_lambda_handler_once_daily_stores_even_when_heating_off(
+    mock_load_config: MagicMock,
+    mock_load_creds: MagicMock,
+    mock_get_iot_config: MagicMock,
+    mock_get_heating_values: MagicMock,
+    mock_store_submission: MagicMock,
+) -> None:
+    """Once-daily job must NOT skip on operating_mode; it always stores."""
+    mock_load_config.return_value = {
+        "max_retries": 1,
+        "retry_delay_seconds": 60,
+        "user_id": "test-user",
+    }
+    mock_load_creds.return_value = {
+        "VIESSMANN_CLIENT_ID": "client",
+        "VIESSMANN_EMAIL": "email",
+        "VIESSMANN_PASSWORD": "password",
+    }
+    mock_get_heating_values.return_value = {
+        "betriebsstunden": 100,
+        "starts": 10,
+        "operating_mode": "standby",
+    }
+    mock_store_submission.return_value = (True, "submission-1")
+
+    with patch.dict(
+        "os.environ",
+        {
+            "ONCE_DAILY": "true",
+            "SUBMISSIONS_TABLE": "test-table",
+            "VIESSMANN_CREDENTIALS_SECRET_ARN": "arn:aws:secretsmanager:eu-central-1:123:secret:test",
+        },
+        clear=False,
+    ):
+        if "ACTIVE_WINDOWS_PARAM" in __import__("os").environ:
+            del __import__("os").environ["ACTIVE_WINDOWS_PARAM"]
+        result = lambda_handler({}, None)
+
+    assert result["statusCode"] == 200
+    body = json.loads(result["body"])
+    assert body == {"submission_id": "submission-1"}
+    mock_store_submission.assert_called_once()

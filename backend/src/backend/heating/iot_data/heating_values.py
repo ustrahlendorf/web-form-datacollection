@@ -21,6 +21,10 @@ from .get_iot_config import IotConfig
 OPERATING_MODE_FEATURE = "heating.circuits.0.operating.modes.active"
 VALID_HEATING_MODES = frozenset({"heating", "standby"})
 
+# operating_mode values (from get_heating_values) that mean the heating is actively
+# running — mirrors the "Heizung AN/AUS" logic in frontend/src/app.js.
+HEATING_ACTIVE_MODES = frozenset({"heating", "dhwAndHeating"})
+
 # Feature paths per plan: heating.gas.consumption.heating, supply temp from sensors
 HEATING_FEATURE_PATHS = [
     "heating.gas.consumption.heating",
@@ -200,4 +204,4 @@ def set_heating_mode(
         )
 
 
-__all__ = ["get_heating_values", "set_heating_mode"]
+__all__ = ["get_heating_values", "set_heating_mode", "HEATING_ACTIVE_MODES"]

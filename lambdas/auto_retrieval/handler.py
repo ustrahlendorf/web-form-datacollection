@@ -8,6 +8,10 @@ Publishes to SNS on final failure.
 When ACTIVE_WINDOWS_PARAM is set (frequent scheduler), Lambda checks current time
 in AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE (default UTC) against configured windows
 and exits early if outside any window.
+
+For the frequent scheduler (ONCE_DAILY=false), storage is also skipped when the
+heating's operating_mode is not an active mode (e.g. "standby" / "Heizung AUS"),
+since operating_mode is already part of the single Viessmann feature batch call.
 """
 
 import json
@@ -483,7 +487,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     When ACTIVE_WINDOWS_PARAM is set (frequent scheduler), exits early if current
     time in AUTO_RETRIEVAL_ACTIVE_WINDOWS_TIMEZONE (default UTC) is outside any
-    configured active window.
+    configured active window. For the frequent scheduler (ONCE_DAILY=false), also
+    exits early once fetched if the heating's operating_mode is not active
+    (e.g. "standby").
     """
     if _check_active_window_and_maybe_skip():
         return {"statusCode": 200, "body": json.dumps({"skipped": "outside_active_window"})}
@@ -508,7 +514,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     os.environ["VIESSMANN_PASSWORD"] = creds["VIESSMANN_PASSWORD"]
 
     from backend.heating.iot_data.get_iot_config import get_iot_config
-    from backend.heating.iot_data.heating_values import get_heating_values
+    from backend.heating.iot_data.heating_values import get_heating_values, HEATING_ACTIVE_MODES
 
     from backend.viessmann.viessmann_submit import store_viessmann_submission
 
@@ -521,6 +527,23 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # Validate we have minimum required data
             if values.get("betriebsstunden") is None and values.get("starts") is None:
                 raise ValueError("Viessmann API returned no betriebsstunden or starts")
+
+            operating_mode = values.get("operating_mode")
+            if (
+                not _is_once_daily_event()
+                and operating_mode is not None
+                and operating_mode not in HEATING_ACTIVE_MODES
+            ):
+                print(
+                    f"Heating is off (operating_mode={operating_mode!r}); "
+                    "skipping frequent storage"
+                )
+                return {
+                    "statusCode": 200,
+                    "body": json.dumps(
+                        {"skipped": "heating_off", "operating_mode": operating_mode}
+                    ),
+                }
 
             skip_dup_str = os.environ.get("AUTO_RETRIEVAL_SKIP_DUPLICATE", "true").lower()
             skip_if_duplicate = skip_dup_str in ("true", "1", "yes")
