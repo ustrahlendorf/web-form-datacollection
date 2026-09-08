@@ -34,6 +34,7 @@ task deploy-frontend
 
 - `ACTIVE_SUBMISSIONS_TABLE_NAME` / `PASSIVE_SUBMISSIONS_TABLE_NAME` müssen in `taskfile.env` gesetzt sein.
 - `task deploy-api` deployt nur den API-Stack; `task deploy-api-with-deps` zieht Abhängigkeiten mit.
+- CDK-Deploys bündeln Lambda-Assets via Docker (`heating_lambda_bundling`). **Default-Docker-Runtime ist `colima`**, nicht Docker Desktop: vor einem Deploy `colima start` (falls nicht bereits per `colima status` als laufend gemeldet); Docker Desktop nicht eigenständig starten.
 
 ## Frontend Build & Deploy
 
