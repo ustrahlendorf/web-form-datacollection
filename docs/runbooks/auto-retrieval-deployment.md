@@ -237,6 +237,10 @@ Deploy-time schedule values remain in SSM. Runtime values are managed in AppConf
 - Daily scheduler sets `ONCE_DAILY=true`; it always executes on its EventBridge **Scheduler** schedule and ignores `ACTIVE_WINDOWS_PARAM` / `frequentActiveWindows`.
 - Frequent scheduler sets `ONCE_DAILY=false`; it evaluates active windows and may skip runs outside configured windows.
 
+**Heating-off behavior by scheduler type:**
+- Frequent scheduler (`ONCE_DAILY=false`) also skips storage when the heating's `operating_mode` (fetched in the same Viessmann batch call, no extra API cost) is not an active mode — i.e. `"standby"` ("Heizung AUS") rather than `"heating"` / `"dhwAndHeating"`. Response body: `{"skipped": "heating_off", "operating_mode": "standby"}`. If `operating_mode` is missing/`null`, the Lambda proceeds and stores anyway (fail-open).
+- Daily scheduler (`ONCE_DAILY=true`) always stores its reading regardless of heating status, so the daily record stays complete.
+
 Example: change daily schedule to 07:30 **local time** in `ScheduleTimezone` (here `Europe/Berlin`):
 
 ```bash
@@ -286,7 +290,7 @@ Stack output `DailyAutoRetrievalScheduleName` matches the schedule name (e.g. `h
 
 ## Frequent Scheduler (Multiple Runs Per Day)
 
-The **frequent** scheduler runs multiple times per day within configurable active windows, using a dedicated DynamoDB table and SNS topic:
+The **frequent** scheduler runs multiple times per day within configurable active windows, using a dedicated DynamoDB table and SNS topic. It also skips storage for any run where the heating is off (`operating_mode` is `"standby"`) — see "Heating-off behavior by scheduler type" in Step 4.
 
 ```bash
 task deploy-init                 # Deploy first to create FrequentScheduleCron parameter
@@ -348,7 +352,7 @@ cdk destroy DataCollectionScheduler-dev
 |---------|-------|
 | Lambda fails with "AutoRetrieval userId not configured" | Set AppConfig `userId` first. If migration fallback is enabled, also verify `${PFX}/AutoRetrieval/UserId` |
 | Lambda fails with "VIESSMANN_CREDENTIALS_SECRET_ARN not set" | Ensure `taskfile.env` has `VIESSMANN_CREDENTIALS_SECRET_ARN` and Scheduler stack was deployed with it |
-| No data stored | Check CloudWatch Logs; may be skipped as duplicate (same datum_iso) |
+| No data stored | Check CloudWatch Logs; may be skipped as duplicate (same datum_iso), or — for the frequent scheduler only — skipped because heating is off (`"skipped": "heating_off"`) |
 | SNS alert received | Check logs for error details; verify Viessmann API connectivity |
 | Settings save succeeds but new behavior not visible yet | Deployment may still be in progress; wait for rollout window and verify Lambda logs on next scheduler run |
 
