@@ -1,2 +1,4 @@
 -r requirements.txt
 pytest==9.2.0
+# nur für scripts/import_history.py (in Lambda ist boto3 vorinstalliert)
+boto3==1.44.1
