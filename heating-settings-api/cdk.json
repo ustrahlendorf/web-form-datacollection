@@ -1,0 +1,12 @@
+{
+  "app": "python3 app.py",
+  "watch": {
+    "include": ["**"],
+    "exclude": ["README.md", "cdk*.json", "requirements*.txt", ".venv", "**/__pycache__", "tests", "cdk.out"]
+  },
+  "context": {
+    "@aws-cdk/core:checkSecretUsage": true,
+    "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
+    "@aws-cdk/aws-iam:minimizePolicies": true
+  }
+}
