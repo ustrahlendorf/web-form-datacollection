@@ -47,7 +47,7 @@ def handler(event, _context):
     pk = f"SYSTEM#{os.environ.get('SYSTEM_ID', 'haus')}"
     table = _get_table()
     try:
-        now_utc, now_local = logic.now_pair()
+        _, now_local = logic.now_pair()
         parsed = logic.parse_payload(_body(event), now_local)
         sk = logic.sort_key(parsed["event_at"], parsed["request_id"])
 
@@ -76,7 +76,7 @@ def handler(event, _context):
         if later:
             quality.append("backdated_before_later_events")
 
-        item = logic.build_item(pk, parsed, merged, prev, changed, quality, now_utc)
+        item = logic.build_item(pk, parsed, merged, prev, changed, quality, now_local)
         table.put_item(
             Item=item,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",

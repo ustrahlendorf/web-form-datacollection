@@ -29,7 +29,7 @@ def test_row_to_item_basic():
     assert item["SK"].startswith("EVT#2026-10-29T07:40#")
     assert item["komfort"] == Decimal(23) and item["neigung"] == Decimal("1.4")
     assert item["prev"] == {"neigung": Decimal("1.2")} and item["changed"] == ["neigung"]
-    assert item["created_at"] == "2026-10-29T06:40:08Z"  # Ortszeit (MEZ) -> UTC
+    assert item["created_at"] == "2026-10-29T07:40"  # Ortszeit, hh:mm
     assert item["source"] == "apple-notes-import" and item["quality"] == []
 
 

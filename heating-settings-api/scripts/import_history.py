@@ -19,7 +19,7 @@ import argparse
 import csv
 import hashlib
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -39,10 +39,9 @@ def _num(param: str, value: str) -> Decimal:
     return Decimal(int(number))
 
 
-def _created_at_utc(local_iso: str) -> str:
-    """Erstelldatum der Notiz (Ortszeit) -> UTC, wie bei API-Einträgen."""
-    naive = datetime.strptime(local_iso, "%Y-%m-%dT%H:%M:%S")
-    return naive.replace(tzinfo=logic.LOCAL_TZ).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+def _created_at_local(local_iso: str) -> str:
+    """Erstelldatum der Notiz (Ortszeit), auf Minuten gekürzt, wie bei API-Einträgen."""
+    return datetime.strptime(local_iso, "%Y-%m-%dT%H:%M:%S").strftime("%Y-%m-%dT%H:%M")
 
 
 def row_to_item(row: dict, pk: str) -> dict:
@@ -67,7 +66,7 @@ def row_to_item(row: dict, pk: str) -> dict:
         "PK": pk,
         "SK": logic.sort_key(event_at, request_id),
         "event_at": event_at,
-        "created_at": _created_at_utc(row["created_at"]),
+        "created_at": _created_at_local(row["created_at"]),
         **{p: _num(p, row[p]) for p in logic.PARAMS},
         "prev": prev,
         "changed": changed,

@@ -1,6 +1,7 @@
 """Handler-Tests gegen eine DynamoDB-Attrappe (moto) – kein echter AWS-Zugriff."""
 import base64
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -73,7 +74,7 @@ def test_first_entry_created_with_all_params(handlers):
     item = body["item"]
     assert item["PK"] == PK and item["SK"].startswith("EVT#2026-01-05T08:00#")
     assert item["prev"] == {} and set(item["changed"]) == set(FULL)
-    assert item["source"] == "api" and item["created_at"].endswith("Z")
+    assert item["source"] == "api" and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d", item["created_at"])
     assert len(items()) == 1
 
 

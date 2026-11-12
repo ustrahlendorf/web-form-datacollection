@@ -9,7 +9,7 @@ API Gateway (HTTP API, IAM-Auth) → Lambda (Python 3.13, arm64) → DynamoDB (O
 | `PK` | `SYSTEM#haus` | Anlage, per Stack-Parameter `system_id` |
 | `SK` | `EVT#2026-10-29T07:40#a1b2c3d4e5` | `event_at` + Request-ID (Idempotenz) |
 | `event_at` | `2026-10-29T07:40` | wann die Änderung wirksam wurde (Ortszeit) |
-| `created_at` | `2026-10-29T06:41:12Z` | Server-Zeit (UTC) |
+| `created_at` | `2026-10-29T07:41` | Erstellzeit in Ortszeit (Europe/Berlin), Format wie `event_at`, auf Minuten genau |
 | `komfort`, `normal`, `reduziert` | `23` | ganze °C, 5–30 |
 | `neigung` | `1.4` | 0.2–3.5, eine Nachkommastelle, immer Punkt |
 | `niveau` | `0.0` | -10–10, eine Nachkommastelle |

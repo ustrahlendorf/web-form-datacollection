@@ -145,12 +145,12 @@ def compute_change(params: dict, base: dict) -> tuple[dict, dict, list[str]]:
 
 
 def build_item(pk: str, parsed: dict, merged: dict, prev: dict, changed: list[str],
-               quality: list[str], now_utc: datetime) -> dict:
+               quality: list[str], now_local: datetime) -> dict:
     return {
         "PK": pk,
         "SK": sort_key(parsed["event_at"], parsed["request_id"]),
         "event_at": parsed["event_at"],
-        "created_at": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "created_at": now_local.strftime("%Y-%m-%dT%H:%M"),  # Ortszeit, wie event_at
         **{k: merged[k] for k in PARAMS},
         "prev": prev,
         "changed": changed,

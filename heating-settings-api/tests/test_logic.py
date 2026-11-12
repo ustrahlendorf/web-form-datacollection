@@ -1,5 +1,5 @@
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lambda_src"))
 import logic  # noqa: E402
 
 NOW_LOCAL = datetime(2026, 11, 11, 8, 0)
-NOW_UTC = datetime(2026, 11, 11, 7, 0, tzinfo=timezone.utc)
 FULL = {"komfort": 23, "normal": 20, "reduziert": 16, "neigung": 1.4, "niveau": 0.0}
 
 
@@ -88,10 +87,10 @@ def test_unchanged_values_are_not_reported():
 def test_build_item_shape():
     p = parse({**FULL, "event_at": "2026-10-29T07:40", "request_id": "abc"})
     merged, prev, changed = logic.compute_change(p["params"], {})
-    item = logic.build_item("SYSTEM#haus", p, merged, prev, changed, p["quality"], NOW_UTC)
+    item = logic.build_item("SYSTEM#haus", p, merged, prev, changed, p["quality"], NOW_LOCAL)
     assert item["PK"] == "SYSTEM#haus"
     assert item["SK"] == "EVT#2026-10-29T07:40#abc"
-    assert item["created_at"] == "2026-11-11T07:00:00Z"
+    assert item["created_at"] == "2026-11-11T08:00"  # Ortszeit, hh:mm
     assert item["prev"] == {} and set(item["changed"]) == set(logic.PARAMS)
 
 
