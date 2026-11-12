@@ -1,4 +1,5 @@
 -r requirements.txt
 pytest==9.2.0
-# nur für scripts/import_history.py (in Lambda ist boto3 vorinstalliert)
+# boto3: nur für scripts/import_history.py (in Lambda vorinstalliert); moto: Handler-Tests ohne echtes AWS
 boto3==1.44.1
+moto[dynamodb]==5.2.5
