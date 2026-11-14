@@ -2,7 +2,7 @@
 
 Datenmodell: Ein Item = eine Änderung der Heizungseinstellungen mit dem
 kompletten neuen Zustand. ``prev`` enthält die Alt-Werte der geänderten
-Parameter, ``changed`` deren Namen.
+Parameter (nur diese Schlüssel sind geändert).
 """
 import hashlib
 import json
@@ -77,23 +77,21 @@ def _to_decimal(name: str, value) -> Decimal:
     return dec.quantize(quant)
 
 
-def parse_event_at(value, now_local: datetime) -> tuple[str, list[str]]:
-    """Liefert (event_at, quality). Ohne Angabe gilt die aktuelle Ortszeit."""
-    quality: list[str] = []
+def parse_event_at(value, now_local: datetime) -> str:
+    """Liefert event_at. Ohne Angabe gilt die aktuelle Ortszeit, ohne Uhrzeit 00:00."""
     if value is None:
-        return now_local.strftime("%Y-%m-%dT%H:%M"), quality
+        return now_local.strftime("%Y-%m-%dT%H:%M")
     if not isinstance(value, str) or not _EVENT_AT_RE.match(value):
         raise ValidationError("event_at: erwartet YYYY-MM-DD oder YYYY-MM-DDTHH:MM")
     if "T" not in value:
         value += "T00:00"
-        quality.append("time_unknown")
     try:
         parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M")
     except ValueError:
         raise ValidationError("event_at: ungültiges Datum/Uhrzeit")
     if parsed > now_local.replace(tzinfo=None) + timedelta(days=1):
         raise ValidationError("event_at: liegt in der Zukunft")
-    return value, quality
+    return value
 
 
 def parse_payload(body, now_local: datetime) -> dict:
@@ -106,7 +104,7 @@ def parse_payload(body, now_local: datetime) -> dict:
     params = {k: _to_decimal(k, body[k]) for k in PARAMS if k in body}
     if not params:
         raise ValidationError("mindestens ein Parameter erforderlich: " + ", ".join(PARAMS))
-    event_at, quality = parse_event_at(body.get("event_at"), now_local)
+    event_at = parse_event_at(body.get("event_at"), now_local)
 
     request_id = body.get("request_id")
     if request_id is None:
@@ -118,7 +116,7 @@ def parse_payload(body, now_local: datetime) -> dict:
     elif not isinstance(request_id, str) or not _REQUEST_ID_RE.match(request_id):
         raise ValidationError("request_id: 1-64 Zeichen aus A-Z a-z 0-9 _ -")
 
-    return {"params": params, "event_at": event_at, "request_id": request_id, "quality": quality}
+    return {"params": params, "event_at": event_at, "request_id": request_id}
 
 
 def state_of(item: dict | None) -> dict:
@@ -144,8 +142,7 @@ def compute_change(params: dict, base: dict) -> tuple[dict, dict, list[str]]:
     return merged, prev, changed
 
 
-def build_item(pk: str, parsed: dict, merged: dict, prev: dict, changed: list[str],
-               quality: list[str], now_local: datetime) -> dict:
+def build_item(pk: str, parsed: dict, merged: dict, prev: dict, now_local: datetime) -> dict:
     return {
         "PK": pk,
         "SK": sort_key(parsed["event_at"], parsed["request_id"]),
@@ -153,8 +150,6 @@ def build_item(pk: str, parsed: dict, merged: dict, prev: dict, changed: list[st
         "created_at": now_local.strftime("%Y-%m-%dT%H:%M"),  # Ortszeit, wie event_at
         **{k: merged[k] for k in PARAMS},
         "prev": prev,
-        "changed": changed,
-        "quality": quality,
         "source": "api",
     }
 

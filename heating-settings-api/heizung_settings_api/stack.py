@@ -24,8 +24,11 @@ class HeizungSettingsStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # --- Daten -------------------------------------------------------
-        table = dynamodb.TableV2(
-            self, "SettingsTable",
+        # Die frühere Migrations-Tabelle (SettingsTable) ist aus dem Stack entfernt; sie bleibt
+        # wegen RETAIN bestehen und wird separat gelöscht.
+        parameter_table = dynamodb.TableV2(
+            self, "ParameterTable",
+            table_name="Settings-HeizungParameter",
             partition_key=dynamodb.Attribute(name="PK", type=dynamodb.AttributeType.STRING),
             sort_key=dynamodb.Attribute(name="SK", type=dynamodb.AttributeType.STRING),
             billing=dynamodb.Billing.on_demand(),
@@ -47,7 +50,7 @@ class HeizungSettingsStack(Stack):
                 code=_lambda.Code.from_asset(LAMBDA_DIR, exclude=["__pycache__", "*.pyc"]),
                 memory_size=256,
                 timeout=Duration.seconds(10),
-                environment={"TABLE_NAME": table.table_name, "SYSTEM_ID": system_id},
+                environment={"TABLE_NAME": parameter_table.table_name, "SYSTEM_ID": system_id},
                 log_group=logs.LogGroup(
                     self, f"{name}Logs",
                     retention=logs.RetentionDays.ONE_MONTH,
@@ -59,8 +62,8 @@ class HeizungSettingsStack(Stack):
         reader = make_function("ReaderFunction", "reader.handler", "Liest aktuelle Einstellungen und Historie")
 
         # Minimale Rechte pro Funktion
-        table.grant(writer, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem")
-        table.grant(reader, "dynamodb:Query")
+        parameter_table.grant(writer, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem")
+        parameter_table.grant(reader, "dynamodb:Query")
 
         # --- API ---------------------------------------------------------
         api = apigw.HttpApi(
@@ -85,4 +88,4 @@ class HeizungSettingsStack(Stack):
         api.add_routes(path="/current", methods=[apigw.HttpMethod.GET], integration=reader_integration)
 
         CfnOutput(self, "ApiUrl", value=api.api_endpoint)
-        CfnOutput(self, "TableName", value=table.table_name)
+        CfnOutput(self, "ParameterTableName", value=parameter_table.table_name)

@@ -9,7 +9,9 @@ def _template() -> Template:
 
 
 def test_table_is_protected_and_on_demand():
-    _template().has_resource_properties("AWS::DynamoDB::GlobalTable", {
+    t = _template()
+    t.resource_count_is("AWS::DynamoDB::GlobalTable", 1)
+    t.has_resource_properties("AWS::DynamoDB::GlobalTable", {
         "BillingMode": "PAY_PER_REQUEST",
         "KeySchema": [{"AttributeName": "PK", "KeyType": "HASH"},
                       {"AttributeName": "SK", "KeyType": "RANGE"}],
@@ -19,7 +21,33 @@ def test_table_is_protected_and_on_demand():
             "PointInTimeRecoverySpecification": {"PointInTimeRecoveryEnabled": True},
         })],
     })
-    _template().has_resource("AWS::DynamoDB::GlobalTable", {"DeletionPolicy": "Retain"})
+    for res in t.find_resources("AWS::DynamoDB::GlobalTable").values():
+        assert res["DeletionPolicy"] == "Retain"
+
+
+def test_parameter_table_has_fixed_name_and_same_keys():
+    t = _template()
+    t.has_resource_properties("AWS::DynamoDB::GlobalTable", {
+        "TableName": "Settings-HeizungParameter",
+        "BillingMode": "PAY_PER_REQUEST",
+        "KeySchema": [{"AttributeName": "PK", "KeyType": "HASH"},
+                      {"AttributeName": "SK", "KeyType": "RANGE"}],
+        "Replicas": [Match.object_like({
+            "DeletionProtectionEnabled": True,
+            "PointInTimeRecoverySpecification": {"PointInTimeRecoveryEnabled": True},
+        })],
+    })
+
+
+def test_lambdas_use_parameter_table_only():
+    t = _template()
+    param_id = next(iter(t.find_resources(
+        "AWS::DynamoDB::GlobalTable", {"Properties": {"TableName": "Settings-HeizungParameter"}})))
+    for fn in t.find_resources("AWS::Lambda::Function").values():
+        assert fn["Properties"]["Environment"]["Variables"]["TABLE_NAME"] == {"Ref": param_id}
+    for pol in t.find_resources("AWS::IAM::Policy").values():
+        for stmt in pol["Properties"]["PolicyDocument"]["Statement"]:
+            assert param_id in str(stmt["Resource"]), "Rechte nur auf Parameter-Tabelle"
 
 
 def test_two_arm_lambdas():

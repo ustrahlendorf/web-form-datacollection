@@ -29,10 +29,10 @@ def test_request_id_is_deterministic_for_same_body():
     assert parse(body)["request_id"] == parse(dict(body))["request_id"]
 
 
-def test_date_only_sets_time_unknown():
+def test_date_only_gets_midnight():
     p = parse({"normal": 21, "event_at": "2026-10-29"})
     assert p["event_at"] == "2026-10-29T00:00"
-    assert p["quality"] == ["time_unknown"]
+    assert "quality" not in p
 
 
 def test_default_event_at_is_now_local():
@@ -87,11 +87,13 @@ def test_unchanged_values_are_not_reported():
 def test_build_item_shape():
     p = parse({**FULL, "event_at": "2026-10-29T07:40", "request_id": "abc"})
     merged, prev, changed = logic.compute_change(p["params"], {})
-    item = logic.build_item("SYSTEM#haus", p, merged, prev, changed, p["quality"], NOW_LOCAL)
+    item = logic.build_item("SYSTEM#haus", p, merged, prev, NOW_LOCAL)
     assert item["PK"] == "SYSTEM#haus"
     assert item["SK"] == "EVT#2026-10-29T07:40#abc"
     assert item["created_at"] == "2026-11-11T08:00"  # Ortszeit, hh:mm
-    assert item["prev"] == {} and set(item["changed"]) == set(logic.PARAMS)
+    assert item["prev"] == {} and changed == list(logic.PARAMS)
+    assert set(item) == {"PK", "SK", "event_at", "created_at", "komfort", "normal", "reduziert",
+                         "neigung", "niveau", "prev", "source"}
 
 
 def test_range_bounds_include_whole_day():

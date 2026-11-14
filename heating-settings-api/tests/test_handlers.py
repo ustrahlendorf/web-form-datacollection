@@ -73,7 +73,7 @@ def test_first_entry_created_with_all_params(handlers):
     assert status == 201 and body["status"] == "created"
     item = body["item"]
     assert item["PK"] == PK and item["SK"].startswith("EVT#2026-01-05T08:00#")
-    assert item["prev"] == {} and set(item["changed"]) == set(FULL)
+    assert item["prev"] == {} and "changed" not in item and "quality" not in item
     assert item["source"] == "api" and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d", item["created_at"])
     assert len(items()) == 1
 
@@ -86,9 +86,8 @@ def test_partial_update_merges_state_and_tracks_prev(handlers):
     item = body["item"]
     assert item["komfort"] == 23 and item["reduziert"] == 16  # aus Vorgängerzustand
     assert item["neigung"] == 1.2 and item["normal"] == 21
-    assert set(item["changed"]) == {"neigung", "normal"}
-    assert item["prev"] == {"neigung": 1.4, "normal": 20}
-    assert item["quality"] == []
+    assert item["prev"] == {"neigung": 1.4, "normal": 20}  # nur geänderte Parameter
+    assert "changed" not in item and "quality" not in item
 
 
 def test_unchanged_values_write_nothing(handlers):
@@ -116,20 +115,19 @@ def test_same_minute_different_request_ids_both_stored(handlers):
     assert a[0] == 201 and b[0] == 201 and len(items()) == 3
 
 
-def test_backdated_entry_is_flagged(handlers):
+def test_backdated_entry_is_stored_without_flags(handlers):
     writer, _ = handlers
     seed(writer, ("2026-03-01T08:00", FULL))
     status, body = post(writer, {**FULL, "event_at": "2026-01-01T08:00", "normal": 18})
     assert status == 201
-    assert body["item"]["quality"] == ["backdated_before_later_events"]
-    assert body["item"]["prev"] == {}  # nichts davor
+    assert "quality" not in body["item"] and body["item"]["prev"] == {}  # nichts davor
 
 
-def test_date_only_event_is_flagged_time_unknown(handlers):
+def test_date_only_event_gets_midnight(handlers):
     writer, _ = handlers
     status, body = post(writer, {**FULL, "event_at": "2026-01-05"})
     assert status == 201 and body["item"]["event_at"] == "2026-01-05T00:00"
-    assert "time_unknown" in body["item"]["quality"]
+    assert "quality" not in body["item"]
 
 
 @pytest.mark.parametrize("payload, msg", [

@@ -67,16 +67,7 @@ def handler(event, _context):
         if not changed:
             return _response(200, {"status": "unchanged", "state": merged})
 
-        # Nachträglich erfasst? Dann sind spätere Einträge nicht neu berechnet.
-        quality = list(parsed["quality"])
-        later = table.query(
-            KeyConditionExpression=Key("PK").eq(pk) & Key("SK").gt(sk),
-            Limit=1, ConsistentRead=True,
-        )["Items"]
-        if later:
-            quality.append("backdated_before_later_events")
-
-        item = logic.build_item(pk, parsed, merged, prev, changed, quality, now_local)
+        item = logic.build_item(pk, parsed, merged, prev, now_local)
         table.put_item(
             Item=item,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
