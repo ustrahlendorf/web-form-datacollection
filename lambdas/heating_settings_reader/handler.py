@@ -7,7 +7,7 @@ import os
 import boto3
 from boto3.dynamodb.conditions import Key
 
-import logic
+from backend.heating_settings import logic
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -85,7 +85,7 @@ def _changes(table, pk, qs):
     return _response(200, body)
 
 
-def handler(event, _context):
+def lambda_handler(event, _context):
     pk = f"SYSTEM#{os.environ.get('SYSTEM_ID', 'haus')}"
     table = _get_table()
     route = event.get("routeKey", "")

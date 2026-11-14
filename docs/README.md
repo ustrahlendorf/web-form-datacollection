@@ -32,6 +32,7 @@ For the full, canonical guide, see `getting-started.md`.
 - `architecture/repo-layout.md` — Python packages, Lambda `lambdas/*` naming, CDK asset strategy (blueprint; complements `reference/python-layout.md`)
 - `decisions/0001-repo-python-and-lambda-packaging.md` — ADR: keep `backend` package name through migration, shared runtime bundle default, heating requirements workflow
 - `specification.md` — functional specification / requirements (release 1)
+- `reference/heating-settings-api.md` — heating settings API (stack, handlers, DynamoDB table `Settings-HeizungParameter`, endpoints)
 
 ### runbooks
 

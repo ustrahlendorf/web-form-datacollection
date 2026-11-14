@@ -285,6 +285,16 @@ tasks:
     cmds:
       - cdk deploy "DataCollectionFrontend-dev"
 
+  deploy-heating-settings:
+    desc: "Deploy heating settings API stack (dev) - API Gateway, Lambda, DynamoDB"
+    deps: [doctor]
+    dir: "{{.APP_DIR}}"
+    env:
+      CDK_DEFAULT_REGION: "{{.AWS_REGION}}"
+      JSII_RUNTIME_PACKAGE_CACHE_ROOT: "{{.JSII_CACHE_DIR}}"
+    cmds:
+      - cdk deploy --exclusively "HeizungSettingsStack"
+
   deploy-scheduler-daily:
     desc: "Deploy Scheduler stack (dev) - auto-retrieval of Viessmann data"
     deps: [doctor]
@@ -344,6 +354,11 @@ tasks:
           - CDK command: cdk deploy DataCollectionFrontend-dev
           - Effective stacks: DataCollectionFrontend-dev
           - Notes: no explicit stack dependencies in current CDK app wiring
+
+        deploy-heating-settings
+          - CDK command: cdk deploy --exclusively HeizungSettingsStack
+          - Effective stacks: HeizungSettingsStack
+          - Notes: independent stack (no dependencies on the other stacks)
 
         deploy-scheduler-daily
           - CDK command: cdk deploy DataCollectionScheduler-dev

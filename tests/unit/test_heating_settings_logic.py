@@ -1,12 +1,9 @@
-import sys
 from datetime import datetime
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lambda_src"))
-import logic  # noqa: E402
+from backend.heating_settings import logic
 
 NOW_LOCAL = datetime(2026, 11, 11, 8, 0)
 FULL = {"komfort": 23, "normal": 20, "reduziert": 16, "neigung": 1.4, "niveau": 0.0}

@@ -15,6 +15,7 @@ from infrastructure.stacks.cognito_stack import CognitoStack
 from infrastructure.stacks.datalake_stack import DataLakeStack
 from infrastructure.stacks.dynamodb_stack import DynamoDBStack
 from infrastructure.stacks.frontend_stack import FrontendStack
+from infrastructure.stacks.heating_settings_stack import HeizungSettingsStack
 from infrastructure.stacks.init_stack import InitStack
 from infrastructure.stacks.scheduler_once_daily_stack import SchedulerOnceDailyStack
 from infrastructure.stacks.scheduler_frequent_stack import SchedulerFrequentStack
@@ -217,6 +218,16 @@ def create_app() -> App:
         Tags.of(scheduler_frequent_stack).add("Component", "scheduler-frequent")
         scheduler_frequent_stack.add_dependency(init_stack)
         scheduler_frequent_stack.add_dependency(appconfig_stack)
+
+    # Heating settings API (API Gateway IAM auth -> Lambda -> DynamoDB). Independent of the other stacks.
+    heating_settings_stack = HeizungSettingsStack(
+        app,
+        "HeizungSettingsStack",
+        # No explicit env: the stack was deployed environment-agnostic; setting env would replace
+        # the API Gateway invoke permissions (concrete account/region in the source ARN).
+        description="Heizung: Einstellungen per API erfassen (API Gateway, Lambda, DynamoDB)",
+    )
+    Tags.of(heating_settings_stack).add("Component", "heating-settings")
 
     # Ensure deployment ordering across stacks that use exports/imports.
     # InitStack owns the stable SSM "contract" parameters and must exist first so other stacks

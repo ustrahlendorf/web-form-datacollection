@@ -3,13 +3,10 @@ import base64
 import json
 import re
 import sys
-from pathlib import Path
 
 import boto3
 import pytest
 from moto import mock_aws
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lambda_src"))
 
 TABLE = "test-settings"
 PK = "SYSTEM#haus"
@@ -35,23 +32,25 @@ def handlers(monkeypatch):
                                   {"AttributeName": "SK", "AttributeType": "S"}],
             BillingMode="PAY_PER_REQUEST",
         )
-        for name in ("writer", "reader"):
+        names = ("lambdas.heating_settings_writer.handler", "lambdas.heating_settings_reader.handler")
+        for name in names:
             sys.modules.pop(name, None)
-        import reader, writer  # noqa: E401
+        from lambdas.heating_settings_reader import handler as reader
+        from lambdas.heating_settings_writer import handler as writer
         writer._table = reader._table = None
         yield writer, reader
-        for name in ("writer", "reader"):
+        for name in names:
             sys.modules.pop(name, None)
 
 
 def post(writer, body, raw=False, **extra):
     event = {"routeKey": "POST /changes", "body": body if raw else json.dumps(body), **extra}
-    res = writer.handler(event, None)
+    res = writer.lambda_handler(event, None)
     return res["statusCode"], json.loads(res["body"])
 
 
 def get(reader, route, **qs):
-    res = reader.handler({"routeKey": f"GET {route}", "queryStringParameters": qs or None}, None)
+    res = reader.lambda_handler({"routeKey": f"GET {route}", "queryStringParameters": qs or None}, None)
     return res["statusCode"], json.loads(res["body"])
 
 
@@ -149,7 +148,7 @@ def test_body_problems(handlers):
     writer, _ = handlers
     assert post(writer, "kein json", raw=True)[0] == 400
     assert post(writer, "[1,2]", raw=True)[0] == 400
-    assert writer.handler({"routeKey": "POST /changes"}, None)["statusCode"] == 400  # Body fehlt
+    assert writer.lambda_handler({"routeKey": "POST /changes"}, None)["statusCode"] == 400  # Body fehlt
     encoded = base64.b64encode(json.dumps(FULL).encode()).decode()
     status, _ = post(writer, encoded, raw=True, isBase64Encoded=True)
     assert status == 201

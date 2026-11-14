@@ -12,7 +12,7 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-This file is the **development and tooling** set: CDK (`aws-cdk-lib`, API Gateway alpha packages), `boto3`, `pytest`, `hypothesis`, `requests`, and related pins. Use it for `cdk synth` / deploy tasks driven from the Taskfile and for running the test suite from the repo root.
+This file is the **development and tooling** set: CDK (`aws-cdk-lib` 2.276 with the stable `aws_apigatewayv2*` modules, no alpha packages), `boto3`, `moto` (DynamoDB handler tests), `pytest`, `hypothesis`, `requests`, and related pins. Use it for `cdk synth` / deploy tasks driven from the Taskfile and for running the test suite from the repo root.
 
 ## `backend/`: the `backend` package (`pyproject.toml`)
 

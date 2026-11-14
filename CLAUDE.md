@@ -5,7 +5,7 @@ Web-App zur Erfassung/Anzeige von Gastherme-Verbrauchsdaten (Viessmann API). AWS
 ## Repo-Grenzen
 
 - **`lambdas/<function>/`** — Lambda-Entry-Points (`handler.py`, `lambda_handler`). Ein snake_case-Ordner pro deployter Funktion; CDK `handler=` zeigt hierher. Domänenlogik gehört nach `backend`, nicht hierher.
-- **`backend/`** — installierbares Package `backend` (`backend/src/backend/`): `shared` (Models/Validators), `viessmann` (OAuth/Submit), `heating.iot_data`. Von Handlern und Tests genutzt.
+- **`backend/`** — installierbares Package `backend` (`backend/src/backend/`): `shared` (Models/Validators), `viessmann` (OAuth/Submit), `heating.iot_data`, `heating_settings` (Validierung/Datenmodell der Heizungs-Einstellungen). Von Handlern und Tests genutzt.
 - **`infrastructure/`** — AWS CDK (Stacks, Constructs, Bundling). Root `cdk.json` steuert synth/deploy.
 - **`frontend/`** — statische UI. Code unter `frontend/src/` (JS/CSS) und `frontend/public/` (HTML). Nicht `node_modules` editieren.
 - **`tests/`** — `unit`, `integration`, `e2e`; gemeinsames `tests/conftest.py`.
@@ -30,6 +30,7 @@ task deploy-init        # einmalig: SSM-Parameter
 task deploy-dynamodb
 task deploy-api
 task deploy-frontend
+task deploy-heating-settings   # Heizungs-Einstellungen: API Gateway (IAM) + Lambda + DynamoDB `Settings-HeizungParameter`
 ```
 
 - `ACTIVE_SUBMISSIONS_TABLE_NAME` / `PASSIVE_SUBMISSIONS_TABLE_NAME` müssen in `taskfile.env` gesetzt sein.

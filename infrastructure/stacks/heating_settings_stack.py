@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from aws_cdk import (
     CfnOutput,
     Duration,
@@ -14,7 +12,8 @@ from aws_cdk import (
 )
 from constructs import Construct
 
-LAMBDA_DIR = str(Path(__file__).resolve().parent.parent / "lambda_src")
+from infrastructure.cdk_constructs.python_lambda_asset import python_lambda_code_from_repo
+from infrastructure.config.heating_lambda_env import BACKEND_PYTHONPATH
 
 
 class HeizungSettingsStack(Stack):
@@ -47,10 +46,14 @@ class HeizungSettingsStack(Stack):
                 runtime=_lambda.Runtime.PYTHON_3_13,
                 architecture=_lambda.Architecture.ARM_64,
                 handler=handler,
-                code=_lambda.Code.from_asset(LAMBDA_DIR, exclude=["__pycache__", "*.pyc"]),
+                code=python_lambda_code_from_repo(),
                 memory_size=256,
                 timeout=Duration.seconds(10),
-                environment={"TABLE_NAME": parameter_table.table_name, "SYSTEM_ID": system_id},
+                environment={
+                    "TABLE_NAME": parameter_table.table_name,
+                    "SYSTEM_ID": system_id,
+                    "PYTHONPATH": BACKEND_PYTHONPATH,
+                },
                 log_group=logs.LogGroup(
                     self, f"{name}Logs",
                     retention=logs.RetentionDays.ONE_MONTH,
@@ -58,8 +61,8 @@ class HeizungSettingsStack(Stack):
                 ),
             )
 
-        writer = make_function("WriterFunction", "writer.handler", "Erfasst eine Heizungs-Einstellungsänderung")
-        reader = make_function("ReaderFunction", "reader.handler", "Liest aktuelle Einstellungen und Historie")
+        writer = make_function("WriterFunction", "lambdas.heating_settings_writer.handler.lambda_handler", "Erfasst eine Heizungs-Einstellungsänderung")
+        reader = make_function("ReaderFunction", "lambdas.heating_settings_reader.handler.lambda_handler", "Liest aktuelle Einstellungen und Historie")
 
         # Minimale Rechte pro Funktion
         parameter_table.grant(writer, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem")

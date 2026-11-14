@@ -1,7 +1,7 @@
 import aws_cdk as cdk
 from aws_cdk.assertions import Match, Template
 
-from heizung_settings_api.stack import HeizungSettingsStack
+from infrastructure.stacks.heating_settings_stack import HeizungSettingsStack
 
 
 def _template() -> Template:

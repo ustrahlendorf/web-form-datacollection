@@ -1,6 +1,17 @@
 # Heizung Settings API
 
 API Gateway (HTTP API, IAM-Auth) → Lambda (Python 3.13, arm64) → DynamoDB (On-Demand, PITR, Löschschutz).
+Erfasst Änderungen der Heizungseinstellungen (Komfort/Normal/Reduziert, Heizkurve Neigung/Niveau).
+
+Code-Orte im Repo:
+
+| Teil | Ort |
+| --- | --- |
+| CDK-Stack `HeizungSettingsStack` | `infrastructure/stacks/heating_settings_stack.py` (registriert in `infrastructure/app.py`) |
+| Handler (POST `/changes`) | `lambdas/heating_settings_writer/handler.py` |
+| Handler (GET `/current`, GET `/changes`) | `lambdas/heating_settings_reader/handler.py` |
+| Validierung und Datenmodell | `backend/src/backend/heating_settings/logic.py` |
+| Tests | `tests/unit/test_heating_settings_*.py`, `tests/integration/test_heating_settings_stack.py` |
 
 ## Tabelle `Settings-HeizungParameter`
 
@@ -16,6 +27,8 @@ API Gateway (HTTP API, IAM-Auth) → Lambda (Python 3.13, arm64) → DynamoDB (O
 | `prev` | `{"neigung": 1.2}` | Alt-Werte der geänderten Parameter (serverseitig berechnet); die Schlüssel zeigen, was sich geändert hat |
 | `source` | `api` | Herkunft des Eintrags |
 
+Der Stack hat die Tabelle mit festem Namen, PITR, Löschschutz und `RemovalPolicy.RETAIN`.
+
 ## Endpunkte (alle mit IAM/SigV4, `execute-api:Invoke`)
 
 - `POST /changes` – Body: ein oder mehrere Parameter, optional `event_at`
@@ -27,27 +40,18 @@ API Gateway (HTTP API, IAM-Auth) → Lambda (Python 3.13, arm64) → DynamoDB (O
 
 Idempotenz: gleicher Body mit festem `event_at` (oder gleiche `request_id`) erzeugt keinen zweiten Eintrag.
 
-## Eigenes venv, eigene CDK-Version
+## Entwickeln und Deployen
 
-Dieses Subprojekt ist bewusst vom restlichen Repo getrennt: eigenes `.venv`,
-eigene `requirements.txt` und eigene `cdk.json`. Es nutzt `aws-cdk-lib` **2.276**
-mit den stabilen API-Gateway-v2-Modulen. Die übrige App im Repo-Root nutzt
-`aws-cdk-lib` 2.100 mit alpha-Paketen. Beide Versionen lassen sich nicht in einem
-venv mischen. Die Repo-Pins und das Repo-venv bleiben unverändert.
-
-## Entwickeln
+Das Projekt nutzt wie alle anderen Teile das Repo-venv und die Root-`requirements.txt`
+(`aws-cdk-lib` 2.276, `moto` für die Handler-Tests):
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-pytest
-cdk synth --strict
+source .venv/bin/activate
+pytest tests/unit/test_heating_settings_logic.py tests/unit/test_heating_settings_handlers.py \
+       tests/integration/test_heating_settings_stack.py
+task deploy-heating-settings
 ```
 
-## Deployment (bewusst noch nicht ausgeführt)
-
-```bash
-cdk bootstrap aws://<ACCOUNT>/<REGION>   # einmalig pro Account/Region
-cdk diff
-cdk deploy
-```
+Der Stack ist unabhängig von den anderen Stacks. Die Lambdas nutzen das gemeinsame
+Repo-Asset mit `PYTHONPATH=backend/src` (siehe `reference/python-layout.md`). Beim Ändern
+der Handler gilt: `handler=`-Strings in CDK und Modulpfade unter `lambdas/` müssen übereinstimmen.
