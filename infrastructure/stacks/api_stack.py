@@ -2,9 +2,9 @@
 
 from aws_cdk import (
     Stack,
-    aws_apigatewayv2_alpha as apigw,
-    aws_apigatewayv2_authorizers_alpha as apigw_auth,
-    aws_apigatewayv2_integrations_alpha as apigw_integrations,
+    aws_apigatewayv2 as apigw,
+    aws_apigatewayv2_authorizers as apigw_auth,
+    aws_apigatewayv2_integrations as apigw_integrations,
     aws_iam as iam,
     aws_lambda as lambda_,
     aws_logs as logs,
