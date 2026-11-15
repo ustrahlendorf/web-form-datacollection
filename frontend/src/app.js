@@ -22,6 +22,8 @@ const state = {
     hparamLoading: false,
     hparamCurrent: null,   // newest entry (current parameter state), used for prefill/plausibility
     hparamSubmitting: false,
+    hparamLiveLoading: false,
+    hparamLive: null,      // last live values read from the boiler (locks date/time while set)
 };
 
 // Initialize AuthManager
@@ -147,6 +149,10 @@ function setupEventListeners() {
     if (hparamForm) {
         hparamForm.addEventListener('submit', handleHparamSubmit);
     }
+    const hparamLiveBtn = document.getElementById('hparam-live-btn');
+    if (hparamLiveBtn) {
+        hparamLiveBtn.addEventListener('click', handleHparamLive);
+    }
     const hparamReloadBtn = document.getElementById('hparam-reload-btn');
     if (hparamReloadBtn) {
         hparamReloadBtn.addEventListener('click', () => loadHparam());
@@ -253,6 +259,7 @@ function navigateToPage(page) {
         loadSettings();
         loadHeatingControl();
     } else if (page === 'hparam') {
+        prefillHparamForm();
         loadHparam();
     }
 }
@@ -2899,7 +2906,6 @@ async function loadHparam({ append = false } = {}) {
         }
         if (!append) {
             state.hparamCurrent = items[0] || null;
-            prefillHparamForm();
         }
         state.hparamNextToken = data.next_token || null;
     } catch (error) {
@@ -2927,24 +2933,43 @@ function pad2(n) {
     return String(n).padStart(2, '0');
 }
 
-// Fills date/time with "now" and the parameter inputs with the current (newest) values.
-function prefillHparamForm() {
-    const datumEl = document.getElementById('hparam-datum');
-    if (!datumEl) {
-        return;
-    }
-    const now = new Date();
-    datumEl.value = `${pad2(now.getDate())}.${pad2(now.getMonth() + 1)}.${now.getFullYear()}`;
-    document.getElementById('hparam-uhrzeit').value = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
-
-    const current = state.hparamCurrent;
-    HPARAM_PARAMS.forEach(name => {
-        const el = document.getElementById(`hparam-${name}`);
+function setHparamDateTimeLocked(locked) {
+    ['hparam-datum', 'hparam-uhrzeit'].forEach(id => {
+        const el = document.getElementById(id);
         if (el) {
-            el.value = current && current[name] !== undefined && current[name] !== null
-                ? formatHparamValue(name, current[name]) : '';
+            el.readOnly = locked;
         }
     });
+}
+
+function hparamNowStrings(now = new Date()) {
+    return {
+        datum: `${pad2(now.getDate())}.${pad2(now.getMonth() + 1)}.${now.getFullYear()}`,
+        uhrzeit: `${pad2(now.getHours())}:${pad2(now.getMinutes())}`,
+    };
+}
+
+function showHparamDrift(message) {
+    const el = document.getElementById('hparam-drift');
+    if (!el) {
+        return;
+    }
+    el.textContent = message || '';
+    el.style.display = message ? 'block' : 'none';
+}
+
+// Empties all inputs (parameters and date/time), unlocks date/time, clears live state and drift hint.
+// Parameter values are no longer taken from the table; use the Live button to read the boiler.
+function prefillHparamForm() {
+    state.hparamLive = null;
+    HPARAM_FORM_FIELDS.forEach(name => {
+        const el = document.getElementById(`hparam-${name}`);
+        if (el) {
+            el.value = '';
+        }
+    });
+    setHparamDateTimeLocked(false);
+    showHparamDrift('');
 }
 
 function parseHparamNumber(text) {
@@ -3022,9 +3047,9 @@ function validateHparamForm(values, current, now = new Date()) {
     return errors;
 }
 
+// The server sets event_at itself; the form date/time is not sent.
 function buildHparamPayload(values) {
-    const [d, m, y] = values.datum.split('.');
-    const payload = { event_at: `${y}-${m}-${d}T${values.uhrzeit}` };
+    const payload = {};
     HPARAM_PARAMS.forEach(name => {
         payload[name] = parseHparamNumber(values[name]);
     });
@@ -3077,28 +3102,67 @@ function displayHparamErrors(errors) {
     });
 }
 
+const HPARAM_FORBIDDEN_MESSAGE = 'Keine Berechtigung: Gruppe heating-parameter-writers erforderlich';
+
+function hparamHasDrift(live, current) {
+    if (!live || !current) {
+        return false;
+    }
+    return HPARAM_PARAMS.some(name => {
+        const l = live[name];
+        const c = current[name];
+        if (l === null || l === undefined) {
+            return false;
+        }
+        return Number(l) !== Number(c);
+    });
+}
+
+function setHparamBusy(busy) {
+    ['hparam-submit-btn', 'hparam-live-btn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.disabled = busy;
+        }
+    });
+}
+
 async function handleHparamSubmit(e) {
     e.preventDefault();
-    if (state.hparamSubmitting) {
+    if (state.hparamSubmitting || state.hparamLiveLoading) {
         return;
     }
     clearHparamFormErrors();
 
     const values = readHparamFormValues();
-    const errors = validateHparamForm(values, state.hparamCurrent);
+    // Date/time are not sent (server uses "now"); empty fields count as "now" for validation.
+    const now = hparamNowStrings();
+    const validationValues = {
+        ...values,
+        datum: values.datum || now.datum,
+        uhrzeit: values.uhrzeit || now.uhrzeit,
+    };
+    const errors = validateHparamForm(validationValues, state.hparamCurrent);
     if (errors.length > 0) {
         displayHparamErrors(errors);
+        return;
+    }
+    if (!window.confirm('Werte in die Gastherme schreiben?')) {
         return;
     }
     await submitHparam(buildHparamPayload(values));
 }
 
+function describeHparamApplied(applied) {
+    return Object.entries(applied || {})
+        .filter(([, info]) => info && info.ok)
+        .map(([name, info]) => `${HPARAM_LABELS[name] || name} ${info.from} → ${info.to}`)
+        .join(', ');
+}
+
 async function submitHparam(payload) {
-    const btn = document.getElementById('hparam-submit-btn');
     state.hparamSubmitting = true;
-    if (btn) {
-        btn.disabled = true;
-    }
+    setHparamBusy(true);
     try {
         const response = await authenticatedFetch(`${CONFIG.API_ENDPOINT}/heating/parameters`, {
             method: 'POST',
@@ -3109,9 +3173,27 @@ async function submitHparam(payload) {
 
         if (response.ok && result.status === 'created') {
             await loadHparam();
-            showHparamMessage('Submission successful!', 'success');
+            prefillHparamForm();
+            showHparamMessage('Werte in die Gastherme geschrieben und gespeichert.', 'success');
         } else if (response.ok && result.status === 'unchanged') {
-            showHparamMessage('No change: values equal the state at that time', 'error');
+            showHparamMessage('No change: values equal the state of the boiler', 'error');
+        } else if (response.status === 403) {
+            showHparamMessage(HPARAM_FORBIDDEN_MESSAGE, 'error');
+        } else if (response.status === 502) {
+            const appliedText = describeHparamApplied(result.applied);
+            let message = result.error || 'Viessmann-Fehler';
+            if (result.partial) {
+                message += appliedText
+                    ? ` Teilweise angewendet: ${appliedText}.`
+                    : ' Teilweise angewendet (keine Details).';
+            } else {
+                message += ' Es wurde nichts geschrieben.';
+            }
+            if (result.item) {
+                await loadHparam();
+                prefillHparamForm();
+            }
+            showHparamMessage(message, 'error');
         } else if (response.ok && result.status === 'duplicate') {
             showHparamMessage('Entry already exists', 'error');
         } else {
@@ -3122,9 +3204,87 @@ async function submitHparam(payload) {
         showHparamMessage('An error occurred. Please try again.', 'error');
     } finally {
         state.hparamSubmitting = false;
-        if (btn) {
-            btn.disabled = false;
+        setHparamBusy(false);
+    }
+}
+
+// Live button: read boiler values, fill the form, lock date/time, offer to sync on drift.
+async function handleHparamLive() {
+    if (state.hparamLiveLoading || state.hparamSubmitting) {
+        return;
+    }
+    clearHparamFormErrors();
+    showHparamDrift('');
+    state.hparamLiveLoading = true;
+    setHparamBusy(true);
+    const liveBtn = document.getElementById('hparam-live-btn');
+    const originalLabel = liveBtn ? liveBtn.textContent : '';
+    if (liveBtn) {
+        liveBtn.textContent = 'Loading...';
+    }
+    try {
+        const response = await authenticatedFetch(`${CONFIG.API_ENDPOINT}/heating/parameters/live`);
+        const live = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const reason = live.error ? `: ${live.error}` : '';
+            showHparamMessage(
+                response.status === 502
+                    ? `Gastherme nicht erreichbar (Viessmann-Fehler)${reason}`
+                    : `Live-Werte konnten nicht geladen werden${reason}`,
+                'error'
+            );
+            return;
         }
+        state.hparamLive = live;
+        HPARAM_PARAMS.forEach(name => {
+            const el = document.getElementById(`hparam-${name}`);
+            if (el) {
+                el.value = live[name] === null || live[name] === undefined ? '' : formatHparamValue(name, live[name]);
+            }
+        });
+        const now = hparamNowStrings();
+        const datumEl = document.getElementById('hparam-datum');
+        const uhrzeitEl = document.getElementById('hparam-uhrzeit');
+        if (datumEl) {
+            datumEl.value = now.datum;
+        }
+        if (uhrzeitEl) {
+            uhrzeitEl.value = now.uhrzeit;
+        }
+        setHparamDateTimeLocked(true);
+
+        if (hparamHasDrift(live, state.hparamCurrent)) {
+            showHparamDrift('Die Therme weicht vom neuesten Tabelleneintrag ab.');
+            if (window.confirm('Therme weicht von der Tabelle ab – als Eintrag übernehmen?')) {
+                await syncHparam();
+            }
+        }
+    } catch (error) {
+        console.error('Error loading live heating parameters:', error);
+        showHparamMessage('An error occurred. Please try again.', 'error');
+    } finally {
+        state.hparamLiveLoading = false;
+        setHparamBusy(false);
+        if (liveBtn) {
+            liveBtn.textContent = originalLabel || 'Live';
+        }
+    }
+}
+
+async function syncHparam() {
+    const response = await authenticatedFetch(`${CONFIG.API_ENDPOINT}/heating/parameters/sync`, { method: 'POST' });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result.status === 'created') {
+        await loadHparam();
+        showHparamDrift('');
+        showHparamMessage('Live-Werte als Eintrag übernommen.', 'success');
+    } else if (response.ok && result.status === 'unchanged') {
+        showHparamDrift('');
+        showHparamMessage('Keine Abweichung: Tabelle entspricht bereits der Therme.', 'success');
+    } else if (response.status === 403) {
+        showHparamMessage(HPARAM_FORBIDDEN_MESSAGE, 'error');
+    } else {
+        showHparamMessage(result.error || 'Übernahme fehlgeschlagen', 'error');
     }
 }
 
@@ -3158,6 +3318,8 @@ if (typeof module !== 'undefined' && module.exports) {
         validateHparamForm,
         buildHparamPayload,
         handleHparamSubmit,
+        handleHparamLive,
+        hparamHasDrift,
         __getStateForTests: () => state,
         __setAuthenticatedFetchForTests: (fn) => {
             authenticatedFetch = fn;

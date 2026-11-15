@@ -5,9 +5,13 @@ from aws_cdk import (
     aws_apigatewayv2 as apigw,
     aws_apigatewayv2_authorizers as apigw_auth,
     aws_apigatewayv2_integrations as apigw_integrations,
+    aws_cloudwatch as cloudwatch,
+    aws_cloudwatch_actions as cw_actions,
     aws_iam as iam,
     aws_lambda as lambda_,
     aws_logs as logs,
+    aws_sns as sns,
+    aws_sns_subscriptions as sns_subs,
     aws_ssm as ssm,
     CfnOutput,
     Duration,
@@ -233,7 +237,15 @@ class APIStack(Stack):
             else None
         )
         heating_parameters_handler = self._create_heating_parameters_handler()
-        heating_parameters_writer_handler = self._create_heating_parameters_writer_handler()
+        heating_parameters_writer_handler = self._create_heating_parameters_writer_handler(
+            viessmann_credentials_secret_arn
+        )
+        heating_parameters_live_handler = (
+            self._create_heating_parameters_live_handler(viessmann_credentials_secret_arn)
+            if viessmann_credentials_secret_arn
+            else None
+        )
+        self._create_heating_write_alarm(heating_parameters_writer_handler)
         auto_retrieval_config_handler = self._create_auto_retrieval_config_handler(
             lambda_execution_role,
             appconfig_application_id=appconfig_application_id,
@@ -255,6 +267,7 @@ class APIStack(Stack):
             auto_retrieval_config_handler,
             heating_parameters_handler,
             heating_parameters_writer_handler,
+            heating_parameters_live_handler,
         )
 
         # Store references for use by other stacks
@@ -415,6 +428,7 @@ class APIStack(Stack):
         auto_retrieval_config_handler: lambda_.Function | None = None,
         heating_parameters_handler: lambda_.Function | None = None,
         heating_parameters_writer_handler: lambda_.Function | None = None,
+        heating_parameters_live_handler: lambda_.Function | None = None,
     ) -> None:
         """
         Wire Lambda functions to API Gateway routes with JWT authorization.
@@ -508,6 +522,21 @@ class APIStack(Stack):
                 authorizer=jwt_authorizer,
             )
 
+        # GET /heating/parameters/live (any signed-in user), POST /heating/parameters/sync (group)
+        if heating_parameters_live_handler is not None:
+            for route_id, path, method in (
+                ("HeatingParametersLiveIntegration", "/heating/parameters/live", apigw.HttpMethod.GET),
+                ("HeatingParametersSyncIntegration", "/heating/parameters/sync", apigw.HttpMethod.POST),
+            ):
+                http_api.add_routes(
+                    path=path,
+                    methods=[method],
+                    integration=apigw_integrations.HttpLambdaIntegration(
+                        route_id, heating_parameters_live_handler
+                    ),
+                    authorizer=jwt_authorizer,
+                )
+
         # GET/PUT /config/auto-retrieval route
         if auto_retrieval_config_handler is not None:
             http_api.add_routes(
@@ -569,14 +598,70 @@ class APIStack(Stack):
             ["dynamodb:Query"],
         )
 
-    def _create_heating_parameters_writer_handler(self) -> lambda_.Function:
-        """Create Lambda for POST /heating/parameters (``GetItem``, ``Query``, ``PutItem``)."""
+    def _create_heating_parameters_writer_handler(
+        self, viessmann_credentials_secret_arn: str | None = None
+    ) -> lambda_.Function:
+        """Lambda for POST /heating/parameters (``GetItem``, ``Query``, ``PutItem``; Viessmann)."""
         return self._create_heating_parameters_function(
             "HeatingParametersWriterHandler",
             "lambdas.heating_parameters_writer.handler.lambda_handler",
-            "Lambda handler to record heating parameter changes (source=web)",
+            "Lambda handler to write heating parameters to the boiler and record them (source=web)",
             ["dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem"],
+            viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
+            timeout_seconds=29,
         )
+
+    def _create_heating_parameters_live_handler(
+        self, viessmann_credentials_secret_arn: str
+    ) -> lambda_.Function:
+        """Lambda for GET /heating/parameters/live and POST /heating/parameters/sync."""
+        return self._create_heating_parameters_function(
+            "HeatingParametersLiveHandler",
+            "lambdas.heating_parameters_live.handler.lambda_handler",
+            "Lambda handler for live heating parameters and sync to DynamoDB",
+            ["dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem"],
+            viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
+            timeout_seconds=29,
+        )
+
+    def _create_heating_write_alarm(self, writer_fn: lambda_.Function) -> None:
+        """Metric filter + alarm on failed write attempts, notified via SNS (optional e-mail).
+
+        The address comes only from CDK context ``heating_alert_email`` (never hardcoded).
+        """
+        topic = sns.Topic(
+            self,
+            "HeatingWriteAlertsTopic",
+            display_name="Heating parameter write alerts",
+        )
+        email = self.node.try_get_context("heating_alert_email")
+        if email:
+            topic.add_subscription(sns_subs.EmailSubscription(str(email)))
+
+        log_group = logs.LogGroup.from_log_group_name(
+            self, "HeatingParametersWriterLogGroup", f"/aws/lambda/{writer_fn.function_name}"
+        )
+        metric_filter = logs.MetricFilter(
+            self,
+            "HeatingWriteFailureFilter",
+            log_group=log_group,
+            metric_namespace="HeatingParameters",
+            metric_name="WriteFailures",
+            filter_pattern=logs.FilterPattern.any_term("heating_parameter_write_failed"),
+            metric_value="1",
+            default_value=0,
+        )
+        alarm = cloudwatch.Alarm(
+            self,
+            "HeatingWriteFailureAlarm",
+            metric=metric_filter.metric(statistic="Sum", period=Duration.minutes(5)),
+            threshold=1,
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="Failed heating parameter write attempt (Viessmann command error)",
+        )
+        alarm.add_alarm_action(cw_actions.SnsAction(topic))
 
     def _create_heating_parameters_function(
         self,
@@ -584,23 +669,32 @@ class APIStack(Stack):
         handler: str,
         description: str,
         actions: list[str],
+        viessmann_credentials_secret_arn: str | None = None,
+        timeout_seconds: int = 10,
     ) -> lambda_.Function:
         """Lambda with its own role (CDK default: basic logging) and only ``actions`` on the
         fixed-name table ``Settings-HeizungParameter`` (owned by HeizungSettingsStack;
-        referenced by ARN, no stack dependency)."""
+        referenced by ARN, no stack dependency). With a Viessmann secret ARN the function also
+        gets ``secretsmanager:GetSecretValue`` on that secret and the Viessmann bundling."""
         table_name = HEATING_PARAMETERS_TABLE_NAME
+        environment = {
+            "TABLE_NAME": table_name,
+            "SYSTEM_ID": "haus",
+            "PYTHONPATH": BACKEND_PYTHONPATH,
+        }
+        if viessmann_credentials_secret_arn:
+            environment["VIESSMANN_CREDENTIALS_SECRET_ARN"] = viessmann_credentials_secret_arn
+            environment["VIESSMANN_TOKEN_CACHE_PATH"] = VIESSMANN_TOKEN_CACHE_PATH
         fn = lambda_.Function(
             self,
             construct_id,
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler=handler,
-            code=python_lambda_code_from_repo(),
-            environment={
-                "TABLE_NAME": table_name,
-                "SYSTEM_ID": "haus",
-                "PYTHONPATH": BACKEND_PYTHONPATH,
-            },
-            timeout=Duration.seconds(10),
+            code=python_lambda_code_from_repo(
+                bundling=heating_lambda_bundling() if viessmann_credentials_secret_arn else None
+            ),
+            environment=environment,
+            timeout=Duration.seconds(timeout_seconds),
             memory_size=256,
             description=description,
             log_retention=logs.RetentionDays.ONE_WEEK,
@@ -614,6 +708,14 @@ class APIStack(Stack):
                 ],
             )
         )
+        if viessmann_credentials_secret_arn:
+            fn.add_to_role_policy(
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=["secretsmanager:GetSecretValue"],
+                    resources=[viessmann_credentials_secret_arn],
+                )
+            )
         return fn
 
     def _create_auto_retrieval_config_handler(

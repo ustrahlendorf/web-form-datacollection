@@ -11,6 +11,7 @@ const {
     validateHparamForm,
     buildHparamPayload,
     handleHparamSubmit,
+    handleHparamLive,
     __getStateForTests,
     __setAuthenticatedFetchForTests,
     __setConfigForTests,
@@ -140,7 +141,9 @@ function formHtml() {
             <input id="hparam-uhrzeit"><span id="hparam-uhrzeit-error" class="error-message"></span>
             ${params.map(p => `<input id="hparam-${p}"><span id="hparam-${p}-error" class="error-message"></span>`).join('')}
             <button id="hparam-submit-btn" type="submit"></button>
+            <button id="hparam-live-btn" type="button">Live</button>
         </form>
+        <div id="hparam-drift" style="display:none"></div>
         <div id="hparam-message" class="message"></div>`;
 }
 
@@ -206,27 +209,33 @@ describe('hparam form', () => {
         state.hparamSubmitting = false;
         state.hparamNextToken = null;
         state.hparamLoading = false;
+        state.hparamLiveLoading = false;
+        window.confirm = jest.fn(() => true);
     });
 
-    test('prefills parameters from current values and date/time with now', () => {
+    test('prefillHparamForm leaves parameters and date/time empty and unlocked', () => {
         __getStateForTests().hparamCurrent = ITEM;
+        document.getElementById('hparam-komfort').value = '99';
+        document.getElementById('hparam-datum').value = 'x';
+        document.getElementById('hparam-datum').readOnly = true;
         prefillHparamForm();
-        expect(document.getElementById('hparam-komfort').value).toBe('23');
-        expect(document.getElementById('hparam-neigung').value).toBe('1.4');
-        expect(document.getElementById('hparam-niveau').value).toBe('0.0');
-        expect(document.getElementById('hparam-datum').value).toMatch(/^\d{2}\.\d{2}\.\d{4}$/);
-        expect(document.getElementById('hparam-uhrzeit').value).toMatch(/^\d{2}:\d{2}$/);
+        ['komfort', 'neigung', 'niveau', 'datum', 'uhrzeit'].forEach(n => {
+            expect(document.getElementById(`hparam-${n}`).value).toBe('');
+        });
+        expect(document.getElementById('hparam-datum').readOnly).toBe(false);
     });
 
-    test('loadHparam prefills the form from the newest entry', async () => {
+    test('loadHparam does not fill the form but keeps newest entry as current', async () => {
         __setAuthenticatedFetchForTests(() => jsonResponse({ items: [ITEM, { ...ITEM, komfort: 20 }], count: 2 }));
         await loadHparam();
-        expect(document.getElementById('hparam-komfort').value).toBe('23');
+        expect(document.getElementById('hparam-komfort').value).toBe('');
+        expect(document.getElementById('hparam-datum').value).toBe('');
+        expect(__getStateForTests().hparamCurrent).toEqual(ITEM);
     });
 
-    test('buildHparamPayload converts to event_at and numbers', () => {
+    test('buildHparamPayload sends numbers only, without event_at', () => {
         expect(buildHparamPayload({ ...VALUES, neigung: '1,5' })).toEqual({
-            event_at: '2026-10-29T07:40', komfort: 23, normal: 21, reduziert: 16, neigung: 1.5, niveau: 0,
+            komfort: 23, normal: 21, reduziert: 16, neigung: 1.5, niveau: 0,
         });
     });
 
@@ -249,9 +258,11 @@ describe('hparam form', () => {
         const [url, opts] = fetchMock.mock.calls[0];
         expect(url).toBe('https://api.test/heating/parameters');
         expect(opts.method).toBe('POST');
-        expect(JSON.parse(opts.body)).toMatchObject({ neigung: 1.6, event_at: '2026-10-29T07:40' });
+        expect(JSON.parse(opts.body)).toEqual({ komfort: 23, normal: 21, reduziert: 16, neigung: 1.6, niveau: 0 });
+        expect(window.confirm).toHaveBeenCalledWith('Werte in die Gastherme schreiben?');
         expect(fetchMock).toHaveBeenCalledTimes(2); // POST + table reload
-        expect(document.getElementById('hparam-message').textContent).toBe('Submission successful!');
+        expect(document.getElementById('hparam-komfort').value).toBe('');
+        expect(document.getElementById('hparam-message').textContent).toContain('geschrieben');
         expect(document.getElementById('hparam-message').classList.contains('success')).toBe(true);
         expect(document.getElementById('hparam-submit-btn').disabled).toBe(false);
     });
@@ -283,5 +294,160 @@ describe('hparam form', () => {
         fillForm({ neigung: '1.6' });
         await handleHparamSubmit({ preventDefault() {} });
         expect(document.getElementById('hparam-message').textContent).toContain('No change');
+    });
+
+    test('declined confirm sends nothing', async () => {
+        __getStateForTests().hparamCurrent = ITEM;
+        window.confirm = jest.fn(() => false);
+        const fetchMock = jest.fn();
+        __setAuthenticatedFetchForTests(fetchMock);
+        fillForm({ neigung: '1.6' });
+        await handleHparamSubmit({ preventDefault() {} });
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test('empty date/time do not block submit', async () => {
+        __getStateForTests().hparamCurrent = ITEM;
+        const fetchMock = jest.fn(() => jsonResponse({ status: 'unchanged', state: {} }));
+        __setAuthenticatedFetchForTests(fetchMock);
+        fillForm({ neigung: '1.6', datum: '', uhrzeit: '' });
+        await handleHparamSubmit({ preventDefault() {} });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    test('403 shows group hint', async () => {
+        __getStateForTests().hparamCurrent = ITEM;
+        __setAuthenticatedFetchForTests(() => Promise.resolve({
+            ok: false, status: 403, json: () => Promise.resolve({ error: 'forbidden' }),
+        }));
+        fillForm({ neigung: '1.6' });
+        await handleHparamSubmit({ preventDefault() {} });
+        expect(document.getElementById('hparam-message').textContent)
+            .toBe('Keine Berechtigung: Gruppe heating-parameter-writers erforderlich');
+    });
+
+    test('502 partial shows applied parameters and reloads table when item exists', async () => {
+        __getStateForTests().hparamCurrent = ITEM;
+        const fetchMock = jest.fn()
+            .mockImplementationOnce(() => Promise.resolve({
+                ok: false, status: 502,
+                json: () => Promise.resolve({
+                    error: 'Command failed', partial: true,
+                    applied: { komfort: { from: 23, to: 24, ok: true }, neigung: { from: 1.4, to: 1.6, ok: false } },
+                    item: ITEM,
+                }),
+            }))
+            .mockImplementationOnce(() => jsonResponse({ items: [ITEM], count: 1 }));
+        __setAuthenticatedFetchForTests(fetchMock);
+        fillForm({ neigung: '1.6', komfort: '24' });
+        await handleHparamSubmit({ preventDefault() {} });
+        const text = document.getElementById('hparam-message').textContent;
+        expect(text).toContain('Command failed');
+        expect(text).toContain('Komfort 23 → 24');
+        expect(text).not.toContain('Neigung');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    test('502 without item does not reload table', async () => {
+        __getStateForTests().hparamCurrent = ITEM;
+        const fetchMock = jest.fn(() => Promise.resolve({
+            ok: false, status: 502, json: () => Promise.resolve({ error: 'boom', partial: false, applied: {}, item: null }),
+        }));
+        __setAuthenticatedFetchForTests(fetchMock);
+        fillForm({ neigung: '1.6' });
+        await handleHparamSubmit({ preventDefault() {} });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(document.getElementById('hparam-message').textContent).toContain('boom');
+    });
+});
+
+describe('hparam live button', () => {
+    const LIVE = { komfort: 23, normal: 21, reduziert: 16, neigung: 1.4, niveau: 0, fetched_at: 'x' };
+
+    beforeEach(() => {
+        document.body.innerHTML = formHtml();
+        const state = __getStateForTests();
+        state.hparamCurrent = ITEM;
+        state.hparamSubmitting = false;
+        state.hparamLiveLoading = false;
+        state.hparamLoading = false;
+        window.confirm = jest.fn(() => true);
+    });
+
+    test('fills fields, sets now and locks date/time; no popup when equal to table', async () => {
+        const fetchMock = jest.fn(() => jsonResponse(LIVE));
+        __setAuthenticatedFetchForTests(fetchMock);
+        await handleHparamLive();
+        expect(fetchMock.mock.calls[0][0]).toBe('https://api.test/heating/parameters/live');
+        expect(document.getElementById('hparam-komfort').value).toBe('23');
+        expect(document.getElementById('hparam-niveau').value).toBe('0.0');
+        expect(document.getElementById('hparam-datum').value).toMatch(/^\d{2}\.\d{2}\.\d{4}$/);
+        expect(document.getElementById('hparam-uhrzeit').value).toMatch(/^\d{2}:\d{2}$/);
+        expect(document.getElementById('hparam-datum').readOnly).toBe(true);
+        expect(document.getElementById('hparam-uhrzeit').readOnly).toBe(true);
+        expect(window.confirm).not.toHaveBeenCalled();
+        expect(document.getElementById('hparam-drift').style.display).toBe('none');
+        expect(document.getElementById('hparam-live-btn').disabled).toBe(false);
+        expect(document.getElementById('hparam-live-btn').textContent).toBe('Live');
+    });
+
+    test('buttons are disabled while the request runs', async () => {
+        let release;
+        __setAuthenticatedFetchForTests(() => new Promise(resolve => { release = () => resolve({ ok: true, json: () => Promise.resolve(LIVE) }); }));
+        const p = handleHparamLive();
+        expect(document.getElementById('hparam-live-btn').disabled).toBe(true);
+        expect(document.getElementById('hparam-submit-btn').disabled).toBe(true);
+        release();
+        await p;
+        expect(document.getElementById('hparam-live-btn').disabled).toBe(false);
+    });
+
+    test('drift shows hint and popup; yes posts sync and reloads table', async () => {
+        const fetchMock = jest.fn()
+            .mockImplementationOnce(() => jsonResponse({ ...LIVE, komfort: 24 }))
+            .mockImplementationOnce(() => jsonResponse({ status: 'created', item: ITEM }))
+            .mockImplementationOnce(() => jsonResponse({ items: [ITEM], count: 1 }));
+        __setAuthenticatedFetchForTests(fetchMock);
+        await handleHparamLive();
+        expect(window.confirm).toHaveBeenCalledWith('Therme weicht von der Tabelle ab – als Eintrag übernehmen?');
+        expect(fetchMock.mock.calls[1][0]).toBe('https://api.test/heating/parameters/sync');
+        expect(fetchMock.mock.calls[1][1].method).toBe('POST');
+        expect(fetchMock.mock.calls[2][0]).toContain('/heating/parameters?limit=50');
+        expect(document.getElementById('hparam-message').classList.contains('success')).toBe(true);
+        expect(document.getElementById('hparam-drift').style.display).toBe('none');
+    });
+
+    test('drift with No keeps the hint and does not sync', async () => {
+        window.confirm = jest.fn(() => false);
+        const fetchMock = jest.fn(() => jsonResponse({ ...LIVE, normal: 20 }));
+        __setAuthenticatedFetchForTests(fetchMock);
+        await handleHparamLive();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const drift = document.getElementById('hparam-drift');
+        expect(drift.style.display).toBe('block');
+        expect(drift.textContent).toContain('weicht');
+    });
+
+    test('sync 403 shows group hint', async () => {
+        const fetchMock = jest.fn()
+            .mockImplementationOnce(() => jsonResponse({ ...LIVE, komfort: 24 }))
+            .mockImplementationOnce(() => Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve({ error: 'forbidden' }) }));
+        __setAuthenticatedFetchForTests(fetchMock);
+        await handleHparamLive();
+        expect(document.getElementById('hparam-message').textContent).toContain('heating-parameter-writers');
+    });
+
+    test('502 shows readable error and leaves fields untouched and unlocked', async () => {
+        __setAuthenticatedFetchForTests(() => Promise.resolve({
+            ok: false, status: 502, json: () => Promise.resolve({ error: 'Viessmann down' }),
+        }));
+        await handleHparamLive();
+        const msg = document.getElementById('hparam-message');
+        expect(msg.textContent).toContain('Gastherme nicht erreichbar');
+        expect(msg.textContent).toContain('Viessmann down');
+        expect(msg.classList.contains('error')).toBe(true);
+        expect(document.getElementById('hparam-komfort').value).toBe('');
+        expect(document.getElementById('hparam-datum').readOnly).toBe(false);
+        expect(document.getElementById('hparam-live-btn').disabled).toBe(false);
     });
 });
