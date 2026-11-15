@@ -103,3 +103,39 @@ def test_range_bounds_include_whole_day():
 def test_to_jsonable():
     assert logic.to_jsonable({"a": Decimal("1.4"), "b": Decimal("20"), "c": [Decimal("0")]}) == {
         "a": 1.4, "b": 20, "c": [0]}
+
+
+def test_plausibility_accepts_equal_and_ordered_values():
+    logic.check_plausibility(parse({**FULL, "normal": 23, "reduziert": 23})["params"])
+    logic.compute_change(parse(FULL)["params"], {})
+
+
+@pytest.mark.parametrize("override, message", [
+    ({"reduziert": 21}, r"reduziert \(21\) darf nicht größer als normal \(20\)"),
+    ({"normal": 24}, r"normal \(24\) darf nicht größer als komfort \(23\)"),
+    ({"komfort": 19}, r"normal \(20\) darf nicht größer als komfort \(19\)"),
+])
+def test_plausibility_violation_on_first_entry(override, message):
+    with pytest.raises(logic.ValidationError, match=message):
+        logic.compute_change(parse({**FULL, **override})["params"], {})
+
+
+def test_plausibility_checks_partial_update_against_previous_state():
+    base = parse(FULL)["params"]
+    with pytest.raises(logic.ValidationError, match="Plausibilität"):
+        logic.compute_change(parse({"reduziert": 22})["params"], base)
+    with pytest.raises(logic.ValidationError, match="Plausibilität"):
+        logic.compute_change(parse({"komfort": 18})["params"], base)
+
+
+def test_plausibility_not_checked_when_nothing_changes():
+    legacy = {**parse(FULL)["params"], "reduziert": Decimal("22")}  # Altbestand, nicht plausibel
+    _, _, changed = logic.compute_change({"normal": Decimal("20")}, legacy)
+    assert changed == []
+
+
+def test_build_item_source_defaults_to_api_and_is_configurable():
+    p = parse({**FULL, "event_at": "2026-10-29T07:40", "request_id": "abc"})
+    merged, prev, _ = logic.compute_change(p["params"], {})
+    assert logic.build_item("SYSTEM#haus", p, merged, prev, NOW_LOCAL)["source"] == "api"
+    assert logic.build_item("SYSTEM#haus", p, merged, prev, NOW_LOCAL, source="web")["source"] == "web"

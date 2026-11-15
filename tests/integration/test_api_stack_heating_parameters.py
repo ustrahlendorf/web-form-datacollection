@@ -59,3 +59,42 @@ def test_function_has_own_role_with_query_only_on_parameter_table():
     assert stmts[0]["Effect"] == "Allow"
     assert "table/Settings-HeizungParameter" in str(stmts[0]["Resource"])
     assert "*" not in str(stmts[0]["Resource"]).replace("AWS::", "")
+
+
+WRITER_HANDLER = "lambdas.heating_parameters_writer.handler.lambda_handler"
+
+
+def test_post_route_is_jwt_protected():
+    t = _template()
+    t.has_resource_properties("AWS::ApiGatewayV2::Route", {
+        "RouteKey": "POST /heating/parameters",
+        "AuthorizationType": "JWT",
+        "AuthorizerId": Match.any_value(),
+    })
+
+
+def test_writer_function_env_points_to_parameter_table():
+    t = _template()
+    t.has_resource_properties("AWS::Lambda::Function", {
+        "Handler": WRITER_HANDLER,
+        "Environment": {"Variables": Match.object_like({
+            "TABLE_NAME": "Settings-HeizungParameter", "SYSTEM_ID": "haus",
+            "PYTHONPATH": Match.any_value()})},
+    })
+
+
+def test_writer_has_own_role_with_get_query_put_only_on_parameter_table():
+    t = _template()
+    fns = t.find_resources("AWS::Lambda::Function", {"Properties": {"Handler": WRITER_HANDLER}})
+    assert len(fns) == 1
+    role_ref = next(iter(fns.values()))["Properties"]["Role"]["Fn::GetAtt"][0]
+    shared = t.find_resources("AWS::IAM::Role", {"Properties": {"RoleName": "data-collection-lambda-role-dev"}})
+    assert role_ref not in shared, "eigene Rolle, nicht die geteilte Lambda-Rolle"
+    stmts = [s for p in t.find_resources("AWS::IAM::Policy").values()
+             if any(r.get("Ref") == role_ref for r in p["Properties"]["Roles"])
+             for s in p["Properties"]["PolicyDocument"]["Statement"]]
+    assert len(stmts) == 1
+    assert stmts[0]["Effect"] == "Allow"
+    assert sorted(stmts[0]["Action"]) == ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]
+    assert "table/Settings-HeizungParameter" in str(stmts[0]["Resource"])
+    assert "*" not in str(stmts[0]["Resource"]).replace("AWS::", "")

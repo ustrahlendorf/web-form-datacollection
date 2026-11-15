@@ -184,7 +184,7 @@ def test_current_returns_latest_by_event_time_not_insert_order(handlers):
 
 
 def _seed_series(writer):
-    seed(writer, ("2025-12-01T08:00", FULL))
+    seed(writer, ("2025-12-01T08:00", {**FULL, "komfort": 26}))  # komfort >= normal bleibt gewahrt
     for i, day in enumerate(["2025-12-15", "2026-01-10", "2026-01-20", "2026-02-05"]):
         post(writer, {"event_at": f"{day}T08:00", "normal": 21 + i})
 

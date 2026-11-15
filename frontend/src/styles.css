@@ -415,6 +415,20 @@ input[type="number"].error {
     font-weight: 600;
 }
 
+.hparam-form-section {
+    margin-top: 2rem;
+}
+
+.hparam-form-row-params {
+    grid-template-columns: repeat(5, 1fr);
+}
+
+@media (max-width: 768px) {
+    .hparam-form-row-params {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 /* Pagination */
 .pagination {
     display: flex;

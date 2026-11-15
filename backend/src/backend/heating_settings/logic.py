@@ -126,10 +126,21 @@ def state_of(item: dict | None) -> dict:
     return {k: item[k] for k in PARAMS if k in item}
 
 
+def check_plausibility(state: dict) -> None:
+    """Fachliche Querprüfung auf dem vollständigen Zustand: reduziert <= normal <= komfort."""
+    for lower, upper in (("reduziert", "normal"), ("normal", "komfort")):
+        if state[lower] > state[upper]:
+            raise ValidationError(
+                f"Plausibilität: {lower} ({state[lower]}) darf nicht größer als "
+                f"{upper} ({state[upper]}) sein"
+            )
+
+
 def compute_change(params: dict, base: dict) -> tuple[dict, dict, list[str]]:
     """Gibt (neuer Zustand, prev, changed) zurück.
 
-    Ohne Vorgängerzustand müssen alle Parameter angegeben werden.
+    Ohne Vorgängerzustand müssen alle Parameter angegeben werden. Bei einer Änderung muss der
+    zusammengeführte Zustand plausibel sein (auch bei Teilangaben gegen den Vorgängerzustand).
     """
     merged = {**base, **params}
     missing = [k for k in PARAMS if k not in merged]
@@ -138,11 +149,14 @@ def compute_change(params: dict, base: dict) -> tuple[dict, dict, list[str]]:
             "erster Eintrag: alle Parameter erforderlich, es fehlen: " + ", ".join(missing)
         )
     changed = [k for k in PARAMS if k in params and base.get(k) != params[k]]
+    if changed:
+        check_plausibility(merged)
     prev = {k: base[k] for k in changed if k in base}
     return merged, prev, changed
 
 
-def build_item(pk: str, parsed: dict, merged: dict, prev: dict, now_local: datetime) -> dict:
+def build_item(pk: str, parsed: dict, merged: dict, prev: dict, now_local: datetime,
+               source: str = "api") -> dict:
     return {
         "PK": pk,
         "SK": sort_key(parsed["event_at"], parsed["request_id"]),
@@ -150,7 +164,7 @@ def build_item(pk: str, parsed: dict, merged: dict, prev: dict, now_local: datet
         "created_at": now_local.strftime("%Y-%m-%dT%H:%M"),  # Ortszeit, wie event_at
         **{k: merged[k] for k in PARAMS},
         "prev": prev,
-        "source": "api",
+        "source": source,
     }
 
 

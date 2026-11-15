@@ -71,3 +71,33 @@ task deploy-heating-settings
 Der Stack ist unabhängig von den anderen Stacks. Die Lambdas nutzen das gemeinsame
 Repo-Asset mit `PYTHONPATH=backend/src` (siehe `reference/python-layout.md`). Beim Ändern
 der Handler gilt: `handler=`-Strings in CDK und Modulpfade unter `lambdas/` müssen übereinstimmen.
+
+
+## Schreiben über JWT: `POST /heating/parameters`
+
+Für die Weboberfläche (Tab "Hparam") gibt es im `APIStack` (Cognito-JWT, CORS wie die übrigen Routen)
+die Route `POST /heating/parameters`. Sie nutzt dieselbe Schreiblogik wie `POST /changes`
+(`backend/src/backend/heating_settings/writer.py`), mit diesen Unterschieden:
+
+- Auth: Cognito-JWT statt IAM/SigV4.
+- `source` ist `web` (die IAM-Route schreibt weiter `api`).
+- Die Antwort enthält Items nur mit den öffentlichen Feldern (`event_at`, `created_at`, die fünf
+  Parameter, `prev`, `source`), nie `PK`/`SK`.
+- Lambda `lambdas/heating_parameters_writer/handler.py` mit eigener Rolle: nur `dynamodb:GetItem`,
+  `dynamodb:Query` und `dynamodb:PutItem` auf `Settings-HeizungParameter` (Referenz über den festen
+  Tabellennamen, keine Stack-Abhängigkeit).
+
+Body: ein oder mehrere Parameter, optional `event_at` (`YYYY-MM-DD[THH:MM]`, Ortszeit, nicht in der
+Zukunft) und `request_id`. `created_at` setzt immer der Server. Antworten: `201 created`,
+`200 unchanged` bzw. `duplicate`, `400` Validierungsfehler, `409` Konflikt, `500` ohne Details.
+
+### Plausibilitätsregel (gilt für beide Schreib-Routen)
+
+Zusätzlich zu den Wertebereichen muss der zusammengeführte Zustand erfüllen:
+`reduziert <= normal <= komfort`. Das gilt auch bei Teilangaben (gegen den Vorgängerzustand) und
+führt sonst zu `400` mit einer Meldung wie
+`Plausibilität: reduziert (21) darf nicht größer als normal (20) sein`.
+Die Regel liegt in `logic.check_plausibility` und wird in `logic.compute_change` angewandt, wenn sich
+ein Wert ändert. Eine Anfrage ohne Änderung (`unchanged`) wird dadurch nicht abgelehnt.
+**Verhaltensänderung:** Auch die bestehende IAM-Route `POST /changes` lehnt nun unplausible
+Reihenfolgen ab.

@@ -233,6 +233,7 @@ class APIStack(Stack):
             else None
         )
         heating_parameters_handler = self._create_heating_parameters_handler()
+        heating_parameters_writer_handler = self._create_heating_parameters_writer_handler()
         auto_retrieval_config_handler = self._create_auto_retrieval_config_handler(
             lambda_execution_role,
             appconfig_application_id=appconfig_application_id,
@@ -253,6 +254,7 @@ class APIStack(Stack):
             heating_live_handler,
             auto_retrieval_config_handler,
             heating_parameters_handler,
+            heating_parameters_writer_handler,
         )
 
         # Store references for use by other stacks
@@ -412,6 +414,7 @@ class APIStack(Stack):
         heating_live_handler: lambda_.Function | None = None,
         auto_retrieval_config_handler: lambda_.Function | None = None,
         heating_parameters_handler: lambda_.Function | None = None,
+        heating_parameters_writer_handler: lambda_.Function | None = None,
     ) -> None:
         """
         Wire Lambda functions to API Gateway routes with JWT authorization.
@@ -425,6 +428,7 @@ class APIStack(Stack):
             heating_live_handler: Optional Lambda for GET /heating/live
             auto_retrieval_config_handler: Optional Lambda for GET/PUT /config/auto-retrieval
             heating_parameters_handler: Optional Lambda for GET /heating/parameters
+            heating_parameters_writer_handler: Optional Lambda for POST /heating/parameters
         """
         # POST /submit route
         http_api.add_routes(
@@ -492,6 +496,18 @@ class APIStack(Stack):
                 authorizer=jwt_authorizer,
             )
 
+        # POST /heating/parameters (records a parameter change; source="web")
+        if heating_parameters_writer_handler is not None:
+            http_api.add_routes(
+                path="/heating/parameters",
+                methods=[apigw.HttpMethod.POST],
+                integration=apigw_integrations.HttpLambdaIntegration(
+                    "HeatingParametersWriterIntegration",
+                    heating_parameters_writer_handler,
+                ),
+                authorizer=jwt_authorizer,
+            )
+
         # GET/PUT /config/auto-retrieval route
         if auto_retrieval_config_handler is not None:
             http_api.add_routes(
@@ -545,18 +561,39 @@ class APIStack(Stack):
         return heating_live_fn
 
     def _create_heating_parameters_handler(self) -> lambda_.Function:
-        """Create Lambda for GET /heating/parameters.
+        """Create Lambda for GET /heating/parameters (read-only: ``dynamodb:Query``)."""
+        return self._create_heating_parameters_function(
+            "HeatingParametersHandler",
+            "lambdas.heating_parameters.handler.lambda_handler",
+            "Lambda handler for heating parameter history (read-only)",
+            ["dynamodb:Query"],
+        )
 
-        Own role (CDK default: basic logging) with only ``dynamodb:Query`` on the fixed-name
-        table ``Settings-HeizungParameter`` (owned by HeizungSettingsStack; referenced by ARN,
-        no stack dependency).
-        """
+    def _create_heating_parameters_writer_handler(self) -> lambda_.Function:
+        """Create Lambda for POST /heating/parameters (``GetItem``, ``Query``, ``PutItem``)."""
+        return self._create_heating_parameters_function(
+            "HeatingParametersWriterHandler",
+            "lambdas.heating_parameters_writer.handler.lambda_handler",
+            "Lambda handler to record heating parameter changes (source=web)",
+            ["dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem"],
+        )
+
+    def _create_heating_parameters_function(
+        self,
+        construct_id: str,
+        handler: str,
+        description: str,
+        actions: list[str],
+    ) -> lambda_.Function:
+        """Lambda with its own role (CDK default: basic logging) and only ``actions`` on the
+        fixed-name table ``Settings-HeizungParameter`` (owned by HeizungSettingsStack;
+        referenced by ARN, no stack dependency)."""
         table_name = HEATING_PARAMETERS_TABLE_NAME
         fn = lambda_.Function(
             self,
-            "HeatingParametersHandler",
+            construct_id,
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="lambdas.heating_parameters.handler.lambda_handler",
+            handler=handler,
             code=python_lambda_code_from_repo(),
             environment={
                 "TABLE_NAME": table_name,
@@ -565,13 +602,13 @@ class APIStack(Stack):
             },
             timeout=Duration.seconds(10),
             memory_size=256,
-            description="Lambda handler for heating parameter history (read-only)",
+            description=description,
             log_retention=logs.RetentionDays.ONE_WEEK,
         )
         fn.add_to_role_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
-                actions=["dynamodb:Query"],
+                actions=actions,
                 resources=[
                     f"arn:{self.partition}:dynamodb:{self.region}:{self.account}:table/{table_name}"
                 ],

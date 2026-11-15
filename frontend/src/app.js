@@ -20,6 +20,8 @@ const state = {
     heatingStatusTimer: null,
     hparamNextToken: null,
     hparamLoading: false,
+    hparamCurrent: null,   // newest entry (current parameter state), used for prefill/plausibility
+    hparamSubmitting: false,
 };
 
 // Initialize AuthManager
@@ -140,6 +142,10 @@ function setupEventListeners() {
     const hparamMoreBtn = document.getElementById('hparam-more-btn');
     if (hparamMoreBtn) {
         hparamMoreBtn.addEventListener('click', () => loadHparam({ append: true }));
+    }
+    const hparamForm = document.getElementById('hparam-form');
+    if (hparamForm) {
+        hparamForm.addEventListener('submit', handleHparamSubmit);
     }
     const hparamReloadBtn = document.getElementById('hparam-reload-btn');
     if (hparamReloadBtn) {
@@ -2891,6 +2897,10 @@ async function loadHparam({ append = false } = {}) {
         } else {
             container.innerHTML = renderHparamTable(items);
         }
+        if (!append) {
+            state.hparamCurrent = items[0] || null;
+            prefillHparamForm();
+        }
         state.hparamNextToken = data.next_token || null;
     } catch (error) {
         console.error('Error loading heating parameters:', error);
@@ -2900,6 +2910,221 @@ async function loadHparam({ append = false } = {}) {
     } finally {
         state.hparamLoading = false;
         updateHparamMoreButton();
+    }
+}
+
+// Hparam entry form (Vorbild: Init "Submit Data (New Submission)")
+const HPARAM_LIMITS = {
+    komfort: { min: 5, max: 30, decimals: 0 },
+    normal: { min: 5, max: 30, decimals: 0 },
+    reduziert: { min: 5, max: 30, decimals: 0 },
+    neigung: { min: 0.2, max: 3.5, decimals: 1 },
+    niveau: { min: -10, max: 10, decimals: 1 },
+};
+const HPARAM_FORM_FIELDS = ['datum', 'uhrzeit', ...HPARAM_PARAMS];
+
+function pad2(n) {
+    return String(n).padStart(2, '0');
+}
+
+// Fills date/time with "now" and the parameter inputs with the current (newest) values.
+function prefillHparamForm() {
+    const datumEl = document.getElementById('hparam-datum');
+    if (!datumEl) {
+        return;
+    }
+    const now = new Date();
+    datumEl.value = `${pad2(now.getDate())}.${pad2(now.getMonth() + 1)}.${now.getFullYear()}`;
+    document.getElementById('hparam-uhrzeit').value = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+
+    const current = state.hparamCurrent;
+    HPARAM_PARAMS.forEach(name => {
+        const el = document.getElementById(`hparam-${name}`);
+        if (el) {
+            el.value = current && current[name] !== undefined && current[name] !== null
+                ? formatHparamValue(name, current[name]) : '';
+        }
+    });
+}
+
+function parseHparamNumber(text) {
+    const trimmed = String(text === undefined || text === null ? '' : text).trim().replace(',', '.');
+    if (trimmed === '' || !/^[-+]?\d+(\.\d+)?$/.test(trimmed)) {
+        return NaN;
+    }
+    return Number(trimmed);
+}
+
+function hparamHasAtMostDecimals(value, decimals) {
+    const factor = 10 ** decimals;
+    return Math.abs(value * factor - Math.round(value * factor)) < 1e-9;
+}
+
+// dd.mm.yyyy + hh:mm -> Date (local) or null
+function hparamLocalDate(datum, uhrzeit) {
+    if (!isValidDate(datum) || !isValidTime(uhrzeit)) {
+        return null;
+    }
+    const [d, m, y] = datum.split('.').map(Number);
+    const [hh, mm] = uhrzeit.split(':').map(Number);
+    return new Date(y, m - 1, d, hh, mm);
+}
+
+// values: { datum, uhrzeit, komfort, normal, reduziert, neigung, niveau } (strings as typed)
+// current: newest stored entry or null. Returns [{ field, message }]; field 'form' = general message.
+function validateHparamForm(values, current, now = new Date()) {
+    const errors = [];
+
+    if (!isValidDate(values.datum)) {
+        errors.push({ field: 'datum', message: 'Invalid date format. Expected dd.mm.yyyy' });
+    }
+    if (!isValidTime(values.uhrzeit)) {
+        errors.push({ field: 'uhrzeit', message: 'Invalid time format. Expected hh:mm' });
+    }
+    const eventDate = hparamLocalDate(values.datum, values.uhrzeit);
+    if (eventDate && eventDate.getTime() > now.getTime() + 24 * 60 * 60 * 1000) {
+        errors.push({ field: 'datum', message: 'Event date/time must not be in the future' });
+    }
+
+    const numbers = {};
+    HPARAM_PARAMS.forEach(name => {
+        const limit = HPARAM_LIMITS[name];
+        const value = parseHparamNumber(values[name]);
+        numbers[name] = value;
+        if (Number.isNaN(value)) {
+            errors.push({ field: name, message: 'Enter a number' });
+        } else if (value < limit.min || value > limit.max) {
+            errors.push({ field: name, message: `Must be between ${limit.min} and ${limit.max}` });
+        } else if (!hparamHasAtMostDecimals(value, limit.decimals)) {
+            errors.push({
+                field: name,
+                message: limit.decimals === 0 ? 'Must be a whole number' : `At most ${limit.decimals} decimal place`,
+            });
+        }
+    });
+
+    // Plausibility: reduziert <= normal <= komfort (only when the single values are valid)
+    const valid = name => !errors.some(e => e.field === name);
+    if (valid('reduziert') && valid('normal') && numbers.reduziert > numbers.normal) {
+        errors.push({ field: 'reduziert', message: `Reduziert (${numbers.reduziert}) must not exceed Normal (${numbers.normal})` });
+    }
+    if (valid('normal') && valid('komfort') && numbers.normal > numbers.komfort) {
+        errors.push({ field: 'normal', message: `Normal (${numbers.normal}) must not exceed Komfort (${numbers.komfort})` });
+    }
+
+    // At least one value must differ from the current state
+    if (errors.length === 0 && current) {
+        const changed = HPARAM_PARAMS.some(name => Number(current[name]) !== numbers[name]);
+        if (!changed) {
+            errors.push({ field: 'form', message: 'No change: all values equal the current parameters' });
+        }
+    }
+    return errors;
+}
+
+function buildHparamPayload(values) {
+    const [d, m, y] = values.datum.split('.');
+    const payload = { event_at: `${y}-${m}-${d}T${values.uhrzeit}` };
+    HPARAM_PARAMS.forEach(name => {
+        payload[name] = parseHparamNumber(values[name]);
+    });
+    return payload;
+}
+
+function readHparamFormValues() {
+    const values = {};
+    HPARAM_FORM_FIELDS.forEach(name => {
+        const el = document.getElementById(`hparam-${name}`);
+        values[name] = el ? el.value.trim() : '';
+    });
+    return values;
+}
+
+function clearHparamFormErrors() {
+    document.querySelectorAll('#hparam-form .error-message').forEach(el => {
+        el.textContent = '';
+    });
+    document.querySelectorAll('#hparam-form input').forEach(el => el.classList.remove('error'));
+    showHparamMessage('', null);
+}
+
+function showHparamMessage(message, type) {
+    const el = document.getElementById('hparam-message');
+    if (!el) {
+        return;
+    }
+    el.textContent = message;
+    el.classList.remove('success', 'error');
+    if (type) {
+        el.classList.add(type);
+    }
+}
+
+function displayHparamErrors(errors) {
+    errors.forEach(error => {
+        if (error.field === 'form') {
+            showHparamMessage(error.message, 'error');
+            return;
+        }
+        const errorEl = document.getElementById(`hparam-${error.field}-error`);
+        const inputEl = document.getElementById(`hparam-${error.field}`);
+        if (errorEl && !errorEl.textContent) {
+            errorEl.textContent = error.message;
+        }
+        if (inputEl) {
+            inputEl.classList.add('error');
+        }
+    });
+}
+
+async function handleHparamSubmit(e) {
+    e.preventDefault();
+    if (state.hparamSubmitting) {
+        return;
+    }
+    clearHparamFormErrors();
+
+    const values = readHparamFormValues();
+    const errors = validateHparamForm(values, state.hparamCurrent);
+    if (errors.length > 0) {
+        displayHparamErrors(errors);
+        return;
+    }
+    await submitHparam(buildHparamPayload(values));
+}
+
+async function submitHparam(payload) {
+    const btn = document.getElementById('hparam-submit-btn');
+    state.hparamSubmitting = true;
+    if (btn) {
+        btn.disabled = true;
+    }
+    try {
+        const response = await authenticatedFetch(`${CONFIG.API_ENDPOINT}/heating/parameters`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const result = await response.json().catch(() => ({}));
+
+        if (response.ok && result.status === 'created') {
+            await loadHparam();
+            showHparamMessage('Submission successful!', 'success');
+        } else if (response.ok && result.status === 'unchanged') {
+            showHparamMessage('No change: values equal the state at that time', 'error');
+        } else if (response.ok && result.status === 'duplicate') {
+            showHparamMessage('Entry already exists', 'error');
+        } else {
+            showHparamMessage(result.error || 'Submission failed', 'error');
+        }
+    } catch (error) {
+        console.error('Error submitting heating parameters:', error);
+        showHparamMessage('An error occurred. Please try again.', 'error');
+    } finally {
+        state.hparamSubmitting = false;
+        if (btn) {
+            btn.disabled = false;
+        }
     }
 }
 
@@ -2929,6 +3154,10 @@ if (typeof module !== 'undefined' && module.exports) {
         renderHparamRows,
         renderHparamTable,
         loadHparam,
+        prefillHparamForm,
+        validateHparamForm,
+        buildHparamPayload,
+        handleHparamSubmit,
         __getStateForTests: () => state,
         __setAuthenticatedFetchForTests: (fn) => {
             authenticatedFetch = fn;
