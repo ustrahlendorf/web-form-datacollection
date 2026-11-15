@@ -84,6 +84,15 @@ class CognitoStack(Stack):
             generate_secret=False,  # No secret for public frontend client
         )
 
+        # Group allowed to write heating parameters (checked via cognito:groups in the Lambdas)
+        cognito.CfnUserPoolGroup(
+            self,
+            "HeatingParameterWritersGroup",
+            user_pool_id=user_pool.user_pool_id,
+            group_name="heating-parameter-writers",
+            description="May write heating parameters to the boiler (POST /heating/parameters, /sync)",
+        )
+
         # Configure Hosted UI
         user_pool.add_domain(
             "DataCollectionDomain",

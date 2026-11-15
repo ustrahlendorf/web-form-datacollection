@@ -47,3 +47,13 @@ def test_cognito_user_pool_disables_self_signup() -> None:
 
 
 
+
+
+def test_heating_parameter_writers_group_exists():
+    import aws_cdk as cdk
+    from aws_cdk.assertions import Template
+    from infrastructure.stacks.cognito_stack import CognitoStack
+    stack = CognitoStack(cdk.App(), "TestCognitoGroup", environment_name="dev",
+                         env=cdk.Environment(account="123456789012", region="eu-central-1"))
+    Template.from_stack(stack).has_resource_properties(
+        "AWS::Cognito::UserPoolGroup", {"GroupName": "heating-parameter-writers"})

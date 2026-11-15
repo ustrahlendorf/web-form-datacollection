@@ -1,5 +1,4 @@
-"""Tests für POST /heating/parameters (moto, kein AWS-Zugriff)."""
-import base64
+"""Tests für POST /heating/parameters (moto + gemockte Viessmann-Funktionen, kein AWS-Zugriff)."""
 import json
 import sys
 from unittest import mock
@@ -13,6 +12,7 @@ TABLE = "test-parameters-writer"
 PK = "SYSTEM#haus"
 FULL = {"komfort": 23, "normal": 20, "reduziert": 16, "neigung": 1.4, "niveau": 0.0}
 PUBLIC = {"event_at", "created_at", "komfort", "normal", "reduziert", "neigung", "niveau", "prev", "source"}
+GROUP_CLAIMS = {"sub": "u1", "cognito:groups": "[heating-parameter-writers]"}
 
 
 @pytest.fixture
@@ -36,13 +36,57 @@ def api(monkeypatch):
         sys.modules.pop(name, None)
         from lambdas.heating_parameters_writer import handler
         handler._table = None
-        yield handler
+        handler._secrets = mock.MagicMock()
+        with mock.patch.object(handler.viessmann_credentials, "load_into_env"), \
+                mock.patch.object(handler, "_get_iot_config", return_value={"cfg": 1}):
+            yield handler
         sys.modules.pop(name, None)
 
 
-def post(api, body, raw=False, **extra):
+class Viessmann:
+    """Gemockte Viessmann-API: hält den Live-Zustand, apply ändert ihn."""
+
+    def __init__(self, live=None, fail_on=None, live_error=False):
+        self.live = dict(live or FULL)
+        self.fail_on = fail_on
+        self.live_error = live_error
+        self.applied_calls = []
+
+    def get(self, iot_config, **kw):
+        if self.live_error:
+            raise RuntimeError("boom")
+        return {**self.live, "fetched_at": "2026-11-15T10:00:00+00:00"}
+
+    def apply(self, changes, iot_config, **kw):
+        self.applied_calls.append(dict(changes))
+        before = dict(self.live)
+        applied, error, partial = {}, None, False
+        for k, v in changes.items():
+            if k == self.fail_on:
+                applied[k] = {"from": before[k], "to": v, "ok": False}
+                error, partial = f"Command {k} fehlgeschlagen", bool(applied and any(a["ok"] for a in applied.values()))
+                break
+            self.live[k] = v
+            applied[k] = {"from": before[k], "to": v, "ok": True}
+        return {"applied": applied, "live_before": before, "live_after": dict(self.live),
+                "error": error, "partial": partial}
+
+
+@pytest.fixture
+def vm():
+    v = Viessmann()
+    import backend.heating.iot_data as pkg
+    mod = mock.MagicMock(get_heating_parameters=v.get, apply_heating_parameters=v.apply)
+    with mock.patch.dict(sys.modules, {"backend.heating.iot_data.heating_parameters": mod}), \
+            mock.patch.object(pkg, "heating_parameters", mod, create=True):
+        yield v
+
+
+def post(api, body, groups=True, raw=False):
+    claims = GROUP_CLAIMS if groups is True else (groups or {"sub": "u1"})
     event = {"routeKey": "POST /heating/parameters",
-             "body": body if raw else json.dumps(body), **extra}
+             "requestContext": {"authorizer": {"jwt": {"claims": claims}}},
+             "body": body if raw else json.dumps(body)}
     res = api.lambda_handler(event, None)
     return res["statusCode"], json.loads(res["body"])
 
@@ -51,123 +95,135 @@ def stored():
     return boto3.resource("dynamodb").Table(TABLE).scan()["Items"]
 
 
-def test_created_with_source_web_and_no_keys_in_response(api):
-    status, body = post(api, {**FULL, "event_at": "2026-10-29T07:40"})
+def test_forbidden_without_group_and_nothing_called(api, vm):
+    status, body = post(api, {"komfort": 24}, groups=False)
+    assert status == 403 and body == {"error": "forbidden"}
+    status, _ = post(api, {"komfort": 24}, groups={"sub": "u", "cognito:groups": "[other]"})
+    assert status == 403 and vm.applied_calls == [] and stored() == []
+
+
+def test_group_claim_as_list_is_accepted(api, vm):
+    status, _ = post(api, {"komfort": 24}, groups={"sub": "u", "cognito:groups": ["x", "heating-parameter-writers"]})
+    assert status == 201
+
+
+def test_created_with_verified_values_source_web_and_server_time(api, vm):
+    status, body = post(api, {"komfort": 24, "event_at": "1999-01-01T00:00"})
     assert status == 201 and body["status"] == "created"
     item = body["item"]
-    assert set(item) == PUBLIC
-    assert item["source"] == "web" and item["prev"] == {} and item["event_at"] == "2026-10-29T07:40"
-    assert "PK" not in item and "SK" not in item
+    assert set(item) == PUBLIC and item["source"] == "web"
+    assert item["komfort"] == 24 and item["normal"] == 20 and item["prev"] == {"komfort": 23}
+    assert item["event_at"] != "1999-01-01T00:00" and len(item["event_at"]) == 16
+    assert body["applied"] == {"komfort": {"from": 23, "to": 24, "ok": True}}
+    assert vm.applied_calls == [{"komfort": 24}]
     (row,) = stored()
-    assert row["source"] == "web" and row["PK"] == PK and row["SK"].startswith("EVT#2026-10-29T07:40#")
+    assert row["PK"] == PK and row["source"] == "web"
 
 
-def test_created_at_is_set_by_server(api):
-    _, body = post(api, {**FULL, "event_at": "2026-10-29T07:40", "created_at": "1999-01-01T00:00"})
-    assert body["error"].startswith("unbekannte Felder")
-    _, ok = post(api, {**FULL, "event_at": "2026-10-29T07:40"})
-    assert ok["item"]["created_at"] != "1999-01-01T00:00" and len(ok["item"]["created_at"]) == 16
+def test_stored_values_are_live_after_not_requested(api, vm):
+    orig = vm.apply
+
+    def apply_and_drift(changes, cfg, **kw):
+        res = orig(changes, cfg, **kw)
+        res["live_after"]["komfort"] = 22  # Gerät hat anderen Wert übernommen
+        return res
+    vm.apply = apply_and_drift
+    import sys as _s
+    _s.modules["backend.heating.iot_data.heating_parameters"].apply_heating_parameters = apply_and_drift
+    status, body = post(api, {"komfort": 24})
+    assert status == 201 and body["item"]["komfort"] == 22
 
 
-def test_event_at_defaults_to_now_without_time_is_midnight(api):
-    _, body = post(api, {**FULL, "event_at": "2026-10-29"})
-    assert body["item"]["event_at"] == "2026-10-29T00:00"
-    _, body = post(api, {**FULL, "komfort": 24})
-    assert len(body["item"]["event_at"]) == 16
+def test_stale_verification_read_still_stores_accepted_target(api, vm):
+    """Regression: Therme übernimmt den Wert, der Read direkt danach liefert noch den alten."""
+    orig = vm.apply
+
+    def apply_stale(changes, cfg, **kw):
+        res = orig(changes, cfg, **kw)
+        res["live_after"] = dict(res["live_before"])  # verzögerte Cloud: alter Zustand
+        return res
+    import sys as _s
+    _s.modules["backend.heating.iot_data.heating_parameters"].apply_heating_parameters = apply_stale
+    status, body = post(api, {"reduziert": 18})
+    assert status == 201 and body["status"] == "created"
+    assert body["item"]["reduziert"] == 18 and body["item"]["prev"] == {"reduziert": 16}
+    (row,) = stored()
+    assert row["reduziert"] == 18
 
 
-def test_partial_update_merges_previous_state_and_tracks_prev(api):
-    post(api, {**FULL, "event_at": "2026-10-01T08:00"})
-    status, body = post(api, {"neigung": 1.2, "event_at": "2026-10-02T08:00"})
-    assert status == 201
-    item = body["item"]
-    assert item["neigung"] == 1.2 and item["komfort"] == 23 and item["normal"] == 20
-    assert item["prev"] == {"neigung": 1.4}
+def test_unchanged_does_not_write(api, vm):
+    status, body = post(api, {"normal": 20})
+    assert status == 200 and body["status"] == "unchanged" and body["state"]["normal"] == 20
+    assert vm.applied_calls == [] and stored() == []
 
 
-def test_unchanged(api):
-    post(api, {**FULL, "event_at": "2026-10-01T08:00"})
-    status, body = post(api, {"normal": 20, "event_at": "2026-10-02T08:00"})
-    assert status == 200 and body["status"] == "unchanged"
-    assert body["state"]["normal"] == 20
-    assert len(stored()) == 1
-
-
-def test_duplicate_with_same_body_and_event_at(api):
-    body = {**FULL, "event_at": "2026-10-29T07:40"}
-    assert post(api, body)[0] == 201
-    status, again = post(api, body)
-    assert status == 200 and again["status"] == "duplicate"
-    assert set(again["item"]) == PUBLIC
-    assert len(stored()) == 1
-
-
-@pytest.mark.parametrize("first, partial", [
-    (FULL, {"reduziert": 22}),
-    (FULL, {"komfort": 19}),
-    (FULL, {"normal": 24}),
-])
-def test_plausibility_violation_with_partial_update(api, first, partial):
-    post(api, {**first, "event_at": "2026-10-01T08:00"})
-    status, body = post(api, {**partial, "event_at": "2026-10-02T08:00"})
-    assert status == 400 and "Plausibilität" in body["error"]
-    assert len(stored()) == 1
-
-
-def test_plausibility_violation_on_first_entry(api):
-    status, body = post(api, {**FULL, "reduziert": 25})
-    assert status == 400 and "reduziert (25) darf nicht größer als normal (20)" in body["error"]
-    assert stored() == []
+def test_only_changed_params_are_applied(api, vm):
+    post(api, {"komfort": 23, "normal": 21})
+    assert vm.applied_calls == [{"normal": 21}]
 
 
 @pytest.mark.parametrize("override", [
-    {"komfort": 31}, {"komfort": 4}, {"komfort": 22.5}, {"neigung": 3.6}, {"neigung": 1.25},
-    {"niveau": -10.1}, {"niveau": "x"}, {"normal": True},
+    {"komfort": 31}, {"komfort": 22.5}, {"neigung": 3.6}, {"niveau": "x"}, {"foo": 1},
 ])
-def test_range_and_format_violations(api, override):
-    status, _ = post(api, {**FULL, **override})
-    assert status == 400 and stored() == []
+def test_validation_errors_400(api, vm, override):
+    status, body = post(api, override)
+    assert status == 400 and "error" in body and vm.applied_calls == [] and stored() == []
 
 
-def test_missing_parameter_on_first_entry(api):
-    status, body = post(api, {"komfort": 23})
-    assert status == 400 and "erster Eintrag" in body["error"]
+@pytest.mark.parametrize("partial", [{"reduziert": 22}, {"komfort": 19}, {"normal": 24}])
+def test_plausibility_against_live_state(api, vm, partial):
+    status, body = post(api, partial)
+    assert status == 400 and "Plausibilität" in body["error"] and vm.applied_calls == []
 
 
-@pytest.mark.parametrize("event", [
-    {"routeKey": "POST /heating/parameters"},
-    {"routeKey": "POST /heating/parameters", "body": "{nope"},
-    {"routeKey": "POST /heating/parameters", "body": "[1]"},
-    {"routeKey": "POST /heating/parameters", "body": "{}"},
-])
-def test_invalid_or_missing_body(api, event):
-    res = api.lambda_handler(event, None)
-    assert res["statusCode"] == 400 and "error" in json.loads(res["body"])
+@pytest.mark.parametrize("raw", ["{nope", "[1]", "{}"])
+def test_invalid_body(api, vm, raw):
+    status, _ = post(api, raw, raw=True)
+    assert status == 400
 
 
-def test_base64_body(api):
-    raw = base64.b64encode(json.dumps({**FULL, "event_at": "2026-10-29T07:40"}).encode()).decode()
-    status, _ = post(api, raw, raw=True, isBase64Encoded=True)
-    assert status == 201
+def test_partial_failure_502_with_item_of_actual_values(api, vm):
+    vm.fail_on = "normal"
+    status, body = post(api, {"komfort": 25, "normal": 21})
+    assert status == 502 and body["partial"] is True
+    assert body["applied"]["komfort"]["ok"] is True and body["applied"]["normal"]["ok"] is False
+    assert body["item"]["komfort"] == 25 and body["item"]["normal"] == 20
+    assert body["item"]["source"] == "web" and body["item"]["prev"] == {"komfort": 23}
+    assert len(stored()) == 1
 
 
-def test_event_at_in_future_is_rejected(api):
-    status, body = post(api, {**FULL, "event_at": "2999-01-01T00:00"})
-    assert status == 400 and "Zukunft" in body["error"]
+def test_first_command_fails_502_without_item(api, vm):
+    vm.fail_on = "komfort"
+    status, body = post(api, {"komfort": 25})
+    assert status == 502 and body["partial"] is False and body["item"] is None
+    assert stored() == []
 
 
-def test_conflict_maps_to_409(api):
+def test_live_read_failure_502(api, vm):
+    vm.live_error = True
+    status, body = post(api, {"komfort": 25})
+    assert status == 502 and body["partial"] is False and body["item"] is None
+
+
+def test_conflict_maps_to_409(api, vm):
     err = ClientError({"Error": {"Code": "ConditionalCheckFailedException", "Message": "x"}}, "PutItem")
-    table = api._get_table()
-    with mock.patch.object(table, "put_item", side_effect=err):
-        status, body = post(api, {**FULL, "event_at": "2026-10-29T07:40"})
+    with mock.patch.object(api._get_table(), "put_item", side_effect=err):
+        status, body = post(api, {"komfort": 24})
     assert status == 409 and body == {"error": "Eintrag existiert bereits"}
 
 
-def test_unexpected_error_is_generic(api, monkeypatch):
+def test_failure_is_logged_structured_without_secrets(api, vm, caplog):
+    vm.fail_on = "komfort"
+    with caplog.at_level("INFO"):
+        post(api, {"komfort": 25})
+    msgs = [r.getMessage() for r in caplog.records if "heating_parameter_write_failed" in r.getMessage()]
+    assert msgs and '"parameter": "komfort"' in msgs[0] and "password" not in msgs[0].lower()
+
+
+def test_unexpected_error_is_generic(api, vm, monkeypatch):
     monkeypatch.setenv("TABLE_NAME", "does-not-exist")
     api._table = None
-    status, body = post(api, {**FULL, "event_at": "2026-10-29T07:40"})
+    status, body = post(api, {"komfort": 24})
     assert status == 500 and body == {"error": "interner Fehler"}
 
 

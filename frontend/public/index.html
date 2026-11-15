@@ -295,16 +295,18 @@
                                     </div>
                                     <div class="form-group">
                                         <label for="hparam-niveau">Niveau (−10–10)</label>
-                                        <input type="text" id="hparam-niveau" inputmode="decimal" required>
+                                        <input type="text" id="hparam-niveau" inputmode="numeric" required>
                                         <span class="error-message" id="hparam-niveau-error"></span>
                                     </div>
                                 </div>
 
                                 <div class="form-actions">
                                     <button type="submit" id="hparam-submit-btn" class="btn btn-primary">Submit</button>
+                                    <button type="button" id="hparam-live-btn" class="btn btn-secondary">Live</button>
                                 </div>
                             </div>
                         </form>
+                        <div id="hparam-drift" class="hparam-drift" style="display: none;"></div>
                         <div id="hparam-message" class="message"></div>
                     </div>
                 </div>
