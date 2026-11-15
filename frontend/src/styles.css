@@ -381,14 +381,24 @@ input[type="number"].error {
     margin-bottom: 0;
 }
 
+/* Scroll-Fenster: Kopfzeile + 5 Datenzeilen (feste Zeilenhöhe) */
 .hparam-scroll {
-    max-height: 60rem;
+    --hparam-row-height: 3rem;
+    max-height: calc(var(--hparam-row-height) * 6 + 2px);
     overflow: auto;
 }
 
 .hparam-table {
     margin-bottom: 0;
     white-space: nowrap;
+}
+
+.hparam-table th,
+.hparam-table td {
+    height: var(--hparam-row-height);
+    padding-top: 0;
+    padding-bottom: 0;
+    box-sizing: border-box;
 }
 
 .hparam-table .hparam-value {
