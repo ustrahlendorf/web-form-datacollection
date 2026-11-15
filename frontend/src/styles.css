@@ -369,6 +369,66 @@ input[type="number"].error {
     background-color: #f9f9f9;
 }
 
+/* Hparam (Heizungs-Parameter) */
+.hparam-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.hparam-header h2 {
+    margin-bottom: 0;
+}
+
+/* Scroll-Fenster: Kopfzeile + 5 Datenzeilen (feste Zeilenhöhe) */
+.hparam-scroll {
+    --hparam-row-height: 3rem;
+    max-height: calc(var(--hparam-row-height) * 6 + 2px);
+    overflow: auto;
+}
+
+.hparam-table {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.hparam-table th,
+.hparam-table td {
+    height: var(--hparam-row-height);
+    padding-top: 0;
+    padding-bottom: 0;
+    box-sizing: border-box;
+}
+
+.hparam-table .hparam-value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.hparam-table th:nth-child(n+3):nth-child(-n+7) {
+    text-align: right;
+}
+
+.hparam-table .hparam-changed {
+    background-color: #fff3cd;
+    font-weight: 600;
+}
+
+.hparam-form-section {
+    margin-top: 2rem;
+}
+
+.hparam-form-row-params {
+    grid-template-columns: repeat(5, 1fr);
+}
+
+@media (max-width: 768px) {
+    .hparam-form-row-params {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 /* Pagination */
 .pagination {
     display: flex;

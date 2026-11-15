@@ -22,6 +22,7 @@
                     <a href="#history" class="nav-link" data-page="history">History</a>
                     <a href="#live" class="nav-link" data-page="live">Live</a>
                     <a href="#settings" class="nav-link" data-page="settings">Settings</a>
+                    <a href="#hparam" class="nav-link" data-page="hparam">Hparam</a>
                     <button id="logout-btn" class="nav-link logout-btn">Logout</button>
                 </div>
             </div>
@@ -232,6 +233,79 @@
                         <button id="prev-btn" class="btn btn-secondary">Previous</button>
                         <span id="page-info"></span>
                         <button id="next-btn" class="btn btn-secondary">Next</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Hparam Page (Heizungs-Parameter) -->
+            <section id="hparam-page" class="page">
+                <div class="container">
+                    <div class="hparam-header">
+                        <h2>Heizungs-Parameter</h2>
+                        <button type="button" id="hparam-reload-btn" class="btn btn-secondary">Reload</button>
+                    </div>
+
+                    <div id="hparam-scroll" class="hparam-scroll">
+                        <div id="hparam-content">
+                            <p class="empty-state">Loading heating parameters...</p>
+                        </div>
+                        <div id="hparam-more" class="pagination" style="display: none;">
+                            <button type="button" id="hparam-more-btn" class="btn btn-secondary">Mehr laden</button>
+                        </div>
+                    </div>
+
+                    <!-- New heating parameter entry -->
+                    <div class="form-section hparam-form-section">
+                        <h3>Submit Heating Parameters (New Entry)</h3>
+                        <form id="hparam-form" novalidate>
+                            <div class="form-grid">
+                                <div class="form-row form-row-2">
+                                    <div class="form-group">
+                                        <label for="hparam-datum">Event Date (dd.mm.yyyy)</label>
+                                        <input type="text" id="hparam-datum" placeholder="dd.mm.yyyy" required>
+                                        <span class="error-message" id="hparam-datum-error"></span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="hparam-uhrzeit">Event Time (hh:mm)</label>
+                                        <input type="text" id="hparam-uhrzeit" placeholder="hh:mm" required>
+                                        <span class="error-message" id="hparam-uhrzeit-error"></span>
+                                    </div>
+                                </div>
+
+                                <div class="form-row hparam-form-row-params">
+                                    <div class="form-group">
+                                        <label for="hparam-komfort">Komfort (°C, 5–30)</label>
+                                        <input type="text" id="hparam-komfort" inputmode="numeric" required>
+                                        <span class="error-message" id="hparam-komfort-error"></span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="hparam-normal">Normal (°C, 5–30)</label>
+                                        <input type="text" id="hparam-normal" inputmode="numeric" required>
+                                        <span class="error-message" id="hparam-normal-error"></span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="hparam-reduziert">Reduziert (°C, 5–30)</label>
+                                        <input type="text" id="hparam-reduziert" inputmode="numeric" required>
+                                        <span class="error-message" id="hparam-reduziert-error"></span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="hparam-neigung">Neigung (0.2–3.5)</label>
+                                        <input type="text" id="hparam-neigung" inputmode="decimal" required>
+                                        <span class="error-message" id="hparam-neigung-error"></span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="hparam-niveau">Niveau (−10–10)</label>
+                                        <input type="text" id="hparam-niveau" inputmode="decimal" required>
+                                        <span class="error-message" id="hparam-niveau-error"></span>
+                                    </div>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="submit" id="hparam-submit-btn" class="btn btn-primary">Submit</button>
+                                </div>
+                            </div>
+                        </form>
+                        <div id="hparam-message" class="message"></div>
                     </div>
                 </div>
             </section>
