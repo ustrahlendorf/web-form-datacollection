@@ -173,6 +173,13 @@ describe('validateHparamForm', () => {
         expect(fields(errors)).toEqual(expect.arrayContaining(['normal', 'neigung']));
     });
 
+    test('niveau must be a whole number (Viessmann shift is integer-stepped)', () => {
+        const errors = validateHparamForm({ ...VALUES, niveau: '1.5' }, ITEM, NOW);
+        expect(fields(errors)).toEqual(['niveau']);
+        expect(errors[0].message).toBe('Must be a whole number');
+        expect(validateHparamForm({ ...VALUES, niveau: '1' }, ITEM, NOW)).toEqual([]);
+    });
+
     test('rejects empty and non-numeric input', () => {
         const errors = validateHparamForm({ ...VALUES, komfort: '', reduziert: 'abc' }, ITEM, NOW);
         expect(fields(errors)).toEqual(expect.arrayContaining(['komfort', 'reduziert']));

@@ -2925,7 +2925,7 @@ const HPARAM_LIMITS = {
     normal: { min: 5, max: 30, decimals: 0 },
     reduziert: { min: 5, max: 30, decimals: 0 },
     neigung: { min: 0.2, max: 3.5, decimals: 1 },
-    niveau: { min: -10, max: 10, decimals: 1 },
+    niveau: { min: -10, max: 10, decimals: 0 }, // Viessmann shift ist ganzzahlig (wie in ViCare)
 };
 const HPARAM_FORM_FIELDS = ['datum', 'uhrzeit', ...HPARAM_PARAMS];
 
