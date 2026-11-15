@@ -369,6 +369,42 @@ input[type="number"].error {
     background-color: #f9f9f9;
 }
 
+/* Hparam (Heizungs-Parameter) */
+.hparam-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.hparam-header h2 {
+    margin-bottom: 0;
+}
+
+.hparam-scroll {
+    max-height: 60rem;
+    overflow: auto;
+}
+
+.hparam-table {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.hparam-table .hparam-value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.hparam-table th:nth-child(n+3):nth-child(-n+7) {
+    text-align: right;
+}
+
+.hparam-table .hparam-changed {
+    background-color: #fff3cd;
+    font-weight: 600;
+}
+
 /* Pagination */
 .pagination {
     display: flex;

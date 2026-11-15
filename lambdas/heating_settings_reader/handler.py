@@ -1,5 +1,4 @@
 """GET /current und GET /changes – liest Einstellungen aus DynamoDB."""
-import base64
 import json
 import logging
 import os
@@ -8,6 +7,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 
 from backend.heating_settings import logic
+from backend.heating_settings.reader import decode_token as _decode_token, encode_token as _encode_token
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -29,23 +29,6 @@ def _response(status: int, body: dict) -> dict:
         "headers": {"content-type": "application/json"},
         "body": json.dumps(logic.to_jsonable(body)),
     }
-
-
-def _encode_token(key: dict) -> str:
-    return base64.urlsafe_b64encode(json.dumps(key).encode()).decode()
-
-
-def _decode_token(token: str, pk: str) -> dict:
-    try:
-        key = json.loads(base64.urlsafe_b64decode(token.encode()).decode())
-        ok = (isinstance(key, dict) and key.get("PK") == pk
-              and isinstance(key.get("SK"), str) and key["SK"].startswith("EVT#")
-              and set(key) == {"PK", "SK"})
-    except Exception:
-        ok = False
-    if not ok:
-        raise logic.ValidationError("next_token ungültig")
-    return key
 
 
 def _current(table, pk):

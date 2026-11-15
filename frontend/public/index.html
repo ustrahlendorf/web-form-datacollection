@@ -22,6 +22,7 @@
                     <a href="#history" class="nav-link" data-page="history">History</a>
                     <a href="#live" class="nav-link" data-page="live">Live</a>
                     <a href="#settings" class="nav-link" data-page="settings">Settings</a>
+                    <a href="#hparam" class="nav-link" data-page="hparam">Hparam</a>
                     <button id="logout-btn" class="nav-link logout-btn">Logout</button>
                 </div>
             </div>
@@ -232,6 +233,25 @@
                         <button id="prev-btn" class="btn btn-secondary">Previous</button>
                         <span id="page-info"></span>
                         <button id="next-btn" class="btn btn-secondary">Next</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Hparam Page (Heizungs-Parameter) -->
+            <section id="hparam-page" class="page">
+                <div class="container">
+                    <div class="hparam-header">
+                        <h2>Heizungs-Parameter</h2>
+                        <button type="button" id="hparam-reload-btn" class="btn btn-secondary">Reload</button>
+                    </div>
+
+                    <div id="hparam-scroll" class="hparam-scroll">
+                        <div id="hparam-content">
+                            <p class="empty-state">Loading heating parameters...</p>
+                        </div>
+                        <div id="hparam-more" class="pagination" style="display: none;">
+                            <button type="button" id="hparam-more-btn" class="btn btn-secondary">Mehr laden</button>
+                        </div>
                     </div>
                 </div>
             </section>

@@ -18,6 +18,8 @@ const state = {
     historyTokenStack: [],       // stack of start-tokens for back navigation
     settingsStatusPollTimer: null,
     heatingStatusTimer: null,
+    hparamNextToken: null,
+    hparamLoading: false,
 };
 
 // Initialize AuthManager
@@ -80,7 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Navigate to page from initial hash (e.g. bookmark #live)
     const hash = (window.location.hash || '').replace(/^#/, '');
-    if (hash && ['form', 'analyze', 'history', 'live', 'settings'].includes(hash)) {
+    if (hash && ['form', 'analyze', 'history', 'live', 'settings', 'hparam'].includes(hash)) {
         navigateToPage(hash);
     }
 });
@@ -126,6 +128,24 @@ function setupEventListeners() {
     }
 
     // Settings page form
+    const hparamScroll = document.getElementById('hparam-scroll');
+    if (hparamScroll) {
+        hparamScroll.addEventListener('scroll', () => {
+            const nearBottom = hparamScroll.scrollTop + hparamScroll.clientHeight >= hparamScroll.scrollHeight - 100;
+            if (nearBottom && state.hparamNextToken) {
+                loadHparam({ append: true });
+            }
+        });
+    }
+    const hparamMoreBtn = document.getElementById('hparam-more-btn');
+    if (hparamMoreBtn) {
+        hparamMoreBtn.addEventListener('click', () => loadHparam({ append: true }));
+    }
+    const hparamReloadBtn = document.getElementById('hparam-reload-btn');
+    if (hparamReloadBtn) {
+        hparamReloadBtn.addEventListener('click', () => loadHparam());
+    }
+
     const settingsForm = document.getElementById('settings-form');
     if (settingsForm) {
         settingsForm.addEventListener('submit', handleSettingsSubmit);
@@ -226,6 +246,8 @@ function navigateToPage(page) {
     } else if (page === 'settings') {
         loadSettings();
         loadHeatingControl();
+    } else if (page === 'hparam') {
+        loadHparam();
     }
 }
 
@@ -2738,6 +2760,149 @@ async function setHeatingMode(newMode) {
     }
 }
 
+// Hparam Page Functions (Heizungs-Parameter aus Settings-HeizungParameter)
+const HPARAM_PAGE_SIZE = 50;
+const HPARAM_PARAMS = ['komfort', 'normal', 'reduziert', 'neigung', 'niveau'];
+const HPARAM_LABELS = {
+    komfort: 'Komfort',
+    normal: 'Normal',
+    reduziert: 'Reduziert',
+    neigung: 'Neigung',
+    niveau: 'Niveau',
+};
+const HPARAM_DECIMALS = { komfort: 0, normal: 0, reduziert: 0, neigung: 1, niveau: 1 };
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// "2026-10-29T07:40" -> "29.10.2026 07:40" (event_at/created_at sind Ortszeit)
+function formatHparamTimestamp(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2}))?$/.exec(String(value || ''));
+    if (!match) {
+        return value ? escapeHtml(value) : '—';
+    }
+    return `${match[3]}.${match[2]}.${match[1]}${match[4] ? ' ' + match[4] : ''}`;
+}
+
+function formatHparamValue(name, value) {
+    if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) {
+        return '—';
+    }
+    return Number(value).toFixed(HPARAM_DECIMALS[name] ?? 1);
+}
+
+// {"neigung": 1.2} -> "Neigung 1.2" (mehrere Alt-Werte durch Komma getrennt)
+function formatHparamPrev(prev) {
+    const entries = HPARAM_PARAMS
+        .filter(name => prev && Object.prototype.hasOwnProperty.call(prev, name))
+        .map(name => `${HPARAM_LABELS[name]} ${formatHparamValue(name, prev[name])}`);
+    return entries.length ? escapeHtml(entries.join(', ')) : '—';
+}
+
+function renderHparamRows(items) {
+    return items.map(item => {
+        const prev = item.prev && typeof item.prev === 'object' ? item.prev : {};
+        const paramCells = HPARAM_PARAMS.map(name => {
+            const changed = Object.prototype.hasOwnProperty.call(prev, name);
+            return `<td class="hparam-value${changed ? ' hparam-changed' : ''}">${formatHparamValue(name, item[name])}</td>`;
+        }).join('');
+        return `
+            <tr>
+                <td>${formatHparamTimestamp(item.event_at)}</td>
+                <td>${formatHparamTimestamp(item.created_at)}</td>
+                ${paramCells}
+                <td>${formatHparamPrev(prev)}</td>
+                <td>${item.source ? escapeHtml(item.source) : '—'}</td>
+            </tr>`;
+    }).join('');
+}
+
+function renderHparamTable(items) {
+    return `
+        <table class="history-table hparam-table">
+            <thead>
+                <tr>
+                    <th>Event (local)</th>
+                    <th>Created (local)</th>
+                    <th>Komfort (°C)</th>
+                    <th>Normal (°C)</th>
+                    <th>Reduziert (°C)</th>
+                    <th>Neigung</th>
+                    <th>Niveau</th>
+                    <th>prev</th>
+                    <th>source</th>
+                </tr>
+            </thead>
+            <tbody id="hparam-tbody">${renderHparamRows(items)}</tbody>
+        </table>`;
+}
+
+function updateHparamMoreButton() {
+    const wrap = document.getElementById('hparam-more');
+    if (wrap) {
+        wrap.style.display = state.hparamNextToken ? 'flex' : 'none';
+    }
+}
+
+async function loadHparam({ append = false } = {}) {
+    if (state.hparamLoading) {
+        return;
+    }
+    const container = document.getElementById('hparam-content');
+    if (!container) {
+        return;
+    }
+    if (append && !state.hparamNextToken) {
+        return;
+    }
+
+    state.hparamLoading = true;
+    if (!append) {
+        state.hparamNextToken = null;
+        container.innerHTML = '<p class="empty-state">Loading heating parameters...</p>';
+        updateHparamMoreButton();
+    }
+
+    try {
+        let url = `${CONFIG.API_ENDPOINT}/heating/parameters?limit=${HPARAM_PAGE_SIZE}`;
+        if (append) {
+            url += `&next_token=${encodeURIComponent(state.hparamNextToken)}`;
+        }
+        const response = await authenticatedFetch(url);
+        if (!response || !response.ok) {
+            throw new Error('Failed to load heating parameters');
+        }
+        const data = await response.json();
+        const items = data.items || [];
+
+        if (append) {
+            const tbody = document.getElementById('hparam-tbody');
+            if (tbody) {
+                tbody.insertAdjacentHTML('beforeend', renderHparamRows(items));
+            }
+        } else if (items.length === 0) {
+            container.innerHTML = '<p class="empty-state">No heating parameters found</p>';
+        } else {
+            container.innerHTML = renderHparamTable(items);
+        }
+        state.hparamNextToken = data.next_token || null;
+    } catch (error) {
+        console.error('Error loading heating parameters:', error);
+        if (!append) {
+            container.innerHTML = '<p class="empty-state">Failed to load heating parameters</p>';
+        }
+    } finally {
+        state.hparamLoading = false;
+        updateHparamMoreButton();
+    }
+}
+
 // Exports for Jest tests (Node environment). No impact in browser runtime.
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -2758,6 +2923,13 @@ if (typeof module !== 'undefined' && module.exports) {
         normalizeSettingsSchedulerMetadata,
         renderSettingsSchedulerMetadata,
         loadSettings,
+        formatHparamTimestamp,
+        formatHparamValue,
+        formatHparamPrev,
+        renderHparamRows,
+        renderHparamTable,
+        loadHparam,
+        __getStateForTests: () => state,
         __setAuthenticatedFetchForTests: (fn) => {
             authenticatedFetch = fn;
         },

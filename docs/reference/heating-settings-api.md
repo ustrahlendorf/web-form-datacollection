@@ -40,6 +40,22 @@ Der Stack hat die Tabelle mit festem Namen, PITR, Löschschutz und `RemovalPolic
 
 Idempotenz: gleicher Body mit festem `event_at` (oder gleiche `request_id`) erzeugt keinen zweiten Eintrag.
 
+## JWT-Route für das Frontend: `GET /heating/parameters`
+
+Der Browser hat nur ein Cognito-JWT und kann die IAM-geschützte API oben nicht aufrufen.
+Deshalb gibt es im `APIStack` (`DataCollectionAPI`, JWT-Authorizer, CORS bereits vorhanden)
+eine schreibgeschützte Route `GET /heating/parameters`:
+
+- Lambda `lambdas/heating_parameters/handler.py` (Logik in `backend/src/backend/heating_settings/reader.py`).
+- Eigene Rolle mit nur `dynamodb:Query` auf `Settings-HeizungParameter` (Referenz per festem
+  Tabellennamen/ARN, keine Stack-Abhängigkeit zu `HeizungSettingsStack`). Deploy: `task deploy-api`.
+- Query: `limit` (1–100, Default 50), `next_token` (opak, aus der vorigen Antwort).
+- Antwort `200`: `{"items": [...], "count": N, "next_token": "..."}`; `next_token` nur, wenn weitere
+  Einträge existieren. Sortierung immer neueste zuerst.
+- Items enthalten ausschließlich `event_at`, `created_at`, `komfort`, `normal`, `reduziert`, `neigung`,
+  `niveau`, `prev` (`{}` falls leer), `source` – `PK` und `SK` werden nie ausgeliefert (Allowlist).
+- `400` bei ungültigem `limit`/`next_token`, `500` generisch (`{"error": "interner Fehler"}`).
+
 ## Entwickeln und Deployen
 
 Das Projekt nutzt wie alle anderen Teile das Repo-venv und die Root-`requirements.txt`
