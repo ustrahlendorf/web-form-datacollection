@@ -172,19 +172,3 @@ def test_live_function_has_only_needed_permissions():
     assert actions == ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query",
                        "secretsmanager:GetSecretValue"]
     assert all("*" not in str(s["Resource"]).replace("AWS::", "") for s in stmts)
-
-
-def test_failure_metric_filter_alarm_and_topic():
-    t = _template_with_secret()
-    t.has_resource_properties("AWS::Logs::MetricFilter", {
-        "MetricTransformations": [Match.object_like({"MetricName": "WriteFailures"})]})
-    t.has_resource_properties("AWS::CloudWatch::Alarm", {
-        "MetricName": "WriteFailures", "AlarmActions": [Match.any_value()]})
-    t.resource_count_is("AWS::SNS::Topic", 1)
-    t.resource_count_is("AWS::SNS::Subscription", 0)  # keine Adresse im Code
-
-
-def test_email_subscription_only_from_context():
-    t = _template_with_secret({"heating_alert_email": "ops@example.invalid"})
-    t.has_resource_properties("AWS::SNS::Subscription", {
-        "Protocol": "email", "Endpoint": "ops@example.invalid"})

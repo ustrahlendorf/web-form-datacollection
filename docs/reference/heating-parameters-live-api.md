@@ -61,4 +61,4 @@ Body leer. Server liest Live-Werte; weichen sie vom neuesten DynamoDB-Eintrag ab
 
 ## Monitoring ("ich möchte informiert werden")
 
-Jeder Schreibversuch loggt strukturiert (Parameter, alt, neu, Ergebnis, HTTP-Status der Commands; keine Tokens/Secrets). Zusätzlich CloudWatch-Metric-Filter oder Alarm auf Command-Fehler → SNS-Topic (Abonnent: E-Mail des Users; Adresse wird als Stack-Parameter übergeben, nicht im Code).
+Jeder Schreibversuch loggt strukturiert (Parameter, alt, neu, Ergebnis, HTTP-Status der Commands; keine Tokens/Secrets).  Fehlgeschlagene Schreibversuche erscheinen als Ereignis `heating_parameter_write_failed` in den Lambda-Logs; eine automatische Alarmierung (SNS) gibt es bewusst nicht.

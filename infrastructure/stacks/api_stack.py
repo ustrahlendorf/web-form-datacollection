@@ -5,13 +5,9 @@ from aws_cdk import (
     aws_apigatewayv2 as apigw,
     aws_apigatewayv2_authorizers as apigw_auth,
     aws_apigatewayv2_integrations as apigw_integrations,
-    aws_cloudwatch as cloudwatch,
-    aws_cloudwatch_actions as cw_actions,
     aws_iam as iam,
     aws_lambda as lambda_,
     aws_logs as logs,
-    aws_sns as sns,
-    aws_sns_subscriptions as sns_subs,
     aws_ssm as ssm,
     CfnOutput,
     Duration,
@@ -245,7 +241,6 @@ class APIStack(Stack):
             if viessmann_credentials_secret_arn
             else None
         )
-        self._create_heating_write_alarm(heating_parameters_writer_handler)
         auto_retrieval_config_handler = self._create_auto_retrieval_config_handler(
             lambda_execution_role,
             appconfig_application_id=appconfig_application_id,
@@ -623,45 +618,6 @@ class APIStack(Stack):
             viessmann_credentials_secret_arn=viessmann_credentials_secret_arn,
             timeout_seconds=29,
         )
-
-    def _create_heating_write_alarm(self, writer_fn: lambda_.Function) -> None:
-        """Metric filter + alarm on failed write attempts, notified via SNS (optional e-mail).
-
-        The address comes only from CDK context ``heating_alert_email`` (never hardcoded).
-        """
-        topic = sns.Topic(
-            self,
-            "HeatingWriteAlertsTopic",
-            display_name="Heating parameter write alerts",
-        )
-        email = self.node.try_get_context("heating_alert_email")
-        if email:
-            topic.add_subscription(sns_subs.EmailSubscription(str(email)))
-
-        log_group = logs.LogGroup.from_log_group_name(
-            self, "HeatingParametersWriterLogGroup", f"/aws/lambda/{writer_fn.function_name}"
-        )
-        metric_filter = logs.MetricFilter(
-            self,
-            "HeatingWriteFailureFilter",
-            log_group=log_group,
-            metric_namespace="HeatingParameters",
-            metric_name="WriteFailures",
-            filter_pattern=logs.FilterPattern.any_term("heating_parameter_write_failed"),
-            metric_value="1",
-            default_value=0,
-        )
-        alarm = cloudwatch.Alarm(
-            self,
-            "HeatingWriteFailureAlarm",
-            metric=metric_filter.metric(statistic="Sum", period=Duration.minutes(5)),
-            threshold=1,
-            evaluation_periods=1,
-            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
-            alarm_description="Failed heating parameter write attempt (Viessmann command error)",
-        )
-        alarm.add_alarm_action(cw_actions.SnsAction(topic))
 
     def _create_heating_parameters_function(
         self,
