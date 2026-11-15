@@ -134,6 +134,23 @@ def test_stored_values_are_live_after_not_requested(api, vm):
     assert status == 201 and body["item"]["komfort"] == 22
 
 
+def test_stale_verification_read_still_stores_accepted_target(api, vm):
+    """Regression: Therme übernimmt den Wert, der Read direkt danach liefert noch den alten."""
+    orig = vm.apply
+
+    def apply_stale(changes, cfg, **kw):
+        res = orig(changes, cfg, **kw)
+        res["live_after"] = dict(res["live_before"])  # verzögerte Cloud: alter Zustand
+        return res
+    import sys as _s
+    _s.modules["backend.heating.iot_data.heating_parameters"].apply_heating_parameters = apply_stale
+    status, body = post(api, {"reduziert": 18})
+    assert status == 201 and body["status"] == "created"
+    assert body["item"]["reduziert"] == 18 and body["item"]["prev"] == {"reduziert": 16}
+    (row,) = stored()
+    assert row["reduziert"] == 18
+
+
 def test_unchanged_does_not_write(api, vm):
     status, body = post(api, {"normal": 20})
     assert status == 200 and body["status"] == "unchanged" and body["state"]["normal"] == 20

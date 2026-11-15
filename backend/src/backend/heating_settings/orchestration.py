@@ -125,6 +125,11 @@ def write_parameters(table, pk: str, body, iot_config, *, item_view=None, source
     verified = {}
     for k in logic.PARAMS:
         d = to_decimal(k, live_after.get(k))
+        accepted = k in changes and applied.get(k, {}).get("ok")
+        if accepted and d is not None and d == base.get(k):
+            # Command wurde von der API akzeptiert, der Read direkt danach liefert noch den
+            # alten Wert (Viessmann-Cloud ist verzögert konsistent) -> Zielwert übernehmen.
+            d = merged[k]
         if d is None:
             d = merged[k] if (k not in changes or applied.get(k, {}).get("ok")) \
                 else base.get(k, merged[k])
