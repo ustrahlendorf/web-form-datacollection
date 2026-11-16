@@ -28,6 +28,30 @@ Branch `feature/heizungs-parameter-api-connect`. Dieser Vertrag ist die gemeinsa
 
 `setCurve` braucht immer beide Werte: fehlt einer der beiden Änderungen, den aktuellen Live-Wert mitsenden. Offen: Viessmann-`shift` ist evtl. ganzzahlig, unser `niveau` hat 1 Nachkommastelle → gegen reale Feature-Antwort (`commands.setCurve.params` Constraints) prüfen, Ergebnis dokumentieren, nicht raten.
 
+## Zeitstempel in der Feature-Antwort (Untersuchung 2026-11-16)
+
+Frage: Enthält die Viessmann-Leseantwort für `comfort`/`normal`/`reduced` und `heating.curve` (`slope`/`shift`) einen Zeitpunkt, wann der Wert gesetzt wurde?
+
+**Ergebnis:** Ja, als `timestamp` auf **Feature-Ebene** (ISO 8601, UTC, Millisekunden, `Z`). Auf Property- und Command-Ebene gibt es keinen Zeitstempel. `slope` und `shift` teilen sich den Zeitstempel von `heating.curve`.
+
+```json
+{ "feature": "heating.circuits.0.heating.curve", "timestamp": "2026-11-16T09:11:02.765Z",
+  "properties": { "slope": { "value": 1.4 }, "shift": { "value": 0 } } }
+```
+
+**Semantik (empirisch, die offizielle Doku nennt sie nicht):** `timestamp` ist der Zeitpunkt, an dem die Therme den Wert übernommen hat (Änderungszeitpunkt).
+
+- Bei unveränderten Werten bleibt er über mehrere Abrufe stabil (3 Abrufe über 10 min). Er ist weder die Abfragezeit noch ein Sync-Takt.
+- Nach einer Änderung springt nur der Zeitstempel des geänderten Features, ca. 1–2 s nach dem Schreibbefehl bzw. zum Zeitpunkt der Änderung in ViCare. Die anderen Features bleiben unverändert.
+- Belegt für `reduced` und `heating.curve`, jeweils beim Schreiben über `apply_heating_parameters` und bei Änderung in der ViCare-App. Für `comfort` und `normal` ist das Verhalten naheliegend, aber nicht getestet.
+- Nicht unterscheidbar, **wer** geändert hat (API, ViCare, Regler).
+- `slope` und `shift` lassen sich nicht getrennt datieren. Ob eine Änderung nur von `shift` den Zeitstempel allein bewegt, wurde nicht getestet (im ViCare-Test wurden beide gemeinsam geändert).
+- Features ohne Änderung seit längerem teilen sich einen gemeinsamen Zeitstempel (im Test 121 von 147 Features), vermutlich ein früherer gemeinsamer Zeitpunkt wie Neustart oder Gateway-Abgleich (Annahme).
+
+**Cache-Verhalten nach API-Schreiben:** Ein Abruf direkt (ca. 1 s) nach dem Command liefert noch den alten Wert samt altem Zeitstempel; nach ca. 1 min ist der neue Stand sichtbar. Bei Änderung in ViCare war der neue Stand sofort sichtbar. Ein Verifikations-Read direkt nach dem Schreiben kann also noch den alten Zeitstempel zeigen.
+
+Aktuell wird der Zeitstempel in `_parse_live` und `GET …/live` **nicht** übernommen (nur `properties.*.value`, `fetched_at` ist die Abrufzeit).
+
 ## Endpunkte (alle Cognito-JWT)
 
 ### `GET /heating/parameters/live`
